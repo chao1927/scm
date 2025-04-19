@@ -1,0 +1,10 @@
+package org.scm.srm.wms.adapter.infra.jpa;
+
+import org.scm.srm.wms.adapter.infra.domain.ReturnSupplyOutboundOrder;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface ReturnSupplyOutboundOrderJpaRepository extends JpaRepository<ReturnSupplyOutboundOrder, Long> {
+    ReturnSupplyOutboundOrder findByOutboundNo(String outboundNo);
+}

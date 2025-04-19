@@ -1,0 +1,293 @@
+CREATE TABLE purchase_apply (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '采购申请ID',
+    apply_no VARCHAR(50) NOT NULL COMMENT '采购申请单号',
+    apply_time DATETIME NOT NULL COMMENT '申请日期',
+    apply_emp_id BIGINT NOT NULL COMMENT '申请人ID',
+    purchaser_emp_id BIGINT NOT NULL COMMENT '采购人ID',
+    estimated_total_price DECIMAL(10,2) COMMENT '预计采购总价',
+    status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-待提交，2-待审核，3-审核通过，4-审核拒绝',
+    created_by BIGINT COMMENT '创建人（员工ID）',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_by BIGINT COMMENT '修改人（员工ID）',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '是否删除：0-未删除，1-已删除',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_apply_no (apply_no),
+    KEY idx_apply_time (apply_time),
+    KEY idx_status (status),
+    KEY idx_apply_emp_id (apply_emp_id),
+    KEY idx_purchaser_emp_id (purchaser_emp_id),
+    KEY idx_apply_no (apply_no)
+) COMMENT = '采购申请表';
+
+CREATE TABLE purchase_apply_item (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '采购申请详情ID',
+    apply_no VARCHAR(50) NOT NULL COMMENT '采购申请单号，对应 purchase_apply.apply_no',
+    sku VARCHAR(50) NOT NULL COMMENT '商品SKU',
+    supplier_id BIGINT NOT NULL COMMENT '供应商ID',
+    quantity INT NOT NULL COMMENT '申请数量',
+    unit_id INT NOT NULL COMMENT '计量单位ID',
+    purchased_quantity INT DEFAULT 0 COMMENT '已采购数量',
+    estimated_unit_price DECIMAL(10,2) COMMENT '预估采购单价',
+    estimated_total_price DECIMAL(10,2) COMMENT '预估总价',
+    warehouse_id BIGINT COMMENT '仓库ID',
+    created_by BIGINT COMMENT '创建人（员工ID）',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_by BIGINT COMMENT '修改人（员工ID）',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+    is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '是否删除：0-未删除，1-已删除',
+    PRIMARY KEY (id),
+    KEY idx_apply_no (apply_no),
+    KEY idx_sku (sku),
+    KEY idx_supplier_id (supplier_id),
+    KEY idx_warehouse_id (warehouse_id)
+) COMMENT = '采购申请详情表';
+
+CREATE TABLE purchase_order (
+                                id BIGINT NOT NULL AUTO_INCREMENT COMMENT '采购单ID',
+                                order_no VARCHAR(50) NOT NULL COMMENT '采购单单号',
+                                apply_no VARCHAR(50) NOT NULL COMMENT '采购申请单号，对应 purchase_apply.apply_no',
+                                order_time DATETIME NOT NULL COMMENT '采购时间',
+                                purchaser_emp_id BIGINT NOT NULL COMMENT '采购人ID',
+                                supplier_id BIGINT NOT NULL COMMENT '供应商ID',
+                                estimated_arrival_time DATETIME COMMENT '预计到货时间',
+                                total_price DECIMAL(10,2) COMMENT '采购总价',
+                                remark TEXT COMMENT '备注',
+                                status INT NOT NULL COMMENT '状态：1-待提交，2-待审核，3-待确认，4-待发货，5-待收货，6-待打款，7-采购完成',
+                                created_by BIGINT COMMENT '创建人（员工ID）',
+                                created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                                updated_by BIGINT COMMENT '修改人（员工ID）',
+                                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+                                is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '是否删除：0-未删除，1-已删除',
+                                PRIMARY KEY (id),
+                                UNIQUE KEY uk_order_no (order_no),
+                                KEY idx_apply_no (apply_no),
+                                KEY idx_order_time (order_time),
+                                KEY idx_status (status),
+                                KEY idx_purchaser_emp_id (purchaser_emp_id),
+                                KEY idx_supplier_id (supplier_id),
+                                KEY idx_order_no (order_no)
+) COMMENT = '采购单表';
+
+CREATE TABLE purchase_order_item (
+                                     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '采购单详情ID',
+                                     order_no VARCHAR(50) NOT NULL COMMENT '采购单单号，对应 purchase_order.order_no',
+                                     sku VARCHAR(50) NOT NULL COMMENT '商品SKU',
+                                     quantity INT NOT NULL COMMENT '数量',
+                                     unit_id INT NOT NULL COMMENT '计量单位ID',
+                                     unit_price DECIMAL(10,2) COMMENT '单价',
+                                     total_price DECIMAL(10,2) COMMENT '总价',
+                                     remark TEXT COMMENT '备注',
+                                     warehouse_id BIGINT COMMENT '仓库ID',
+                                     created_by BIGINT COMMENT '创建人（员工ID）',
+                                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                                     updated_by BIGINT COMMENT '修改人（员工ID）',
+                                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+                                     is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '是否删除：0-未删除，1-已删除',
+                                     PRIMARY KEY (id),
+                                     KEY idx_order_no (order_no),
+                                     KEY idx_sku (sku),
+                                     KEY idx_warehouse_id (warehouse_id)
+) COMMENT = '采购单详情表';
+
+
+CREATE TABLE purchase_receipt (
+                                  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '采购收货单ID',
+                                  receipt_no VARCHAR(50) NOT NULL COMMENT '收货单号',
+                                  create_time DATETIME NOT NULL COMMENT '收货单创建时间',
+                                  start_receipt_time DATETIME COMMENT '开始收货时间',
+                                  finish_receipt_time DATETIME COMMENT '收货完成时间',
+                                  order_no VARCHAR(50) NOT NULL COMMENT '采购单单号，对应 purchase_order.order_no',
+                                  delivery_no VARCHAR(50) NOT NULL COMMENT '发货单单号，对应 supplier_delivery_order.delivery_no',
+                                  supplier_id BIGINT NOT NULL COMMENT '供应商ID',
+                                  total_amount DECIMAL(10,2) COMMENT '货品总金额',
+                                  remark TEXT COMMENT '备注',
+                                  status INT NOT NULL COMMENT '状态：1-待收货，2-部分收货，3-全部收货完成，4-缺货收货完成',
+                                  receiver_emp_id BIGINT NOT NULL COMMENT '收货人ID',
+                                  created_by BIGINT COMMENT '创建人（员工ID）',
+                                  created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                                  updated_by BIGINT COMMENT '修改人（员工ID）',
+                                  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+                                  is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '是否删除：0-未删除，1-已删除',
+                                  PRIMARY KEY (id),
+                                  UNIQUE KEY uk_receipt_no (receipt_no),
+                                  KEY idx_create_time (create_time),
+                                  KEY idx_start_receipt_time (start_receipt_time),
+                                  KEY idx_finish_receipt_time (finish_receipt_time),
+                                  KEY idx_order_no (order_no),
+                                  KEY idx_delivery_no (delivery_no),
+                                  KEY idx_status (status),
+                                  KEY idx_supplier_id (supplier_id),
+                                  KEY idx_receiver_emp_id (receiver_emp_id)
+) COMMENT = '采购收货单表';
+
+CREATE TABLE purchase_receipt_item (
+                                       id BIGINT NOT NULL AUTO_INCREMENT COMMENT '收货单详情ID',
+                                       receipt_no VARCHAR(50) NOT NULL COMMENT '收货单号，对应 purchase_receipt.receipt_no',
+                                       sku VARCHAR(50) NOT NULL COMMENT '商品SKU',
+                                       delivery_quantity INT NOT NULL COMMENT '发货数量',
+                                       received_quantity INT NOT NULL COMMENT '收货数量',
+                                       unit_price DECIMAL(10,2) COMMENT '单价',
+                                       total_price DECIMAL(10,2) COMMENT '总价',
+                                       remark TEXT COMMENT '备注',
+                                       created_by BIGINT COMMENT '创建人（员工ID）',
+                                       created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                                       updated_by BIGINT COMMENT '修改人（员工ID）',
+                                       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+                                       is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '是否删除：0-未删除，1-已删除',
+                                       PRIMARY KEY (id),
+                                       KEY idx_receipt_no (receipt_no),
+                                       KEY idx_sku (sku)
+) COMMENT = '采购收货单详情表';
+
+CREATE TABLE return_supply_apply (
+                                     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '退供申请ID',
+                                     apply_no VARCHAR(50) NOT NULL COMMENT '退供申请单号',
+                                     sales_emp_id INT NOT NULL COMMENT '销售人员ID（创建退供申请的人员）',
+                                     strategy_config TEXT COMMENT '退货策略配置（JSON格式）',
+                                     total_item_types INT COMMENT '退供商品种类数量',
+                                     total_quantity INT COMMENT '退供总件数',
+                                     apply_time DATETIME NOT NULL COMMENT '申请时间',
+                                     status TINYINT NOT NULL COMMENT '申请状态：如1-待审核，2-审核通过，3-取消',
+                                     remark TEXT COMMENT '备注',
+
+                                     created_by INT COMMENT '创建人（关联 employee.id）',
+                                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                                     updated_by INT COMMENT '修改人（关联 employee.id）',
+                                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+                                     is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '是否删除：0-未删除，1-已删除',
+                                     PRIMARY KEY (id),
+                                     UNIQUE KEY uk_apply_no (apply_no),
+                                     KEY idx_apply_time (apply_time),
+                                     KEY idx_status (status)
+) COMMENT = '退供申请表';
+
+
+CREATE TABLE return_supply_apply_item (
+                                          id BIGINT NOT NULL AUTO_INCREMENT COMMENT '退供申请明细ID',
+                                          apply_no VARCHAR(50) NOT NULL COMMENT '退供申请单号，对应 return_supply_apply.apply_no',
+                                          sku VARCHAR(50) NOT NULL COMMENT '商品SKU',
+                                          product_name VARCHAR(100) COMMENT '商品名称',
+                                          supplier_id INT NOT NULL COMMENT '供应商ID',
+                                          warehouse_id INT NOT NULL COMMENT '仓库ID（表示从哪个仓库退供）',
+                                          batch_no VARCHAR(50) COMMENT '批次号',
+                                          purchase_order_no VARCHAR(50) COMMENT '采购单单号（自动关联采购时记录）',
+                                          quantity INT NOT NULL COMMENT '申请退供数量',
+                                          return_price DECIMAL(10,2) COMMENT '退供价格',
+                                          return_reason VARCHAR(200) COMMENT '退供原因',
+                                          unit_id INT NOT NULL COMMENT '计量单位ID',
+                                          remark TEXT COMMENT '备注',
+
+                                          created_by INT COMMENT '创建人（关联 employee.id）',
+                                          created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                                          updated_by INT COMMENT '修改人（关联 employee.id）',
+                                          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+                                          is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '是否删除',
+                                          PRIMARY KEY (id),
+                                          KEY idx_apply_no (apply_no),
+                                          KEY idx_sku (sku),
+                                          KEY idx_batch_no (batch_no)
+)
+    COMMENT = '退供申请明细表';
+
+CREATE TABLE return_supply_order (
+                                     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '退供单ID',
+                                     order_no VARCHAR(50) NOT NULL COMMENT '退供单单号',
+                                     apply_no VARCHAR(50) NOT NULL COMMENT '关联退供申请单号（return_supply_apply.apply_no）',
+                                     supplier_id INT NOT NULL COMMENT '退供单绑定的供应商ID',
+                                     total_item_types INT COMMENT '退供商品种类数量',
+                                     total_quantity INT COMMENT '退供总件数',
+                                     initiate_time DATETIME NOT NULL COMMENT '退供单生成时间',
+                                     status TINYINT NOT NULL COMMENT '退供单状态：如1-待确认，2-已确认，3-已取消',
+                                     remark TEXT COMMENT '备注',
+
+                                     created_by INT COMMENT '创建人（关联 employee.id）',
+                                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                                     updated_by INT COMMENT '修改人（关联 employee.id）',
+                                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+                                     is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '是否删除',
+                                     PRIMARY KEY (id),
+                                     UNIQUE KEY uk_order_no (order_no),
+                                     KEY idx_apply_no (apply_no),
+                                     KEY idx_initiate_time (initiate_time),
+                                     KEY idx_status (status)
+) COMMENT = '退供单主表';
+
+CREATE TABLE return_supply_order_item (
+                                          id BIGINT NOT NULL AUTO_INCREMENT COMMENT '退供单明细ID',
+                                          order_no VARCHAR(50) NOT NULL COMMENT '退供单单号，对应 return_supply_order.order_no',
+                                          sku VARCHAR(50) NOT NULL COMMENT '商品SKU',
+                                          product_name VARCHAR(100) COMMENT '商品名称',
+                                          supplier_id INT NOT NULL COMMENT '供应商ID（冗余，与主表一致）',
+                                          warehouse_id INT NOT NULL COMMENT '仓库ID（商品退自哪个仓库）',
+                                          batch_no VARCHAR(50) COMMENT '批次号',
+                                          purchase_order_no VARCHAR(50) COMMENT '采购单单号（自动关联采购记录）',
+                                          quantity INT NOT NULL COMMENT '退供数量',
+                                          return_price DECIMAL(10,2) COMMENT '退供价格',
+                                          return_reason VARCHAR(200) COMMENT '退供原因',
+                                          unit_id INT NOT NULL COMMENT '计量单位ID',
+                                          remark TEXT COMMENT '备注',
+
+                                          created_by INT COMMENT '创建人（关联 employee.id）',
+                                          created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                                          updated_by INT COMMENT '修改人（关联 employee.id）',
+                                          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+                                          is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '是否删除',
+                                          PRIMARY KEY (id),
+                                          KEY idx_order_no (order_no),
+                                          KEY idx_sku (sku),
+                                          KEY idx_batch_no (batch_no)
+) COMMENT = '退供单明细表';
+
+CREATE TABLE return_supply_delivery_order (
+                                              id BIGINT NOT NULL AUTO_INCREMENT COMMENT '退供发货单ID',
+                                              delivery_no VARCHAR(50) NOT NULL COMMENT '退供发货单单号',
+                                              order_no VARCHAR(50) NOT NULL COMMENT '关联退供单单号（return_supply_order.order_no）',
+                                              supplier_id INT NOT NULL COMMENT '供应商ID',
+                                              warehouse_id INT NOT NULL COMMENT '退供发货仓库ID',
+                                              expected_delivery_time DATETIME COMMENT '预计发货时间',
+                                              delivery_time DATETIME COMMENT '实际发货时间',
+                                              logistic_channel_id INT COMMENT '物流渠道ID',
+                                              logistic_no VARCHAR(50) COMMENT '物流单号',
+                                              logistic_cost DECIMAL(10,2) COMMENT '物流费用',
+                                              status TINYINT NOT NULL COMMENT '退供发货单状态：如1-待发货，2-运输中，3-已发货',
+                                              remark TEXT COMMENT '备注',
+
+                                              created_by INT COMMENT '创建人（关联 employee.id）',
+                                              created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                                              updated_by INT COMMENT '修改人（关联 employee.id）',
+                                              updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+                                              is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '是否删除',
+                                              PRIMARY KEY (id),
+                                              UNIQUE KEY uk_delivery_no (delivery_no),
+                                              KEY idx_order_no (order_no),
+                                              KEY idx_expected_delivery_time (expected_delivery_time),
+                                              KEY idx_delivery_time (delivery_time),
+                                              KEY idx_status (status),
+                                              KEY idx_logistic_no (logistic_no)
+) COMMENT = '退供发货单主表';
+
+CREATE TABLE return_supply_delivery_order_item (
+                                                   id BIGINT NOT NULL AUTO_INCREMENT COMMENT '退供发货单明细ID',
+                                                   delivery_no VARCHAR(50) NOT NULL COMMENT '退供发货单单号，对应 return_supply_delivery_order.delivery_no',
+                                                   sku VARCHAR(50) NOT NULL COMMENT '商品SKU',
+                                                   product_name VARCHAR(100) COMMENT '商品名称',
+                                                   supplier_id INT NOT NULL COMMENT '供应商ID',
+                                                   warehouse_id INT NOT NULL COMMENT '仓库ID',
+                                                   batch_no VARCHAR(50) COMMENT '批次号',
+                                                   purchase_order_no VARCHAR(50) COMMENT '采购单单号（自动关联）',
+                                                   quantity INT NOT NULL COMMENT '发货数量',
+                                                   unit_id INT NOT NULL COMMENT '计量单位ID',
+                                                   remark TEXT COMMENT '备注',
+
+                                                   created_by INT COMMENT '创建人（关联 employee.id）',
+                                                   created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                                                   updated_by INT COMMENT '修改人（关联 employee.id）',
+                                                   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+                                                   is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '是否删除',
+                                                   PRIMARY KEY (id),
+                                                   KEY idx_delivery_no (delivery_no),
+                                                   KEY idx_sku (sku),
+                                                   KEY idx_batch_no (batch_no)
+)
+    COMMENT = '退供发货单明细表';

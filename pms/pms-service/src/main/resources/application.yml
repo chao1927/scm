@@ -1,0 +1,33 @@
+spring:
+  servlet:
+    port: 9001
+  application:
+    name: pms
+
+  datasource:
+    url: jdbc:mysql://192.168.1.74:3306/pms?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+    username: root
+    password: '!@#456'
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    show-sql: true
+    properties:
+      hibernate.format_sql: true
+
+  data:
+    redis:
+      host: 192.168.1.74
+      port: 6379
+
+#redisson:
+#  address: "redis://192.168.1.74:6379"
+#  # 可配置连接池参数等
+#  threads: 16
+#  netty-threads: 32
+
+logging:
+  config: classpath:logback-spring.xml
+  level:
+    root: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: DEBUG

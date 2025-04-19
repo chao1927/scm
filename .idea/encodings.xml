@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="Encoding">
+    <file url="file://$PROJECT_DIR$/bdp/adapter/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/bdp/application/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/bdp/domain/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/bdp/interface/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/bdp/repository/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/bdp/service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/bdp/share/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/bdp/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/bdp/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/cis/cis-interface/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/cis/cis-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/cis/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/cis/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/common/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/ecs/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/ecs/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/oms/oms-interface/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/oms/oms-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/oms/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/oms/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/pms/pms-interface/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/pms/pms-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/pms/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/pms/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/srm/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/srm/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/srm/srm-interface/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/srm/srm-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/tms/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/tms/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/tms/tms-interface/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/tms/tms-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/wms/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/wms/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/wms/wms-interface/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/wms/wms-service/src/main/java" charset="UTF-8" />
+  </component>
+</project>

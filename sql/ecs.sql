@@ -1,0 +1,46 @@
+CREATE TABLE ecomm_order (
+                             id BIGINT NOT NULL AUTO_INCREMENT COMMENT '电商平台订单ID',
+                             platform_order_no VARCHAR(50) NOT NULL COMMENT '平台订单号',
+                             customer_name VARCHAR(50) NOT NULL COMMENT '客户姓名',
+                             customer_nickname VARCHAR(50) COMMENT '客户昵称',
+                             customer_phone VARCHAR(20) COMMENT '联系电话',
+                             address_detail VARCHAR(200) COMMENT '收货地址详细信息',
+                             total_product_amount DECIMAL(10,2) COMMENT '订单商品总金额',
+                             freight DECIMAL(10,2) COMMENT '运费',
+                             actual_payment DECIMAL(10,2) COMMENT '实付款',
+                             create_time DATETIME NOT NULL COMMENT '订单创建时间',
+                             pay_time DATETIME COMMENT '付款时间',
+                             complete_time DATETIME COMMENT '成交时间',
+                             payment_method VARCHAR(20) COMMENT '支付方式',
+                             payment_trade_no VARCHAR(50) COMMENT '支付交易号',
+                             order_status TINYINT NOT NULL COMMENT '订单状态，如1-待发货,2-已发货,3-完成,4-关闭',
+                             remark TEXT COMMENT '备注',
+                             created_by BIGINT COMMENT '创建人（员工ID）',
+                             created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                             updated_by BIGINT COMMENT '修改人（员工ID）',
+                             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+                             is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '是否删除：0-未删除,1-已删除',
+                             PRIMARY KEY (id),
+                             UNIQUE KEY uk_platform_order_no (platform_order_no),
+                             KEY idx_create_time (create_time),
+                             KEY idx_pay_time (pay_time),
+                             KEY idx_complete_time (complete_time),
+                             KEY idx_order_status (order_status)
+) COMMENT='电商平台订单';
+
+
+CREATE TABLE ecomm_order_item (
+                                  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '电商平台订单明细ID',
+                                  platform_order_no VARCHAR(50) NOT NULL COMMENT '平台订单号，对应 ecomm_order.platform_order_no',
+                                  sku VARCHAR(50) NOT NULL COMMENT '商品SKU',
+                                  price DECIMAL(10,2) NOT NULL COMMENT '价格',
+                                  quantity INT NOT NULL COMMENT '数量',
+                                  created_by BIGINT COMMENT '创建人（员工ID）',
+                                  created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                                  updated_by BIGINT COMMENT '修改人（员工ID）',
+                                  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+                                  is_deleted TINYINT NOT NULL DEFAULT 0 COMMENT '是否删除',
+                                  PRIMARY KEY (id),
+                                  KEY idx_platform_order_no (platform_order_no),
+                                  KEY idx_sku (sku)
+) COMMENT='电商平台订单明细';
