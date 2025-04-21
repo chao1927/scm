@@ -1,7 +1,6 @@
 package org.scm.bdp.service.adapter.controller;
 
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.scm.bdp.service.application.command.product.*;
 import org.scm.bdp.service.application.handler.ProductCommandHandler;
 import org.springframework.beans.factory.annotation.Autowired;

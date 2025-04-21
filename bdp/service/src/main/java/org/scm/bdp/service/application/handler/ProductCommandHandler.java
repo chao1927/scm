@@ -1,4 +1,4 @@
-ge org.scm.bdp.service.application.handler;
+package org.scm.bdp.service.application.handler;
 
 import org.scm.bdp.service.application.command.product.*;
 import org.scm.bdp.service.application.converter.ProductConverter;

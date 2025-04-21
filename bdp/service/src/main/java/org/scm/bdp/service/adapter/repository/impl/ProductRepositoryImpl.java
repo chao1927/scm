@@ -1,5 +1,6 @@
 package org.scm.bdp.service.adapter.repository.impl;
 
+import org.scm.bdp.service._share.enums.errorcode.ProductErrorCode;
 import org.scm.bdp.service.adapter.infra.jpa.ProductJpaRepository;
 import org.scm.bdp.service.domain.model.ProductAgg;
 import org.scm.bdp.service.domain.repository.ProductRepository;
