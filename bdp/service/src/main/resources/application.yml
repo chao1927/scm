@@ -3,9 +3,9 @@ spring:
     name: bdp
 
   datasource:
-    url: jdbc:mysql://192.168.1.74:3306/bdp?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
-    username: root
-    password: '!@#456'
+    url: jdbc:mysql://192.168.3.25:3306/bdp?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+    username: canal
+    password: Aa123456
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     show-sql: true
@@ -24,7 +24,7 @@ spring:
 #  netty-threads: 32
 
 logging:
-  config: classpath:logback-spring.xml
+  config: classpath:logback.xml
   level:
     root: INFO
     org.hibernate.SQL: DEBUG

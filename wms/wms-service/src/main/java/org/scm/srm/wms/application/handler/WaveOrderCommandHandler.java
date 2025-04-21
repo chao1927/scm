@@ -27,7 +27,7 @@ public class WaveOrderCommandHandler {
         WaveOrderAgg agg = WaveOrderAgg.create(command);
         waveOrderRepository.save(agg);
 
-        eventPublisher.publish(new WaveCreatedEvent(agg.getWaveOrder().getWaveNo()));
+        eventPublisher.publish(new WaveCreatedEvent(agg.waveOrder().getWaveNo()));
     }
 
     public void handle(CloseWaveOrderCommand command) {

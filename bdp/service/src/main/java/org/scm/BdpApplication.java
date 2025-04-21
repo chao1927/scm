@@ -1,4 +1,4 @@
-package org.scm.bdp.service;
+package org.scm;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

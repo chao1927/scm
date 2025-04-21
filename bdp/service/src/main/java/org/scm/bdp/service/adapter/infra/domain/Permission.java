@@ -18,10 +18,19 @@ public class Permission extends BaseBO {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "name")
     private String name;
+
+    @Column(name = "code")
     private String code;
+
+    @Column(name = "path")
     private String path;
+
+    @Column(name = "method")
     private String method;
+
+    @Column(name = "description")
     private String description;
     
     @Column(name = "parent_id")

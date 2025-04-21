@@ -28,7 +28,7 @@ public class UserController {
         return ResponseEntity.ok().build();
     }
 
-    @PostMapping
+    @PostMapping("/change-password")
     public ResponseEntity<Void> changePassword(@RequestBody @Valid ChangePasswordCommand command) {
         commandHandler.handle(command);
         return ResponseEntity.ok().build();

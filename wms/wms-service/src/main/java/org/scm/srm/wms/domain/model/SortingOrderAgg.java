@@ -6,7 +6,6 @@ import org.scm.srm.wms.adapter.infra.domain.SortingOrder;
 import org.scm.srm.wms.application.command.CompleteSortingCommand;
 import org.scm.srm.wms.application.command.StartSortingCommand;
 
-@Getter
 public record SortingOrderAgg(SortingOrder sortingOrder) {
 
     public void startSorting(StartSortingCommand command) {

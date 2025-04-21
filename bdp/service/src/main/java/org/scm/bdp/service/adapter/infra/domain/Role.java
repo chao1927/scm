@@ -18,7 +18,13 @@ public class Role extends BaseBO {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "name")
     private String name;
+
+    @Column(name = "code")
     private String code;
+
+    @Column(name = "remark")
     private String remark;
+
 }

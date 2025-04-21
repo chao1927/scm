@@ -15,11 +15,10 @@ public class UserRole {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @Id
+
     @Column(name = "user_id")
     private Long userId;
 
-    @Id
     @Column(name = "role_id")
     private Long roleId;
 }

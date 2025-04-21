@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class EventPublisher {
 
-    @Autowired
+//    @Autowired
     private RocketMQTemplate rocketMQTemplate;
 
     public void publish(DomainEvent event) {

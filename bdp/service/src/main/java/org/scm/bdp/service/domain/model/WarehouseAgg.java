@@ -6,7 +6,6 @@ import org.scm.bdp.service.adapter.infra.domain.Warehouse;
 
 import java.math.BigDecimal;
 
-@AllArgsConstructor
 public record WarehouseAgg(Warehouse warehouse) {
 
     public Long id() {
