@@ -3,8 +3,11 @@ package org.scm.oms.adapter.infra.domain;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import org.scm.common.BaseBO;
+
+import java.math.BigDecimal;
 
 @EqualsAndHashCode(callSuper = true)
 @Data

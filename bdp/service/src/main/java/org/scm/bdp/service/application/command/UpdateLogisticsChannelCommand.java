@@ -6,6 +6,8 @@ import jakarta.validation.constraints.NotNull;
 public record UpdateLogisticsChannelCommand(
         @NotNull Long id,
         @NotBlank String name,
-        @NotBlank String code,
-        String description
+        @NotBlank Integer serviceType,
+        @NotBlank String coverageArea,
+
+        @NotBlank String freightCalculationRules
 ) {}

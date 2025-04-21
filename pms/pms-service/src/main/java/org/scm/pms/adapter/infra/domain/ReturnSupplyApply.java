@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import org.scm.common.BaseBO;
 
 import java.time.LocalDateTime;
 
@@ -14,7 +15,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Entity
 @Table(name = "return_supply_apply")
-public class ReturnSupplyApply {
+public class ReturnSupplyApply extends BaseBO {
 
     // 主键单独声明
     @Id
@@ -45,17 +46,6 @@ public class ReturnSupplyApply {
     @Column(name = "remark", columnDefinition = "TEXT")
     private String remark;
 
-    // 审计字段
-    @Column(name = "created_by")
-    private Integer createdBy;
-    @Column(name = "created_at")
-    private LocalDateTime createdAt;
-    @Column(name = "updated_by")
-    private Integer updatedBy;
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
-    @Column(name = "is_deleted", nullable = false)
-    private Byte isDeleted;
 
 
 }

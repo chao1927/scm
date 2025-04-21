@@ -6,13 +6,13 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 
 public record CreateProductCommand(
-       @NotBlank
-       String name,
-       @NotNull
-       Long categoryId,
-       @NotNull
-       Long unitId,
+       @NotBlank String name,
        String description,
-       BigDecimal purchasePrice,
-       BigDecimal salePrice
+       @NotNull Long categoryId,
+       @NotNull Long unitId,
+       String keyAttributes,
+       String salesAttributes,
+
+       BigDecimal referencePurchasePrice,
+       BigDecimal referenceSalesPrice
 ) {}

@@ -2,10 +2,7 @@ package org.scm.bdp.service.application.event.product;
 
 import org.scm.common.DomainEvent;
 
-public record ProductUpdatedEvent(
-        Long productId,
-        String name
-) implements DomainEvent {
+public record ProductUpdatedEvent(Long productId) implements DomainEvent {
 
     @Override
     public String topic() {

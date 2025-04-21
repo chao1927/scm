@@ -1,6 +1,7 @@
 package org.scm.bdp.service.application.handler;
 
 import org.scm.bdp.service.application.command.*;
+import org.scm.bdp.service.application.converter.LogisticsChannelConverter;
 import org.scm.bdp.service.application.event.*;
 import org.scm.bdp.service.domain.model.LogisticsChannelAgg;
 import org.scm.bdp.service.domain.repository.LogisticsChannelRepository;
@@ -18,16 +19,26 @@ public class LogisticsChannelCommandHandler {
     private EventPublisher publisher;
 
     public void handle(CreateLogisticsChannelCommand command) {
-        LogisticsChannelAgg agg = LogisticsChannelAgg.create(command);
+        LogisticsChannelAgg agg = LogisticsChannelConverter.cmdConvertAgg(command);
+
+        // TODO 校验物流覆盖区域
+
+        // TODO 校验物流计费名称
+
         repository.save(agg);
-        publisher.publish(new LogisticsChannelCreatedEvent(agg.id(), agg.name()));
+        publisher.publish(new LogisticsChannelCreatedEvent(agg.id()));
     }
 
     public void handle(UpdateLogisticsChannelCommand command) {
         LogisticsChannelAgg agg = repository.findById(command.id());
-        agg.update(command);
+        // TODO 校验物流覆盖区域
+
+        // TODO 校验物流计费名称
+
+        agg.update(command.name(), command.serviceType(), command.coverageArea(), command.freightCalculationRules());
         repository.save(agg);
-        publisher.publish(new LogisticsChannelUpdatedEvent(agg.id(), agg.name()));
+
+        publisher.publish(new LogisticsChannelUpdatedEvent(command.id()));
     }
 
     public void handle(DisableLogisticsChannelCommand command) {
@@ -45,9 +56,9 @@ public class LogisticsChannelCommandHandler {
     }
 
     public void handle(DeleteLogisticsChannelCommand command) {
-        LogisticsChannelAgg agg = repository.findById(command.id());
-        agg.delete();
-        repository.save(agg);
+        repository.checkExistById(command.id());
+        repository.deleteById(command.id());
+
         publisher.publish(new LogisticsChannelDeletedEvent(command.id()));
     }
 }

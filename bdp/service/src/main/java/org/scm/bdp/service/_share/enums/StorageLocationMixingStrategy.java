@@ -2,6 +2,9 @@ package org.scm.bdp.service._share.enums;
 
 import lombok.Getter;
 import lombok.ToString;
+import org.scm.common.exception.BizException;
+
+import org.scm.bdp.service._share.enums.errorcode.WarehouseErrorCode;
 
 @Getter
 @ToString
@@ -18,8 +21,23 @@ public enum StorageLocationMixingStrategy {
         this.value = value;
     }
 
+    public static void checkStrategy(Integer mixingStrategy) {
+        if (mixingStrategy == null) {
+            throw new BizException(WarehouseErrorCode.MIXING_STRATEGY_NOT_EXIST);
+        }
+
+        for (StorageLocationMixingStrategy strategy : StorageLocationMixingStrategy.values()) {
+            if (strategy.getValue() == mixingStrategy) {
+                return;
+            }
+        }
+        throw new BizException(WarehouseErrorCode.MIXING_STRATEGY_NOT_EXIST);
+    }
+
     public int getValue() {
         return value;
     }
+
+
 
 }

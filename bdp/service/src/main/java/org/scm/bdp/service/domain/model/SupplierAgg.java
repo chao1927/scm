@@ -7,11 +7,6 @@ import org.scm.bdp.service.application.command.supplier.UpdateSupplierCommand;
 
 public record SupplierAgg(Supplier supplier) {
 
-    public static SupplierAgg create(CreateSupplierCommand command) {
-        // TODO 实现创建逻辑
-        return null;
-    }
-
     public Long id() {
         return supplier.getId();
     }
@@ -25,7 +20,7 @@ public record SupplierAgg(Supplier supplier) {
     }
 
     public void update(UpdateSupplierCommand command) {
-        // TODO 实现更新逻辑
+
 
     }
 

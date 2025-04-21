@@ -2,10 +2,7 @@ package org.scm.bdp.service.application.event.supplier;
 
 import org.scm.common.DomainEvent;
 
-public record SupplierCreatedEvent(
-        Long supplierId,
-        String name
-) implements DomainEvent {
+public record SupplierCreatedEvent(Long supplierId) implements DomainEvent {
 
     @Override
     public String topic() {

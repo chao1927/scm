@@ -1,9 +1,12 @@
 package org.scm.bdp.service.application.command.product;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+
 public record UpdateProductCategoryCommand(
-        Long id,
-        String name,
-        Long parentId,
+        @NotNull Long id,
+        @NotBlank String name,
+        @NotNull Long parentId,
         String attributes,
-        Integer sortOrder
+        @NotNull Integer sortOrder
 ) {}

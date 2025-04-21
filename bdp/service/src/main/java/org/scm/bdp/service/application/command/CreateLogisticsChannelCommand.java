@@ -4,6 +4,8 @@ import jakarta.validation.constraints.NotBlank;
 
 public record CreateLogisticsChannelCommand(
         @NotBlank String name,
-        @NotBlank String code,
-        String description
+        @NotBlank Integer serviceType,
+        @NotBlank String coverageArea,
+
+        @NotBlank String freightCalculationRules
 ) {}

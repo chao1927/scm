@@ -3,7 +3,9 @@ package org.scm.pms.adapter.infra.domain;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import org.scm.common.BaseBO;
 
 import java.time.LocalDateTime;
 
@@ -13,7 +15,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Entity
 @Table(name = "return_supply_delivery_order_item")
-public class ReturnSupplyDeliveryOrderItem {
+public class ReturnSupplyDeliveryOrderItem extends BaseBO {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -49,15 +51,4 @@ public class ReturnSupplyDeliveryOrderItem {
     @Column(name = "remark", columnDefinition = "TEXT")
     private String remark;
 
-    // 审计字段
-    @Column(name = "created_by")
-    private Integer createdBy;
-    @Column(name = "created_at")
-    private LocalDateTime createdAt;
-    @Column(name = "updated_by")
-    private Integer updatedBy;
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
-    @Column(name = "is_deleted", nullable = false)
-    private Byte isDeleted;
 }

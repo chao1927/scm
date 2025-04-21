@@ -8,4 +8,10 @@ public record AddressAgg(Address address) {
         return address.getId();
     }
 
+    public void update(String province, String city, String district, String detailedAddress) {
+        address.setProvince(province);
+        address.setCity(city);
+        address.setDistrict(district);
+        address.setDetailedAddress(detailedAddress);
+    }
 }

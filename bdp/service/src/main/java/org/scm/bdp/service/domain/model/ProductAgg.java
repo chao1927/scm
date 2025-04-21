@@ -1,14 +1,13 @@
 package org.scm.bdp.service.domain.model;
 
-import lombok.AllArgsConstructor;
 import org.scm.bdp.service._share.enums.SwitchStatus;
 import org.scm.bdp.service.adapter.infra.domain.Product;
-import org.scm.bdp.service.application.command.product.UpdateProductCommand;
 
-@AllArgsConstructor
+import java.math.BigDecimal;
+
 public record ProductAgg(Product product) {
 
-    private Long id() {
+    public Long id() {
         return this.product.getId();
     }
 
@@ -20,12 +19,28 @@ public record ProductAgg(Product product) {
         this.product.setStatus(SwitchStatus.DISABLED.getValue());
     }
 
+    public void initSpu() {
 
-    public void update(UpdateProductCommand command) {
-        // TODO: 更新商品信息
     }
 
-    public void delete() {
+    public void initSku() {
 
+    }
+
+    public void update(String name, String description, Long categoryId, Long unitId) {
+        product.setName(name);
+        product.setDescription(description);
+        product.setCategoryId(categoryId);
+        product.setUnitId(unitId);
+    }
+
+    public void updateAttributes(String keyAttributes, String salesAttributes) {
+        product.setKeyAttributes(keyAttributes);
+        product.setSalesAttributes(salesAttributes);
+    }
+
+    public void updatePrice(BigDecimal referencePurchasePrice, BigDecimal referenceSalesPrice) {
+        product.setReferencePurchasePrice(referencePurchasePrice);
+        product.setReferenceSalesPrice(referenceSalesPrice);
     }
 }

@@ -3,6 +3,7 @@ package org.scm.bdp.service.adapter.controller;
 import jakarta.validation.Valid;
 import org.scm.bdp.service.application.command.product.*;
 import org.scm.bdp.service.application.handler.ProductCategoryCommandHandler;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/product-categories")
 public class ProductCategoryController {
 
+    @Autowired
     private ProductCategoryCommandHandler handler;
 
     /**
@@ -40,14 +42,17 @@ public class ProductCategoryController {
         return ResponseEntity.ok().build();
     }
 
-
+    /**
+     * 启用商品分类
+     * @param id
+     * @return
+     */
     @PostMapping("/{id}/enable")
     public ResponseEntity<Void> enable(@PathVariable Long id) {
         EnableProductCategoryCommand command = new EnableProductCategoryCommand(id);
         handler.handle(command);
         return ResponseEntity.ok().build();
     }
-
 
 
     /**

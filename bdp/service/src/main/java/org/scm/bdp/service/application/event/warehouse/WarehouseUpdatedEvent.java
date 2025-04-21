@@ -2,10 +2,7 @@ package org.scm.bdp.service.application.event.warehouse;
 
 import org.scm.common.DomainEvent;
 
-public record WarehouseUpdatedEvent(
-        Long warehouseId,
-        String name
-) implements DomainEvent {
+public record WarehouseUpdatedEvent(Long warehouseId) implements DomainEvent {
 
     @Override
     public String topic() {

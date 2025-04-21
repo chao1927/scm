@@ -2,11 +2,7 @@ package org.scm.bdp.service.application.event.warehouse;
 
 import org.scm.common.DomainEvent;
 
-public record LocationUpdatedEvent(
-        Long warehouseId,
-        Long locationId,
-        String locationCode
-) implements DomainEvent {
+public record LocationUpdatedEvent(Long locationId) implements DomainEvent {
     @Override
     public String topic() {
         return "warehouse-location-topic";

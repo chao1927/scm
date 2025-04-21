@@ -5,7 +5,6 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import org.scm.bdp.service._share.enums.SwitchStatus;
 import org.scm.common.BaseBO;
 
 @EqualsAndHashCode(callSuper = true)
@@ -25,14 +24,6 @@ public class UnitOfMeasure extends BaseBO {
 
     @Column(name = "status", nullable = false)
     private Integer status;
-
-    public void enable() {
-        this.status = SwitchStatus.ENABLED.getValue();
-    }
-
-    public void disable() {
-        this.status = SwitchStatus.DISABLED.getValue();
-    }
 
 
 }

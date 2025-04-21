@@ -3,9 +3,7 @@ package org.scm.bdp.service.application.event.product;
 import org.scm.common.DomainEvent;
 
 public record ProductCategoryCreatedEvent(
-        Long id,
-        String name,
-        Long parentId
+        Long id
 ) implements DomainEvent {
     @Override
     public String topic() {

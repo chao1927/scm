@@ -7,7 +7,10 @@ public record UpdateSupplierCommand(
         @NotNull Long id,
         @NotBlank String name,
         @NotNull Long categoryId,
-        String contactPerson,
-        String phone,
-        String address
+        @NotBlank String contactPerson,
+        @NotBlank String contactPhone,
+        @NotBlank String address,
+        @NotBlank String businessLicenseNumber,
+        String businessLicensePhoto,
+        @NotBlank String organizationCode
 ) {}

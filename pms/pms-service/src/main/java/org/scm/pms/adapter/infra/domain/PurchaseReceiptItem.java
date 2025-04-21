@@ -3,7 +3,9 @@ package org.scm.pms.adapter.infra.domain;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import org.scm.common.BaseBO;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -14,7 +16,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Entity
 @Table(name = "purchase_receipt_item")
-public class PurchaseReceiptItem {
+public class PurchaseReceiptItem extends BaseBO {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -41,18 +43,4 @@ public class PurchaseReceiptItem {
     @Column(name = "remark", columnDefinition = "TEXT")
     private String remark;
 
-    @Column(name = "created_by")
-    private Long createdBy;
-
-    @Column(name = "created_at")
-    private LocalDateTime createdAt;
-
-    @Column(name = "updated_by")
-    private Long updatedBy;
-
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
-
-    @Column(name = "is_deleted", nullable = false)
-    private Integer isDeleted;
 }

@@ -2,6 +2,8 @@ package org.scm.bdp.service._share.enums;
 
 import lombok.Getter;
 import lombok.ToString;
+import org.scm.common.exception.BizException;
+import org.scm.bdp.service._share.enums.errorcode.WarehouseErrorCode;
 
 @Getter
 @ToString
@@ -17,6 +19,16 @@ public enum WarehouseType {
 
     WarehouseType(int value) {
         this.value = value;
+    }
+
+    public static void checkType(Integer type) {
+
+        for (WarehouseType warehouseType : WarehouseType.values()) {
+            if (warehouseType.getValue() == type) {
+                return;
+            }
+        }
+        throw new BizException(WarehouseErrorCode.WAREHOUSE_TYPE_NOT_EXIST);
     }
 
     public int getValue() {

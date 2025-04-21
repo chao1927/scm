@@ -3,7 +3,7 @@ package org.scm.bdp.service.adapter.repository.impl;
 import org.scm.bdp.service.adapter.infra.jpa.AddressJpaRepository;
 import org.scm.bdp.service.domain.model.AddressAgg;
 import org.scm.bdp.service.domain.repository.AddressRepository;
-import org.scm.common.exception.AddressErrorCode;
+import org.scm.bdp.service._share.enums.errorcode.AddressErrorCode;
 import org.scm.common.exception.BizException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
@@ -14,7 +14,7 @@ public class AddressRepositoryImpl implements AddressRepository {
     private AddressJpaRepository addressJpaRepository;
     @Override
     public void save(AddressAgg addressAgg) {
-        // TODO: 实现保存逻辑
+        addressJpaRepository.save(addressAgg.address());
     }
     @Override
     public AddressAgg findById(Long id) {
@@ -25,6 +25,12 @@ public class AddressRepositoryImpl implements AddressRepository {
 
     @Override
     public void deleteById(Long id) {
+        addressJpaRepository.deleteById(id);
+    }
 
+    @Override
+    public void checkExistById(Long id) {
+        addressJpaRepository.findById(id)
+                .orElseThrow(() -> new BizException(AddressErrorCode.ADDRESS_ID_ERROR));
     }
 }

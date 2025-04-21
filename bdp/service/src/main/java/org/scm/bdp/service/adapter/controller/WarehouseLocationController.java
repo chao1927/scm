@@ -15,36 +15,32 @@ public class WarehouseLocationController {
     private WarehouseLocationCommandHandler handler;
 
     @PostMapping
-    public ResponseEntity<Void> addLocation(@PathVariable Long warehouseId,
-                                            @RequestBody @Valid AddLocationToWarehouseCommand command) {
+    public ResponseEntity<Void> create(@RequestBody @Valid CreateLocationCommand command) {
         handler.handle(command);
         return ResponseEntity.ok().build();
     }
 
     @PutMapping
-    public ResponseEntity<Void> updateLocation(@RequestBody @Valid UpdateLocationCommand command) {
+    public ResponseEntity<Void> update(@RequestBody @Valid UpdateLocationCommand command) {
         handler.handle(command);
         return ResponseEntity.ok().build();
     }
 
-    @PostMapping("/{warehouseId}/locations/{locationId}/disable")
-    public ResponseEntity<Void> disable(@PathVariable Long warehouseId,
-                                        @PathVariable Long locationId) {
-        handler.handle(new DisableLocationCommand(warehouseId, locationId));
+    @PostMapping("/{locationId}/disable")
+    public ResponseEntity<Void> disable(@PathVariable Long locationId) {
+        handler.handle(new DisableLocationCommand(locationId));
         return ResponseEntity.ok().build();
     }
 
-    @PostMapping("/{warehouseId}/locations/{locationId}/enable")
-    public ResponseEntity<Void> enable(@PathVariable Long warehouseId,
-                                       @PathVariable Long locationId) {
-        handler.handle(new EnableLocationCommand(warehouseId, locationId));
+    @PostMapping("/{locationId}/enable")
+    public ResponseEntity<Void> enable(@PathVariable Long locationId) {
+        handler.handle(new EnableLocationCommand(locationId));
         return ResponseEntity.ok().build();
     }
 
-    @DeleteMapping("/{warehouseId}/locations/{locationId}")
-    public ResponseEntity<Void> delete(@PathVariable Long warehouseId,
-                                       @PathVariable Long locationId) {
-        handler.handle(new DeleteLocationCommand(warehouseId, locationId));
+    @DeleteMapping("/{locationId}")
+    public ResponseEntity<Void> delete(@PathVariable Long locationId) {
+        handler.handle(new DeleteLocationCommand(locationId));
         return ResponseEntity.ok().build();
     }
 }
