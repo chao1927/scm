@@ -1,0 +1,6 @@
+interface:
+  display_name: "领域驱动设计系统设计"
+  short_description: "用领域驱动设计从业务知识发现、边界划分、领域建模到架构落地设计或重构系统"
+  default_prompt: "使用 $system-design-ddd-refactor 发现领域知识、划分限界上下文、设计领域模型，并让架构和文档符合领域驱动设计准则。"
+policy:
+  allow_implicit_invocation: true

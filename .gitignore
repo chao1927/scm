@@ -1,0 +1,24 @@
+.DS_Store
+*.log
+*.tmp
+*.temp
+
+# Node / frontend artifacts
+node_modules/
+dist/
+build/
+.next/
+.vite/
+.cache/
+
+# OS and editor caches
+Thumbs.db
+.idea/
+.vscode/
+.obsidian/
+.tools/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/

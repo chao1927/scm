@@ -1,0 +1,4 @@
+interface:
+  display_name: "供应链系统设计助手"
+  short_description: "用结构化访谈、架构清单和按需参考来高效设计供应链系统。"
+  default_prompt: "使用 supply-chain-system-designer 技能，帮我设计供应链系统。"

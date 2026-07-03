@@ -1,0 +1,9 @@
+@import url("../purchase-system/styles.css");
+
+:root {
+  --nav: #0a2f49;
+  --nav-active: #0a81bf;
+  --brand: #0d8fd3;
+  --brand-dark: #075f94;
+  --brand-soft: #e5f7ff;
+}
