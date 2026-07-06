@@ -534,7 +534,7 @@ mindmap
 
 > [企企通-数字化采购管理平台领导品牌,专注SRM采购供应链解决方案](https://www.51qqt.com/)
 > 
-> [集中采购系统-采购数字化-电子采购平台-srm系统-商越科技](https://www.sunyur.com/)
+> [集中02-采购系统-采购数字化-电子采购平台-srm系统-商越科技](https://www.sunyur.com/)
 > 
 > [甄云科技-采购管理系统-SRM平台-询价管理系统-供应商管理软件](https://www.going-link.com/)
 

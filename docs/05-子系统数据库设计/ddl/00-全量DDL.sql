@@ -3700,7 +3700,7 @@ CREATE TABLE `tms_fee_source` (
   `carrier_code` varchar(64) NOT NULL COMMENT '物流商编码',
   `source_order_no` varchar(64) NULL COMMENT '来源单号',
   `transport_scenario` smallint NOT NULL COMMENT '运输场景',
-  `fee_source_status` smallint NOT NULL COMMENT '费用来源状态：1待生成 2已生成 3已推送 4推送失败 5已作废',
+  `fee_source_status` smallint NOT NULL COMMENT '费用来源状态：1待生成 2已生成 3已推送 4推送失败 5已作废 6已采集 7对账差异 8已修正',
   `settlement_direction` smallint NOT NULL COMMENT '结算方向：1应付 2应收',
   `charge_weight` decimal(18,4) NULL COMMENT '计费重量',
   `base_fee` decimal(18,2) NOT NULL DEFAULT 0 COMMENT '基础运费',
@@ -3712,6 +3712,12 @@ CREATE TABLE `tms_fee_source` (
   `generated_at` datetime NULL COMMENT '生成时间',
   `pushed_at` datetime NULL COMMENT '推送BMS时间',
   `bms_receive_no` varchar(64) NULL COMMENT 'BMS接收编号',
+  `bms_collected_at` datetime NULL COMMENT 'BMS采集时间',
+  `bms_billing_item_no` varchar(64) NULL COMMENT 'BMS费用明细号',
+  `reconciliation_status` smallint NULL COMMENT '对账状态：1未对账 2对账中 3已确认 4对账差异',
+  `correction_version` int NOT NULL DEFAULT 0 COMMENT '修正版本',
+  `correction_reason` varchar(512) NULL COMMENT '修正原因',
+  `approval_id` bigint NULL COMMENT '权限审批实例ID',
   `push_fail_reason` varchar(1024) NULL COMMENT '推送失败原因',
   `created_by` bigint NOT NULL COMMENT '创建人',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -3723,7 +3729,8 @@ CREATE TABLE `tms_fee_source` (
   UNIQUE KEY `uk_tms_fee_source_no` (`fee_source_no`),
   UNIQUE KEY `uk_tms_fee_source_waybill` (`waybill_id`),
   KEY `idx_tms_fee_source_status_time` (`fee_source_status`, `updated_at`),
-  KEY `idx_tms_fee_source_carrier` (`carrier_id`, `generated_at`)
+  KEY `idx_tms_fee_source_carrier` (`carrier_id`, `generated_at`),
+  KEY `idx_tms_fee_source_bms` (`bms_receive_no`, `bms_billing_item_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='物流费用来源';
 
 CREATE TABLE `tms_carrier_integration_log` (
@@ -3792,6 +3799,8 @@ CREATE TABLE `tms_operation_audit_log` (
   `target_type` varchar(128) NOT NULL COMMENT '操作对象类型',
   `target_id` bigint NULL COMMENT '操作对象ID',
   `target_no` varchar(128) NULL COMMENT '操作对象单号或编码',
+  `approval_id` bigint NULL COMMENT '权限审批实例ID',
+  `reason` varchar(512) NULL COMMENT '操作原因',
   `before_snapshot` json NULL COMMENT '操作前快照',
   `after_snapshot` json NULL COMMENT '操作后快照',
   `result` smallint NOT NULL COMMENT '结果：1成功 2失败',
@@ -3823,7 +3832,8 @@ INSERT INTO `tms_enum_type` (`enum_type_id`, `enum_type_code`, `enum_type_name`,
 (9016, 'SETTLEMENT_DIRECTION', '结算方向', 1, 1),
 (9017, 'NOTIFY_STATUS', '通知状态', 0, 1),
 (9018, 'EVENT_STATUS', '事件状态', 0, 1),
-(9019, 'CONSUME_STATUS', '消费状态', 0, 1);
+(9019, 'CONSUME_STATUS', '消费状态', 0, 1),
+(9020, 'RECONCILIATION_STATUS', '对账状态', 0, 1);
 
 INSERT INTO `tms_enum_item` (`enum_item_id`, `enum_type_code`, `enum_value`, `enum_label`, `sort_no`, `status`) VALUES
 (900101, 'TMS_SOURCE_SYSTEM', 1, 'OMS', 1, 1),
@@ -3907,6 +3917,9 @@ INSERT INTO `tms_enum_item` (`enum_item_id`, `enum_type_code`, `enum_value`, `en
 (901503, 'FEE_SOURCE_STATUS', 3, '已推送', 3, 1),
 (901504, 'FEE_SOURCE_STATUS', 4, '推送失败', 4, 1),
 (901505, 'FEE_SOURCE_STATUS', 5, '已作废', 5, 1),
+(901506, 'FEE_SOURCE_STATUS', 6, '已采集', 6, 1),
+(901507, 'FEE_SOURCE_STATUS', 7, '对账差异', 7, 1),
+(901508, 'FEE_SOURCE_STATUS', 8, '已修正', 8, 1),
 (901601, 'SETTLEMENT_DIRECTION', 1, '应付', 1, 1),
 (901602, 'SETTLEMENT_DIRECTION', 2, '应收', 2, 1),
 (901701, 'NOTIFY_STATUS', 1, '待通知', 1, 1),
@@ -3921,7 +3934,11 @@ INSERT INTO `tms_enum_item` (`enum_item_id`, `enum_type_code`, `enum_value`, `en
 (901902, 'CONSUME_STATUS', 2, '处理中', 2, 1),
 (901903, 'CONSUME_STATUS', 3, '消费成功', 3, 1),
 (901904, 'CONSUME_STATUS', 4, '消费失败', 4, 1),
-(901905, 'CONSUME_STATUS', 5, '已忽略', 5, 1);
+(901905, 'CONSUME_STATUS', 5, '已忽略', 5, 1),
+(902001, 'RECONCILIATION_STATUS', 1, '未对账', 1, 1),
+(902002, 'RECONCILIATION_STATUS', 2, '对账中', 2, 1),
+(902003, 'RECONCILIATION_STATUS', 3, '已确认', 3, 1),
+(902004, 'RECONCILIATION_STATUS', 4, '对账差异', 4, 1);
 
 SET FOREIGN_KEY_CHECKS = 1;
 
@@ -4888,4 +4905,3 @@ CREATE TABLE `iam_operation_log` (
 
 
 SET FOREIGN_KEY_CHECKS = 1;
-

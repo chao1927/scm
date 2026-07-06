@@ -13,7 +13,7 @@
 优先使用本项目技能：
 
 - `skills/supply-chain-system-designer`
-- `system-design-ddd-refactor`：系统设计、文档重构、子系统拆分、字段模型、接口事件、页面设计都要按 DDD 准则校验；其规则来自 `docs/00-领域驱动设计总分总整理.md` 和 `docs/90-DDD文档优化审计清单.md`。
+- `system-design-ddd-refactor`：系统设计、文档重构、子系统拆分、字段模型、接口事件、页面设计都要按 DDD 准则校验；其规则来自 `docs/00-领域驱动设计总分总整理.md` 和 `docs/90-DDD文档质量规则归档说明.md`。
 
 ## 默认工作方式
 

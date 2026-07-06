@@ -266,7 +266,7 @@ mindmap
 
 ### Part4 “珍珠奶茶法”学习WMS
 
-不同的仓库有不同的业务模式，就会有不同的系统解决方案，所以对应的WMS系统设计也会不一样。国内仓和海外仓的一些差异比较大，国内仓与国内仓之间的差异也有不少，不同的WMS会有不同的解决方案，如果想要全面的掌握WMS的一些内容，一定是需要多接触不同的业务模式的。
+不同的仓库有不同的业务模式，就会有不同的系统解决方案，所以对应的03-WMS系统设计也会不一样。国内仓和海外仓的一些差异比较大，国内仓与国内仓之间的差异也有不少，不同的WMS会有不同的解决方案，如果想要全面的掌握WMS的一些内容，一定是需要多接触不同的业务模式的。
 
 > 不同的WMS的玩法，就好像奶茶店的各种奶茶一样，基底都是一样的，但是加的料不一样，就会变成不同的产品。所以，学习WMS的时候应该先掌握**基础核心且通用的内容**（奶茶），然后根据业务的不一样而增加不同的业务处理逻辑（加的料），最后得到一个能吻合实际业务的WMS。
 
@@ -401,7 +401,7 @@ mindmap
 
 1.  Shipout的OMS和WMS手册，在B站都可以找到
 
-[WMS系统操作视频（业务篇）_哔哩哔哩_bilibili](https://www.bilibili.com/video/BV1k64y1R7Rt?spm_id_from=333.337.search-card.all.click)[首页 - ShipOut 帮助中心](https://support.wms.shipout.com/?page_id=7350&lang=zh)
+[03-WMS系统操作视频（业务篇）_哔哩哔哩_bilibili](https://www.bilibili.com/video/BV1k64y1R7Rt?spm_id_from=333.337.search-card.all.click)[首页 - ShipOut 帮助中心](https://support.wms.shipout.com/?page_id=7350&lang=zh)
 
   
 
