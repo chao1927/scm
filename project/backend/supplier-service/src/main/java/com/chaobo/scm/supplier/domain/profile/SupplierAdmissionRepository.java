@@ -1,0 +1,1 @@
+package com.chaobo.scm.supplier.domain.profile;import java.util.Optional;public interface SupplierAdmissionRepository{Optional<SupplierAdmissionAggregate> findById(long id);void save(SupplierAdmissionAggregate aggregate,long operatorId);}

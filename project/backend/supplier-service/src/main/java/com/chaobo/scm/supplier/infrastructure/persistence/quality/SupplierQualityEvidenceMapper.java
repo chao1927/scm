@@ -1,0 +1,4 @@
+package com.chaobo.scm.supplier.infrastructure.persistence.quality;
+
+import org.apache.ibatis.annotations.*;import java.time.OffsetDateTime;import java.util.List;
+@Mapper public interface SupplierQualityEvidenceMapper {record Row(long id,long issueId,String type,String url,String content,long createdBy,OffsetDateTime createdAt){}@Insert("INSERT INTO sup_quality_issue_evidence(evidence_id,quality_issue_id,evidence_type,attachment_url,content,created_by) VALUES(#{id},#{issueId},#{type},#{url},#{content},#{operator})")void insert(@Param("id")long id,@Param("issueId")long issueId,@Param("type")String type,@Param("url")String url,@Param("content")String content,@Param("operator")long operator);@Select("SELECT evidence_id id,quality_issue_id issueId,evidence_type type,attachment_url url,content,created_by createdBy,created_at createdAt FROM sup_quality_issue_evidence WHERE quality_issue_id=#{issueId} ORDER BY created_at,evidence_id")List<Row> list(long issueId);}

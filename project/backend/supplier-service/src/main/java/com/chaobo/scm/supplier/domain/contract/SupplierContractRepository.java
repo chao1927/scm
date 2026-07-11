@@ -1,0 +1,1 @@
+package com.chaobo.scm.supplier.domain.contract;import java.util.*;public interface SupplierContractRepository{Optional<SupplierContractAggregate> find(long id);void save(SupplierContractAggregate a,long operator);}

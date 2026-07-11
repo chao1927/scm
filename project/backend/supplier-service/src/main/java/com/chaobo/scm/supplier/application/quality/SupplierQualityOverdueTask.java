@@ -1,0 +1,2 @@
+package com.chaobo.scm.supplier.application.quality;import org.springframework.scheduling.annotation.Scheduled;import org.springframework.stereotype.Component;
+@Component public class SupplierQualityOverdueTask{private final SupplierQualityIssueApplicationService service;public SupplierQualityOverdueTask(SupplierQualityIssueApplicationService service){this.service=service;}@Scheduled(cron="${scm.quality.overdue-cron:0 30 0 * * *}")public void mark(){service.markOverdue();}}

@@ -1,0 +1,1 @@
+package com.chaobo.scm.supplier.application.profile;import java.time.OffsetDateTime;public interface AdmissionRegistrationProjectionPort{void registered(long admissionId,long supplierId,String supplierCode,String eventCode,long sourceVersion,OffsetDateTime occurredAt);}

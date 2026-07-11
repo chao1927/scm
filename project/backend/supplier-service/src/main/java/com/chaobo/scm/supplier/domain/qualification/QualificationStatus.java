@@ -1,0 +1,2 @@
+package com.chaobo.scm.supplier.domain.qualification;
+public enum QualificationStatus { PENDING(1,"待审核"), VALID(2,"有效"), REJECTED(3,"已驳回"), EXPIRED(4,"已失效"); private final int code;private final String label;QualificationStatus(int code,String label){this.code=code;this.label=label;}public int code(){return code;}public String label(){return label;}public static QualificationStatus fromCode(int code){for(var value:values())if(value.code==code)return value;throw new IllegalArgumentException("未知资质状态: "+code);} }

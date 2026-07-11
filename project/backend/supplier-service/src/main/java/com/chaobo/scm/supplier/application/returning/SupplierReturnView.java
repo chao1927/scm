@@ -1,0 +1,3 @@
+package com.chaobo.scm.supplier.application.returning;
+import java.math.BigDecimal;import java.time.OffsetDateTime;import java.util.List;
+public record SupplierReturnView(long id,String no,long supplierId,long warehouseId,Long qualityIssueId,String reason,int status,String statusLabel,String inventoryLockNo,OffsetDateTime supplierConfirmedAt,String outboundNo,String shipmentId,String waybillNo,String carrierCode,boolean settlementCompleted,String settlementRef,BigDecimal offsetAmount,BigDecimal claimAmount,String exceptionReason,int version,List<Line> lines){public record Line(long id,String skuCode,String batchNo,String inventoryStatus,BigDecimal requestedQty,BigDecimal lockedQty,BigDecimal outboundQty,BigDecimal signedQty){}}

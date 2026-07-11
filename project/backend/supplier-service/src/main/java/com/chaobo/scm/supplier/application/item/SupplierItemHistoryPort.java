@@ -1,0 +1,1 @@
+package com.chaobo.scm.supplier.application.item;import com.chaobo.scm.supplier.domain.item.SupplierItemAggregate;public interface SupplierItemHistoryPort{void recordCondition(SupplierItemAggregate aggregate,String changeType,long operatorId);}

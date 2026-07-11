@@ -1,0 +1,1 @@
+package com.chaobo.scm.supplier.application.quote;import com.chaobo.scm.common.api.PageResult;import java.util.Optional;public interface SupplierQuoteReadModelPort{Optional<SupplierQuoteView> detail(long id);PageResult<SupplierQuoteView> page(Long supplierId,Integer status,String keyword,int page,int size);}

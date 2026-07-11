@@ -1,0 +1,2 @@
+package com.chaobo.scm.supplier.domain.order;
+public enum PoConfirmStatus{PENDING(1,"待确认"),CONFIRMED(2,"已确认"),DIFFERENCE_PENDING(3,"差异待处理"),REJECTED(4,"已拒绝"),CLOSED(5,"已关闭"),CANCELLED(6,"已取消");private final int code;private final String label;PoConfirmStatus(int code,String label){this.code=code;this.label=label;}public int code(){return code;}public String label(){return label;}public static PoConfirmStatus fromCode(int code){for(var value:values())if(value.code==code)return value;throw new IllegalArgumentException("未知订单确认状态: "+code);}}

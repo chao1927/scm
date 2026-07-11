@@ -1,0 +1,3 @@
+package com.chaobo.scm.supplier.infrastructure.persistence.asn;
+import org.apache.ibatis.annotations.*;import java.math.BigDecimal;
+@Mapper public interface AsnReceiptLineMapper {@Insert("INSERT IGNORE INTO sup_asn_receipt_line(receipt_line_id,asn_id,asn_line_id,received_qty,rejected_qty,quality_status,quality_reason,source_event_code) VALUES(#{id},#{asnId},#{asnLineId},#{received},#{rejected},#{qualityStatus},#{qualityReason},#{eventCode})")int insert(@Param("id")long id,@Param("asnId")long asnId,@Param("asnLineId")long asnLineId,@Param("received")BigDecimal received,@Param("rejected")BigDecimal rejected,@Param("qualityStatus")int qualityStatus,@Param("qualityReason")String qualityReason,@Param("eventCode")String eventCode);}

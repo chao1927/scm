@@ -1,0 +1,1 @@
+package com.chaobo.scm.supplier.domain.quality;import java.util.Optional;public interface SupplierQualityIssueRepository{Optional<SupplierQualityIssueAggregate> findById(long id);void save(SupplierQualityIssueAggregate aggregate,long operatorId);}

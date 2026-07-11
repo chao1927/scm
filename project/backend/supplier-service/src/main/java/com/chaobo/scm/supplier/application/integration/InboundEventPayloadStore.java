@@ -1,0 +1,3 @@
+package com.chaobo.scm.supplier.application.integration;
+import com.chaobo.scm.supplier.application.masterdata.MasterDataEventConsumeLogPort;import org.springframework.stereotype.Component;import tools.jackson.core.JacksonException;import tools.jackson.databind.ObjectMapper;
+@Component public class InboundEventPayloadStore{private final MasterDataEventConsumeLogPort inbox;private final ObjectMapper json;public InboundEventPayloadStore(MasterDataEventConsumeLogPort inbox,ObjectMapper json){this.inbox=inbox;this.json=json;}public void save(String source,String eventCode,String consumer,Object event){try{inbox.savePayload(source,eventCode,consumer,json.writeValueAsString(event));}catch(JacksonException exception){throw new IllegalStateException("入站事件载荷序列化失败",exception);}}}

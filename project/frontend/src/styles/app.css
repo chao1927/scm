@@ -1,0 +1,10 @@
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 1180px; background: #f5f7fa; color: #1f2329; font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif; }
+.app-shell { min-height: 100vh; }
+.app-sider { border-right: 1px solid #e5e6eb; }
+.brand { height: 64px; display: flex; align-items: center; gap: 10px; padding: 0 24px; font-size: 17px; font-weight: 600; color: #0f5eb8; border-bottom: 1px solid #edf0f3; }
+.app-header { height: 64px; padding: 0 24px; background: #fff; border-bottom: 1px solid #e5e6eb; display: flex; align-items: center; justify-content: space-between; }
+.app-content { margin: 20px 24px 28px; padding: 22px 24px; background: #fff; min-height: calc(100vh - 112px); border: 1px solid #e9edf2; border-radius: 6px; }
+.page-heading { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
+.page-heading h3 { margin: 0 0 4px; font-size: 20px; letter-spacing: 0; }
+.filter-bar { padding: 14px 16px; margin-bottom: 16px; background: #f7f9fc; border: 1px solid #edf0f3; border-radius: 6px; }

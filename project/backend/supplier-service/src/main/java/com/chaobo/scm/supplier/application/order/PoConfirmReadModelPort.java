@@ -1,0 +1,1 @@
+package com.chaobo.scm.supplier.application.order;import com.chaobo.scm.common.api.PageResult;import java.util.Optional;public interface PoConfirmReadModelPort{Optional<PoConfirmView> detail(long id);PageResult<PoConfirmView> page(Long supplierId,Integer status,String keyword,int pageNo,int pageSize);}

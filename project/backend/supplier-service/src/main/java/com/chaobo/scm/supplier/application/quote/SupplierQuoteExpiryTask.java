@@ -1,0 +1,2 @@
+package com.chaobo.scm.supplier.application.quote;import org.springframework.scheduling.annotation.Scheduled;import org.springframework.stereotype.Component;
+@Component public class SupplierQuoteExpiryTask{private final SupplierQuoteApplicationService service;public SupplierQuoteExpiryTask(SupplierQuoteApplicationService service){this.service=service;}@Scheduled(cron="${scm.quote.expire-cron:0 20 0 * * *}")public void expire(){service.expireQuotes();}}

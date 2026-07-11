@@ -1,0 +1,15 @@
+package com.chaobo.scm.common.error;
+
+public enum ErrorCode {
+    VALIDATION_FAILED,
+    UNAUTHORIZED,
+    FORBIDDEN,
+    SUPPLIER_SCOPE_DENIED,
+    NOT_FOUND,
+    VERSION_CONFLICT,
+    IDEMPOTENCY_CONFLICT,
+    STATE_CONFLICT,
+    BUSINESS_RULE_FAILED,
+    EXTERNAL_CALL_FAILED,
+    SYSTEM_ERROR
+}

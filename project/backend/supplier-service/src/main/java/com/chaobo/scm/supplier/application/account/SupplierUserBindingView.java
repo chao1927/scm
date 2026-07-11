@@ -1,0 +1,1 @@
+package com.chaobo.scm.supplier.application.account;import java.time.OffsetDateTime;public record SupplierUserBindingView(long bindingId,long supplierId,long userId,String bindingRole,boolean primary,int status,OffsetDateTime boundAt,int version){}

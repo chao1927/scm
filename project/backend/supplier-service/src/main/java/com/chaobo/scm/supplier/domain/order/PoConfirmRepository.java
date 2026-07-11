@@ -1,0 +1,1 @@
+package com.chaobo.scm.supplier.domain.order;import java.util.Optional;public interface PoConfirmRepository{Optional<PoConfirmAggregate> findById(long id);Optional<PoConfirmAggregate> findByPurchaseOrderId(long id);void save(PoConfirmAggregate aggregate,long operator);}

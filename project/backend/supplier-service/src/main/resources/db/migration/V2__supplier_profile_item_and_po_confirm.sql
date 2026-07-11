@@ -1,0 +1,102 @@
+CREATE TABLE IF NOT EXISTS `sup_supplier_profile_snapshot` (
+  `supplier_id` bigint NOT NULL,
+  `supplier_code` varchar(64) NOT NULL,
+  `supplier_name` varchar(256) NOT NULL,
+  `lifecycle_status` smallint NOT NULL,
+  `risk_level` smallint NOT NULL DEFAULT 1,
+  `profile_json` json NOT NULL COMMENT '主数据系统供应商档案本地快照',
+  `source_version` bigint NOT NULL DEFAULT 0,
+  `created_at` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  `version` int NOT NULL DEFAULT 0,
+  PRIMARY KEY (`supplier_id`),
+  UNIQUE KEY `uk_sup_profile_code` (`supplier_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='供应商主数据本地快照';
+
+CREATE TABLE IF NOT EXISTS `sup_supplier_profile_change` (
+  `change_id` bigint NOT NULL,
+  `change_no` varchar(64) NOT NULL,
+  `supplier_id` bigint NOT NULL,
+  `profile_version` int NOT NULL COMMENT '申请时档案版本',
+  `change_reason` varchar(512) NOT NULL,
+  `changed_fields_json` json NOT NULL,
+  `change_status` smallint NOT NULL COMMENT '1待审批 2已撤回 3已通过 4已驳回',
+  `withdraw_reason` varchar(512) NULL,
+  `created_by` bigint NOT NULL,
+  `created_at` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_by` bigint NULL,
+  `updated_at` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  `version` int NOT NULL DEFAULT 0,
+  `deleted` tinyint NOT NULL DEFAULT 0,
+  PRIMARY KEY (`change_id`),
+  UNIQUE KEY `uk_sup_profile_change_no` (`change_no`),
+  KEY `idx_sup_profile_change_supplier` (`supplier_id`,`change_status`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='供应商资料变更申请';
+
+CREATE TABLE IF NOT EXISTS `sup_supplier_item` (
+  `supplier_item_id` bigint NOT NULL,
+  `supplier_id` bigint NOT NULL,
+  `sku_code` varchar(64) NOT NULL,
+  `supplier_sku_code` varchar(128) NULL,
+  `moq` decimal(18,4) NOT NULL,
+  `mpq` decimal(18,4) NOT NULL,
+  `lead_time_days` int NOT NULL,
+  `purchase_unit` varchar(32) NOT NULL,
+  `supply_status` smallint NOT NULL COMMENT '1可供 2暂停 3停供',
+  `pause_reason` varchar(512) NULL,
+  `effective_from` date NULL,
+  `effective_to` date NULL,
+  `created_by` bigint NOT NULL,
+  `created_at` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_by` bigint NULL,
+  `updated_at` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  `version` int NOT NULL DEFAULT 0,
+  `deleted` tinyint NOT NULL DEFAULT 0,
+  PRIMARY KEY (`supplier_item_id`),
+  UNIQUE KEY `uk_sup_item_supplier_sku` (`supplier_id`,`sku_code`),
+  KEY `idx_sup_item_status` (`supplier_id`,`supply_status`,`updated_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='供应商商品供货关系';
+
+CREATE TABLE IF NOT EXISTS `sup_order` (
+  `order_id` bigint NOT NULL,
+  `confirm_no` varchar(64) NOT NULL,
+  `purchase_order_id` bigint NOT NULL,
+  `purchase_order_no` varchar(64) NOT NULL,
+  `supplier_id` bigint NOT NULL,
+  `confirm_status` smallint NOT NULL COMMENT '1待确认 2已确认 3差异待处理 4已拒绝 5已关闭',
+  `confirm_deadline` datetime(3) NULL,
+  `confirmed_at` datetime(3) NULL,
+  `diff_type` smallint NULL,
+  `reason_code` smallint NULL,
+  `remark` varchar(512) NULL,
+  `created_by` bigint NOT NULL,
+  `created_at` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_by` bigint NULL,
+  `updated_at` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  `version` int NOT NULL DEFAULT 0,
+  `deleted` tinyint NOT NULL DEFAULT 0,
+  PRIMARY KEY (`order_id`),
+  UNIQUE KEY `uk_sup_order_confirm_no` (`confirm_no`),
+  UNIQUE KEY `uk_sup_order_purchase_id` (`purchase_order_id`),
+  KEY `idx_sup_order_supplier_status` (`supplier_id`,`confirm_status`,`updated_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='采购订单确认协同聚合';
+
+CREATE TABLE IF NOT EXISTS `sup_order_line` (
+  `order_line_id` bigint NOT NULL,
+  `order_id` bigint NOT NULL,
+  `sku_code` varchar(64) NOT NULL,
+  `order_qty` decimal(18,4) NOT NULL,
+  `confirmed_qty` decimal(18,4) NULL,
+  `requested_delivery_date` date NULL,
+  `confirmed_delivery_date` date NULL,
+  `line_status` smallint NOT NULL COMMENT '1待确认 2已确认 3有差异 4已拒绝',
+  `diff_reason` varchar(512) NULL,
+  `created_by` bigint NOT NULL,
+  `created_at` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_by` bigint NULL,
+  `updated_at` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  `version` int NOT NULL DEFAULT 0,
+  `deleted` tinyint NOT NULL DEFAULT 0,
+  PRIMARY KEY (`order_line_id`),
+  KEY `idx_sup_order_line_order` (`order_id`,`line_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='采购订单确认协同行';

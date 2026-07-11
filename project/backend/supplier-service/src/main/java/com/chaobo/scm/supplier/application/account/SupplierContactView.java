@@ -1,0 +1,1 @@
+package com.chaobo.scm.supplier.application.account;public record SupplierContactView(long contactId,long supplierId,String contactName,String mobile,String email,String contactRole,boolean primary,int status,int version){}

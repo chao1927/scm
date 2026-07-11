@@ -1,0 +1,2 @@
+package com.chaobo.scm.supplier.domain.quote;
+public enum QuoteStatus { DRAFT(1,"草稿"), SUBMITTED(2,"已提交"), CONFIRMED(3,"已确认"), ADOPTED(4,"已采纳"), REJECTED(5,"已拒绝"), VOIDED(6,"已作废"), EXPIRED(7,"已过期"); private final int code; private final String label; QuoteStatus(int code,String label){this.code=code;this.label=label;} public int code(){return code;} public String label(){return label;} public static QuoteStatus fromCode(int code){for(var value:values())if(value.code==code)return value;throw new IllegalArgumentException("未知报价状态: "+code);} }

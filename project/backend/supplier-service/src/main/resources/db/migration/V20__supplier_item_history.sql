@@ -1,0 +1,35 @@
+CREATE TABLE sup_supplier_item_condition_history (
+  history_id BIGINT PRIMARY KEY,
+  supplier_item_id BIGINT NOT NULL,
+  supplier_id BIGINT NOT NULL,
+  sku_code VARCHAR(64) NOT NULL,
+  supplier_sku_code VARCHAR(64) NULL,
+  moq DECIMAL(18,4) NOT NULL,
+  mpq DECIMAL(18,4) NOT NULL,
+  lead_time_days INT NOT NULL,
+  purchase_unit VARCHAR(32) NOT NULL,
+  effective_from DATE NULL,
+  effective_to DATE NULL,
+  condition_version INT NOT NULL,
+  change_type VARCHAR(32) NOT NULL,
+  changed_by BIGINT NOT NULL,
+  changed_at DATETIME(3) NOT NULL,
+  KEY idx_sup_item_condition_history(supplier_item_id,changed_at)
+);
+CREATE TABLE sup_supplier_item_price_snapshot (
+  snapshot_id BIGINT PRIMARY KEY,
+  supplier_id BIGINT NOT NULL,
+  sku_code VARCHAR(64) NOT NULL,
+  agreement_ref VARCHAR(64) NOT NULL,
+  currency VARCHAR(8) NOT NULL,
+  unit_price DECIMAL(18,6) NOT NULL,
+  tax_rate DECIMAL(5,2) NOT NULL,
+  effective_from DATE NOT NULL,
+  effective_to DATE NOT NULL,
+  source_contract_id BIGINT NOT NULL,
+  source_quote_id BIGINT NOT NULL,
+  source_version INT NOT NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_sup_item_price_snapshot(agreement_ref,sku_code,source_version),
+  KEY idx_sup_item_price_lookup(supplier_id,sku_code,effective_from,effective_to)
+);

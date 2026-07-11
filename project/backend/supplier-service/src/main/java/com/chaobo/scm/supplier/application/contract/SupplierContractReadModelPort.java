@@ -1,0 +1,1 @@
+package com.chaobo.scm.supplier.application.contract;import com.chaobo.scm.common.api.PageResult;import java.util.*;public interface SupplierContractReadModelPort{Optional<SupplierContractView> detail(long id);PageResult<SupplierContractView> page(Long supplierId,Integer status,String keyword,int pageNo,int pageSize);}

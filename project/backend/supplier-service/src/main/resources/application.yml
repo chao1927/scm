@@ -1,0 +1,84 @@
+spring:
+  application:
+    name: supplier-service
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://127.0.0.1:3306/scm_supplier?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${MYSQL_USERNAME:scm}
+    password: ${MYSQL_PASSWORD:scm}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 4
+      connection-timeout: 3000
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:1}
+      timeout: 2s
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${IAM_JWK_SET_URI:http://127.0.0.1:8090/.well-known/jwks.json}
+
+server:
+  port: ${SERVER_PORT:8101}
+  shutdown: graceful
+
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+    default-statement-timeout: 5
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    correlation: "[%X{traceId:-},%X{spanId:-}] "
+
+scm:
+  dubbo:
+    registry-address: ${DUBBO_REGISTRY_ADDRESS:N/A}
+    timeout-ms: ${DUBBO_TIMEOUT_MS:2000}
+  integration:
+    batch-size: ${INTEGRATION_BATCH_SIZE:50}
+    max-retries: ${INTEGRATION_MAX_RETRIES:8}
+    fixed-delay: ${INTEGRATION_FIXED_DELAY:1000}
+    circuit:
+      failure-threshold: ${INTEGRATION_CIRCUIT_FAILURE_THRESHOLD:5}
+      open-seconds: ${INTEGRATION_CIRCUIT_OPEN_SECONDS:30}
+  rocketmq:
+    enabled: ${ROCKETMQ_ENABLED:false}
+    endpoints: ${ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
+    topic: ${ROCKETMQ_SUPPLIER_TOPIC:supplier-domain-event}
+    master-data-consumer:
+      enabled: ${ROCKETMQ_MASTER_DATA_CONSUMER_ENABLED:false}
+      topic: ${ROCKETMQ_MASTER_DATA_TOPIC:master-data-domain-event}
+      group: ${ROCKETMQ_MASTER_DATA_CONSUMER_GROUP:supplier-master-data-snapshot}
+    contract-approval-consumer:
+      enabled: ${ROCKETMQ_CONTRACT_APPROVAL_CONSUMER_ENABLED:false}
+      topic: ${ROCKETMQ_CONTRACT_APPROVAL_TOPIC:iam-approval-domain-event}
+      group: ${ROCKETMQ_CONTRACT_APPROVAL_CONSUMER_GROUP:supplier-contract-approval}
+  outbox:
+    batch-size: ${OUTBOX_BATCH_SIZE:100}
+    max-retries: ${OUTBOX_MAX_RETRIES:16}
+    fixed-delay: ${OUTBOX_FIXED_DELAY:1000}
+  qualification:
+    expire-cron: ${SUPPLIER_QUALIFICATION_EXPIRE_CRON:0 10 0 * * *}
+  quote:
+    expire-cron: ${SUPPLIER_QUOTE_EXPIRE_CRON:0 20 0 * * *}
+  quality:
+    overdue-cron: ${SUPPLIER_QUALITY_OVERDUE_CRON:0 30 0 * * *}

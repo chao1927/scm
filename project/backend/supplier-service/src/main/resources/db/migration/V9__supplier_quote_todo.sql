@@ -1,0 +1,3 @@
+CREATE TABLE IF NOT EXISTS sup_supplier_quote_todo (
+ todo_id bigint NOT NULL,rfq_id bigint NOT NULL,rfq_no varchar(64) NOT NULL,supplier_id bigint NOT NULL,quote_deadline datetime(3) NULL,todo_status smallint NOT NULL COMMENT '1待报价 2已提交 3已关闭',rfq_snapshot_json json NOT NULL,created_at datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),updated_at datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),version int NOT NULL DEFAULT 0,PRIMARY KEY(todo_id),UNIQUE KEY uk_sup_quote_todo(rfq_id,supplier_id),KEY idx_sup_quote_todo_status(supplier_id,todo_status,quote_deadline)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='供应商报价待办';

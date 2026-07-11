@@ -1,0 +1,2 @@
+package com.chaobo.scm.supplier.application.asn.event;import java.math.BigDecimal;import java.time.OffsetDateTime;import java.util.List;
+public record WmsAsnEvent(String eventCode,String eventType,long asnId,String appointmentNo,OffsetDateTime arrivedAt,BigDecimal receivedQuantity,BigDecimal rejectedQuantity,List<Line> lines){public record Line(long asnLineId,BigDecimal receivedQuantity,BigDecimal rejectedQuantity,int qualityStatus,String qualityReason){}}

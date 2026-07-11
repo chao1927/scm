@@ -1,0 +1,2 @@
+package com.chaobo.scm.supplier.application.order;import java.math.BigDecimal;import java.time.*;import java.util.List;
+public record PurchaseOrderEvent(String eventCode,String eventType,long purchaseOrderId,String purchaseOrderNo,long supplierId,OffsetDateTime confirmDeadline,List<Line> lines,int sourceVersion,String reason){public record Line(String skuCode,BigDecimal orderQuantity,LocalDate requestedDeliveryDate){}}

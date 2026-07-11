@@ -14,6 +14,7 @@
 
 - `skills/supply-chain-system-designer`
 - `system-design-ddd-refactor`：系统设计、文档重构、子系统拆分、字段模型、接口事件、页面设计都要按 DDD 准则校验；其规则来自 `docs/00-领域驱动设计总分总整理.md` 和 `docs/90-DDD文档质量规则归档说明.md`。
+- `skills/supply-chain-development-execution`：进入代码实现时，必须读取 `docs/09-开发计划/01-开发计划.md`，按接口/类/事件/迁移/测试清单实施，并在 `docs/09-开发计划/02-开发日志.md` 记录完成内容、修改删除项和剩余风险。
 
 ## 默认工作方式
 
