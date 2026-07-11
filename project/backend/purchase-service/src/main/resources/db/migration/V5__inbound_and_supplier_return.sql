@@ -1,0 +1,62 @@
+create table purchase_inbound_tracking (
+    id bigint not null primary key,
+    inbound_no varchar(64) not null,
+    order_no varchar(64) not null,
+    asn_no varchar(64) not null,
+    supplier_id bigint not null,
+    purchase_org_id bigint not null,
+    warehouse_code varchar(64) null,
+    sku_code varchar(64) null,
+    notified_qty decimal(18, 6) not null,
+    received_qty decimal(18, 6) not null default 0,
+    qualified_qty decimal(18, 6) not null default 0,
+    unqualified_qty decimal(18, 6) not null default 0,
+    putaway_qty decimal(18, 6) not null default 0,
+    status tinyint not null comment '1 ASN已记录 2在途 3已到仓 4已收货 5已质检 6已上架 7异常',
+    exception_reason varchar(512) null,
+    version int not null,
+    deleted tinyint not null default 0,
+    created_by bigint not null,
+    updated_by bigint not null,
+    created_at datetime(3) not null,
+    updated_at datetime(3) not null,
+    unique key uk_purchase_inbound_no (inbound_no),
+    unique key uk_purchase_inbound_asn (asn_no),
+    key idx_purchase_inbound_order (order_no, status),
+    key idx_purchase_inbound_org (purchase_org_id, status)
+) comment '采购到货跟踪';
+
+create table purchase_supplier_return (
+    id bigint not null primary key,
+    return_no varchar(64) not null,
+    source_order_no varchar(64) not null,
+    supplier_id bigint not null,
+    purchase_org_id bigint not null,
+    warehouse_code varchar(64) null,
+    status tinyint not null comment '1已创建 2待审批 3已批准 4已通知执行 5已关闭 6已驳回',
+    reject_reason varchar(512) null,
+    version int not null,
+    deleted tinyint not null default 0,
+    created_by bigint not null,
+    updated_by bigint not null,
+    created_at datetime(3) not null,
+    updated_at datetime(3) not null,
+    unique key uk_purchase_supplier_return_no (return_no),
+    key idx_purchase_supplier_return_order (source_order_no),
+    key idx_purchase_supplier_return_org_status (purchase_org_id, status),
+    key idx_purchase_supplier_return_supplier (supplier_id, status)
+) comment '采购退供应商申请';
+
+create table purchase_supplier_return_line (
+    line_id bigint not null primary key,
+    return_id bigint not null,
+    sku_code varchar(64) not null,
+    return_qty decimal(18, 6) not null,
+    returnable_qty decimal(18, 6) not null,
+    reason varchar(512) null,
+    deleted tinyint not null default 0,
+    created_at datetime(3) not null,
+    updated_at datetime(3) not null,
+    key idx_purchase_supplier_return_line_return (return_id),
+    key idx_purchase_supplier_return_line_sku (sku_code)
+) comment '采购退供应商申请行';

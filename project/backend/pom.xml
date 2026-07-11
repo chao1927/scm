@@ -12,6 +12,7 @@
     <modules>
         <module>scm-common</module>
         <module>supplier-service</module>
+        <module>purchase-service</module>
     </modules>
 
     <properties>
