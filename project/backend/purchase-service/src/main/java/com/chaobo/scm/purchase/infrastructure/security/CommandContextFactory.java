@@ -52,6 +52,7 @@ public class CommandContextFactory {
                     "purchase:po:approve",
                     "purchase:po:publish",
                     "purchase:po:cancel",
+                    "purchase:po:close",
                     "purchase:po:read",
                     "purchase:po-change:create",
                     "purchase:po-change:approve",
@@ -63,7 +64,12 @@ public class CommandContextFactory {
                     "purchase:supplier-return:submit",
                     "purchase:supplier-return:approve",
                     "purchase:supplier-return:notify",
-                    "purchase:supplier-return:read");
+                    "purchase:supplier-return:read",
+                    "purchase:supplier_confirm:read",
+                    "purchase:supplier_confirm:accept_diff",
+                    "purchase:supplier_confirm:renegotiate",
+                    "purchase:supplier_confirm:cancel_order",
+                    "purchase:event:replay");
         }
         var values = authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)

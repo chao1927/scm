@@ -1,0 +1,172 @@
+name: scm-middleware
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: scm-mysql
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "${MYSQL_PORT}:3306"
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+      - ./config/mysql/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - ./init/mysql:/docker-entrypoint-initdb.d:ro
+      - ./logs/mysql:/var/log/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - middleware-net
+
+  redis-cluster:
+    image: redis:7.2
+    container_name: scm-redis-cluster
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${REDIS_PORT_7000}:7000"
+      - "${REDIS_PORT_7001}:7001"
+      - "${REDIS_PORT_7002}:7002"
+      - "17000:17000"
+      - "17001:17001"
+      - "17002:17002"
+    volumes:
+      - ./config/redis:/usr/local/etc/redis:ro
+      - ./scripts/redis/start-redis-cluster.sh:/usr/local/bin/start-redis-cluster.sh:ro
+      - ./data/redis:/data
+      - ./logs/redis:/var/log/redis
+    command: ["sh", "/usr/local/bin/start-redis-cluster.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} -p 7000 ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks:
+      - middleware-net
+
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.3.2
+    container_name: scm-rocketmq-namesrv
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${ROCKETMQ_NAMESRV_PORT}:9876"
+    environment:
+      JAVA_OPT_EXT: "-Xms128m -Xmx256m -Xmn64m"
+    volumes:
+      - ./data/rocketmq/namesrv/logs:/home/rocketmq/logs
+    command: ["sh", "mqnamesrv"]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc 'echo > /dev/tcp/127.0.0.1/9876'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks:
+      - middleware-net
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.3.2
+    container_name: scm-rocketmq-broker
+    restart: unless-stopped
+    depends_on:
+      rocketmq-namesrv:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      NAMESRV_ADDR: rocketmq-namesrv:9876
+      JAVA_OPT_EXT: "-Xms256m -Xmx512m -Xmn128m"
+    ports:
+      - "${ROCKETMQ_BROKER_PORT}:10911"
+      - "${ROCKETMQ_BROKER_FAST_PORT}:10909"
+    volumes:
+      - ./config/rocketmq/broker.conf:/home/rocketmq/broker.conf:ro
+      - ./data/rocketmq/broker/store:/home/rocketmq/store
+      - ./data/rocketmq/broker/logs:/home/rocketmq/logs
+    command: ["sh", "mqbroker", "-n", "rocketmq-namesrv:9876", "-c", "/home/rocketmq/broker.conf"]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc 'echo > /dev/tcp/127.0.0.1/10911'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+    networks:
+      - middleware-net
+
+  nacos:
+    image: nacos/nacos-server:v2.3.2
+    container_name: scm-nacos
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      MODE: standalone
+      PREFER_HOST_MODE: hostname
+      TZ: ${TZ}
+      JVM_XMS: 256m
+      JVM_XMX: 512m
+      JVM_XMN: 128m
+      NACOS_AUTH_ENABLE: "true"
+      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY}
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE}
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN}
+    ports:
+      - "${NACOS_HTTP_PORT}:8848"
+      - "${NACOS_GRPC_PORT}:9848"
+      - "${NACOS_GRPC_RAFT_PORT}:9849"
+    volumes:
+      - ./config/nacos/application.properties:/home/nacos/conf/application.properties:ro
+      - ./data/nacos:/home/nacos/data
+      - ./logs/nacos:/home/nacos/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8848/nacos/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    networks:
+      - middleware-net
+
+  nginx:
+    image: nginx:1.26
+    container_name: scm-nginx
+    restart: unless-stopped
+    depends_on:
+      nacos:
+        condition: service_started
+    ports:
+      - "${NGINX_HTTP_PORT}:80"
+      - "${NGINX_HTTPS_PORT}:443"
+    volumes:
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./config/nginx/htpasswd:/etc/nginx/htpasswd:ro
+      - ./data/nginx/html:/usr/share/nginx/html:ro
+      - ./logs/nginx:/var/log/nginx
+    healthcheck:
+      test: ["CMD-SHELL", "nginx -t && wget -qO- http://127.0.0.1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - middleware-net
+
+networks:
+  middleware-net:
+    driver: bridge

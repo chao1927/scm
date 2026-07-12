@@ -11,7 +11,8 @@ public enum PurchaseOrderStatus {
     COMPLETED(8, "已完成"),
     CANCELLED(9, "已取消"),
     CLOSED(10, "已关闭"),
-    REJECTED(11, "已驳回");
+    REJECTED(11, "已驳回"),
+    SUPPLIER_REJECTED(12, "供应商已拒绝");
 
     private final int code;
     private final String label;

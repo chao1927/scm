@@ -3,6 +3,12 @@ package com.chaobo.scm.purchase.infrastructure.persistence.event;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
+
+import com.chaobo.scm.purchase.application.outbox.OutboxMessage;
+
+import java.util.List;
 
 @Mapper
 public interface EventPersistenceMapper {
@@ -45,4 +51,38 @@ public interface EventPersistenceMapper {
             @Param("targetNo") String targetNo,
             @Param("beforeSnapshot") String beforeSnapshot,
             @Param("afterSnapshot") String afterSnapshot);
+
+    @Select("""
+            select event_id eventId, event_code eventCode, event_type eventType, aggregate_type aggregateType,
+                   aggregate_id aggregateId, payload_json payloadJson, retry_count retryCount
+            from purchase_outbox_event
+            where status in (1, 4) and retry_count < #{maxRetries}
+            order by created_at
+            limit #{batchSize}
+            """)
+    List<OutboxMessage> claimOutbox(@Param("batchSize") int batchSize, @Param("maxRetries") int maxRetries);
+
+    @Update("""
+            <script>
+            update purchase_outbox_event set status = 2, updated_at = now(3)
+            where event_id in
+            <foreach collection="eventIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            and status in (1, 4)
+            </script>
+            """)
+    int markOutboxPublishing(@Param("eventIds") List<Long> eventIds);
+
+    @Update("""
+            update purchase_outbox_event
+            set status = 3, published_at = now(3), updated_at = now(3), last_error = null
+            where event_id = #{eventId}
+            """)
+    int markOutboxPublished(long eventId);
+
+    @Update("""
+            update purchase_outbox_event
+            set status = 4, retry_count = retry_count + 1, last_error = #{reason}, updated_at = now(3)
+            where event_id = #{eventId}
+            """)
+    int markOutboxFailed(@Param("eventId") long eventId, @Param("reason") String reason);
 }

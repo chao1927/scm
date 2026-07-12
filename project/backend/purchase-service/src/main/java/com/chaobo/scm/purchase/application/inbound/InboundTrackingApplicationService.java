@@ -57,6 +57,20 @@ public class InboundTrackingApplicationService {
         });
     }
 
+    @Transactional
+    public CommandResult syncWmsFromEvent(String inboundNo, InboundCommands.SyncWms command, CommandContext context) {
+        context.requirePermission("purchase:inbound:sync-wms");
+        return idempotency.execute("purchase:inbound:sync-wms:event", context, () -> {
+            var aggregate = repository.findByNo(inboundNo)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "到货跟踪不存在"));
+            context.requirePurchaseOrgScope(aggregate.purchaseOrgId());
+            var before = snapshot(aggregate);
+            aggregate.syncWms(command.receivedQty(), command.qualifiedQty(), command.unqualifiedQty(),
+                    command.putawayQty(), command.reason(), ids);
+            return persist(aggregate, context, "CONSUME_WMS_INBOUND", before);
+        });
+    }
+
     private CommandResult persist(InboundTrackingAggregate aggregate, CommandContext context, String operation,
                                   String before) {
         repository.save(aggregate, context.operatorId());

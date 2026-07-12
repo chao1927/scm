@@ -78,6 +78,13 @@ public class PurchaseOrderController {
                 body.reason()), contexts.create(request, authentication)), request);
     }
 
+    @PostMapping("/{orderNo}/close")
+    public ApiResponse<CommandResult> close(@PathVariable String orderNo, @Valid @RequestBody CloseRequest body,
+                                            HttpServletRequest request, Authentication authentication) {
+        return ok(applicationService.close(orderNo, new PurchaseOrderCommands.Close(body.version(), body.reason()),
+                contexts.create(request, authentication)), request);
+    }
+
     private <T> ApiResponse<T> ok(T data, HttpServletRequest request) {
         return ApiResponse.success(data, request.getHeader("X-Request-Id"), request.getHeader("X-Trace-Id"));
     }
@@ -118,5 +125,8 @@ public class PurchaseOrderController {
     }
 
     public record CancelRequest(@PositiveOrZero int version, @NotBlank String reason) {
+    }
+
+    public record CloseRequest(@PositiveOrZero int version, @NotBlank String reason) {
     }
 }

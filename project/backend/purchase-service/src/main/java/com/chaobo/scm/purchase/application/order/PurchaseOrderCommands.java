@@ -27,4 +27,7 @@ public final class PurchaseOrderCommands {
 
     public record Cancel(int version, String reason) {
     }
+
+    public record Close(int version, String reason) {
+    }
 }

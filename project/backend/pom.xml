@@ -13,6 +13,11 @@
         <module>scm-common</module>
         <module>supplier-service</module>
         <module>purchase-service</module>
+        <module>wms-service</module>
+        <module>inventory-service</module>
+        <module>iam-service</module>
+        <module>mdm-service</module>
+        <module>oms-service</module>
     </modules>
 
     <properties>

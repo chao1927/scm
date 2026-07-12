@@ -51,6 +51,89 @@ class PurchaseOrderAggregateTest {
         assertThat(order.lines().getFirst().orderQty()).isEqualByComparingTo("20");
     }
 
+    @Test
+    void supplierConfirmationMovesReleasedOrderToConfirmed() {
+        var order = releasedOrder();
+
+        order.recordSupplierConfirmation("按期送达", ids);
+
+        assertThat(order.status()).isEqualTo(PurchaseOrderStatus.SUPPLIER_CONFIRMED);
+        assertThat(order.pullEvents()).extracting("eventType")
+                .contains("SupplierOrderConfirmationRecorded");
+    }
+
+    @Test
+    void supplierRejectionRequiresReasonAndUsesDedicatedState() {
+        var order = releasedOrder();
+
+        assertThatThrownBy(() -> order.recordSupplierRejection("", ids))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("拒绝原因不能为空");
+
+        order.recordSupplierRejection("产能不足", ids);
+
+        assertThat(order.status()).isEqualTo(PurchaseOrderStatus.SUPPLIER_REJECTED);
+    }
+
+    @Test
+    void supplierDifferenceCanOnlyBeRecordedWhileWaitingForConfirmation() {
+        var order = releasedOrder();
+        order.recordSupplierDifference("交期需要顺延", ids);
+
+        assertThat(order.status()).isEqualTo(PurchaseOrderStatus.SUPPLIER_DIFF);
+        assertThatThrownBy(() -> order.recordSupplierConfirmation(null, ids))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不允许执行");
+    }
+
+    @Test
+    void acceptedSupplierDifferenceReturnsOrderToConfirmed() {
+        var order = releasedOrder();
+        order.recordSupplierDifference("数量短缺", ids);
+        order.pullEvents();
+
+        order.acceptSupplierDifference("接受部分供货", ids);
+
+        assertThat(order.status()).isEqualTo(PurchaseOrderStatus.SUPPLIER_CONFIRMED);
+        assertThat(order.pullEvents()).extracting("eventType")
+                .contains("SupplierOrderDifferenceAccepted");
+    }
+
+    @Test
+    void renegotiationReturnsDifferenceOrderToPendingConfirmation() {
+        var order = releasedOrder();
+        order.recordSupplierDifference("交期延后", ids);
+
+        order.restartSupplierNegotiation("请在三天内重新确认交期", ids);
+
+        assertThat(order.status()).isEqualTo(PurchaseOrderStatus.PENDING_SUPPLIER_CONFIRM);
+    }
+
+    @Test
+    void closeRemainingRequiresAnExecutionStateAndReason() {
+        var draft = order(BigDecimal.ZERO);
+        assertThatThrownBy(() -> draft.closeRemaining("停止采购", ids))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不允许执行");
+
+        var released = releasedOrder();
+        released.recordSupplierConfirmation(null, ids);
+        released.closeRemaining("需求取消", ids);
+
+        assertThat(released.status()).isEqualTo(PurchaseOrderStatus.CLOSED);
+        assertThat(released.pullEvents()).extracting("eventType").contains("PurchaseOrderClosed");
+    }
+
+    private PurchaseOrderAggregate releasedOrder() {
+        var order = order(BigDecimal.ZERO);
+        order.pullEvents();
+        order.submit(ids);
+        order.approve(true, null, ids);
+        order.publish("EVENT", ids);
+        order.pullEvents();
+        return order;
+    }
+
     private PurchaseOrderAggregate order(BigDecimal receivedQty) {
         return PurchaseOrderAggregate.create(1, 3001, "SUP001", "测试供应商", 2001, "WH001", "CNY",
                 List.of(new PurchaseOrderLine(ids.nextId(), "SKU-01", "测试SKU", new BigDecimal("10"),

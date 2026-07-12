@@ -2,6 +2,7 @@ package com.chaobo.scm.purchase.application.supplierreturn;
 
 import com.chaobo.scm.common.error.BusinessException;
 import com.chaobo.scm.common.error.ErrorCode;
+import com.chaobo.scm.purchase.application.integration.IntegrationCommandEnqueuer;
 import com.chaobo.scm.purchase.application.shared.*;
 import com.chaobo.scm.purchase.domain.shared.IdentifierGenerator;
 import com.chaobo.scm.purchase.domain.supplierreturn.*;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class SupplierReturnApplicationService {
@@ -17,15 +19,17 @@ public class SupplierReturnApplicationService {
     private final AuditLogRepository auditLog;
     private final IdentifierGenerator ids;
     private final IdempotencyPort idempotency;
+    private final IntegrationCommandEnqueuer integrations;
 
     public SupplierReturnApplicationService(SupplierReturnRepository repository, OutboxRepository outbox,
                                             AuditLogRepository auditLog, IdentifierGenerator ids,
-                                            IdempotencyPort idempotency) {
+                                            IdempotencyPort idempotency, IntegrationCommandEnqueuer integrations) {
         this.repository = repository;
         this.outbox = outbox;
         this.auditLog = auditLog;
         this.ids = ids;
         this.idempotency = idempotency;
+        this.integrations = integrations;
     }
 
     @Transactional
@@ -53,8 +57,19 @@ public class SupplierReturnApplicationService {
     @Transactional
     public CommandResult notifyExecution(String returnNo, SupplierReturnCommands.Notify command, CommandContext context) {
         context.requirePermission("purchase:supplier-return:notify");
-        return change(returnNo, command.version(), context, "NOTIFY_SUPPLIER_RETURN",
-                aggregate -> aggregate.notifyExecution(command.notifyMode(), ids));
+        return idempotency.execute("purchase:supplier-return:NOTIFY_SUPPLIER_RETURN", context, () -> {
+            var aggregate = repository.findByNo(returnNo)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "退供申请不存在"));
+            context.requirePurchaseOrgScope(aggregate.purchaseOrgId());
+            if (aggregate.version() != command.version()) {
+                throw new BusinessException(ErrorCode.VERSION_CONFLICT, "退供申请已被其他人修改");
+            }
+            var before = snapshot(aggregate);
+            aggregate.notifyExecution(command.notifyMode(), ids);
+            var result = persist(aggregate, context, "NOTIFY_SUPPLIER_RETURN", before);
+            enqueueExecutionCommands(aggregate);
+            return result;
+        });
     }
 
     private CommandResult change(String returnNo, int version, CommandContext context, String operation,
@@ -95,5 +110,31 @@ public class SupplierReturnApplicationService {
     private String snapshot(SupplierReturnAggregate aggregate) {
         return "{\"returnNo\":\"%s\",\"status\":%d,\"version\":%d}"
                 .formatted(aggregate.returnNo(), aggregate.status().code(), aggregate.version());
+    }
+
+    private void enqueueExecutionCommands(SupplierReturnAggregate aggregate) {
+        var payload = Map.of(
+                "returnId", aggregate.id(),
+                "returnNo", aggregate.returnNo(),
+                "sourceOrderNo", aggregate.sourceOrderNo(),
+                "supplierId", aggregate.supplierId(),
+                "purchaseOrgId", aggregate.purchaseOrgId(),
+                "warehouseCode", aggregate.warehouseCode() == null ? "" : aggregate.warehouseCode(),
+                "version", aggregate.version(),
+                "lines", aggregate.lines().stream().map(line -> Map.of(
+                        "lineId", line.lineId(),
+                        "skuCode", line.skuCode(),
+                        "returnQty", line.returnQty(),
+                        "returnableQty", line.returnableQty(),
+                        "reason", line.reason() == null ? "" : line.reason()
+                )).toList());
+        integrations.enqueue("INVENTORY_LOCK_SUPPLIER_RETURN", "INVENTORY", "SUPPLIER_RETURN",
+                Long.toString(aggregate.id()), aggregate.returnNo(), payload);
+        integrations.enqueue("WMS_CREATE_SUPPLIER_RETURN_OUTBOUND", "WMS", "SUPPLIER_RETURN",
+                Long.toString(aggregate.id()), aggregate.returnNo(), payload);
+        integrations.enqueue("TMS_CREATE_SUPPLIER_RETURN_TRANSPORT", "TMS", "SUPPLIER_RETURN",
+                Long.toString(aggregate.id()), aggregate.returnNo(), payload);
+        integrations.enqueue("BMS_CREATE_SUPPLIER_RETURN_OFFSET", "BMS", "SUPPLIER_RETURN",
+                Long.toString(aggregate.id()), aggregate.returnNo(), payload);
     }
 }

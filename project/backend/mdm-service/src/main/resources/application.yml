@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: mdm-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/scm_mdm?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: root
+  flyway:
+    enabled: true
+  jackson:
+    time-zone: Asia/Shanghai
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+server:
+  port: 8098

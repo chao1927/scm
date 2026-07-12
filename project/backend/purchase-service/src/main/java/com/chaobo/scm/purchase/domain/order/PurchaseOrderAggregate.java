@@ -112,6 +112,63 @@ public class PurchaseOrderAggregate {
         raise("PurchaseOrderCancelled", Map.of("reason", reason));
     }
 
+    public void closeRemaining(String reason, IdentifierGenerator ids) {
+        ensureStatus(PurchaseOrderStatus.SUPPLIER_CONFIRMED, PurchaseOrderStatus.PARTIALLY_INBOUNDED,
+                PurchaseOrderStatus.SUPPLIER_DIFF, PurchaseOrderStatus.SUPPLIER_REJECTED);
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "关闭剩余数量原因不能为空");
+        }
+        touch();
+        versionNo++;
+        status = PurchaseOrderStatus.CLOSED;
+        raise("PurchaseOrderClosed", Map.of("reason", reason));
+    }
+
+    /**
+     * 供应商确认是采购订单发布后的外部业务事实。事件先由 Inbox 幂等保护，
+     * 再调用本方法推进订单，避免供应商门户直接改写采购订单数据。
+     */
+    public void recordSupplierConfirmation(String remark, IdentifierGenerator ids) {
+        ensureStatus(PurchaseOrderStatus.PENDING_SUPPLIER_CONFIRM);
+        touch();
+        status = PurchaseOrderStatus.SUPPLIER_CONFIRMED;
+        raise("SupplierOrderConfirmationRecorded", optional("remark", remark));
+    }
+
+    public void recordSupplierRejection(String reason, IdentifierGenerator ids) {
+        ensureStatus(PurchaseOrderStatus.PENDING_SUPPLIER_CONFIRM);
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "供应商拒绝原因不能为空");
+        }
+        touch();
+        status = PurchaseOrderStatus.SUPPLIER_REJECTED;
+        raise("SupplierOrderRejectionRecorded", Map.of("reason", reason));
+    }
+
+    public void recordSupplierDifference(String reason, IdentifierGenerator ids) {
+        ensureStatus(PurchaseOrderStatus.PENDING_SUPPLIER_CONFIRM);
+        touch();
+        status = PurchaseOrderStatus.SUPPLIER_DIFF;
+        raise("SupplierOrderDifferenceRecorded", optional("reason", reason));
+    }
+
+    public void acceptSupplierDifference(String comment, IdentifierGenerator ids) {
+        ensureStatus(PurchaseOrderStatus.SUPPLIER_DIFF);
+        touch();
+        status = PurchaseOrderStatus.SUPPLIER_CONFIRMED;
+        raise("SupplierOrderDifferenceAccepted", optional("comment", comment));
+    }
+
+    public void restartSupplierNegotiation(String requirement, IdentifierGenerator ids) {
+        ensureStatus(PurchaseOrderStatus.SUPPLIER_DIFF, PurchaseOrderStatus.SUPPLIER_REJECTED);
+        if (requirement == null || requirement.isBlank()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "重新协商要求不能为空");
+        }
+        touch();
+        status = PurchaseOrderStatus.PENDING_SUPPLIER_CONFIRM;
+        raise("SupplierOrderRenegotiationRequested", Map.of("requirement", requirement));
+    }
+
     public void applyLineQtyChanges(Map<Long, BigDecimal> lineQtyChanges, IdentifierGenerator ids) {
         if (status == PurchaseOrderStatus.COMPLETED || status == PurchaseOrderStatus.CANCELLED) {
             throw new BusinessException(ErrorCode.STATE_CONFLICT, "已完成或已取消订单不能变更");
@@ -181,6 +238,10 @@ public class PurchaseOrderAggregate {
         payload.putAll(extra);
         events.add(new DomainEvent(0, "PUR-" + eventType + "-" + id + "-" + version, eventType,
                 "PURCHASE_ORDER", Long.toString(id), version, OffsetDateTime.now(), payload));
+    }
+
+    private static Map<String, Object> optional(String key, String value) {
+        return value == null || value.isBlank() ? Map.of() : Map.of(key, value);
     }
 
     private void assertNoDuplicateSku() {
