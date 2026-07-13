@@ -11,3 +11,8 @@ spring:
 mybatis:
   configuration:
     map-underscore-to-camel-case: true
+
+scm:
+  security:
+    hmac-secret: ${IAM_JWT_SECRET:}
+    permission-namespace: purchase

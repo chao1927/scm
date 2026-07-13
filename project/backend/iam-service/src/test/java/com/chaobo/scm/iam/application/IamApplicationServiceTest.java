@@ -1,10 +1,13 @@
 package com.chaobo.scm.iam.application;
 
+import com.chaobo.scm.iam.infrastructure.jwt.IamJwtService;
 import com.chaobo.scm.iam.infrastructure.persistence.IamMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -21,6 +24,7 @@ class IamApplicationServiceTest {
         var me = service.me(login.accessToken());
         service.logout(refreshed.refreshToken());
 
+        assertThat(login.accessToken().split("\\.")).hasSize(3);
         assertThat(me.username()).isEqualTo("admin");
         assertThat(mapper.sessions).hasSize(2);
         assertThat(mapper.logs).extracting(IamMapper.OperationLogRow::operation).contains("LOGIN");
@@ -42,6 +46,24 @@ class IamApplicationServiceTest {
         assertThat(service.permissions(10)).hasSize(1);
         assertThat(service.approvals(10).get(0).status()).isEqualTo(2);
         assertThat(service.securityPolicies(10)).hasSize(1);
+    }
+
+    @Test
+    void loginAccessTokenContainsCurrentPermissionsAndDataScopes() {
+        IamJwtService jwt = new IamJwtService("01234567890123456789012345678901");
+        IamApplicationService securedService = new IamApplicationService(mapper, jwt, userId ->
+                new IamTokenClaimsProvider.PermissionClaims(
+                        Set.of("purchase:po:read"), Map.of("PURCHASE_ORG", Set.of("ORG-1"))));
+        securedService.createUser("buyer", "123456");
+
+        var login = securedService.login("buyer", "123456");
+        var accessClaims = jwt.verify(login.accessToken());
+        var refreshClaims = jwt.verify(login.refreshToken());
+
+        assertThat(accessClaims.permissions()).containsExactly("purchase:po:read");
+        assertThat(accessClaims.dataScopes().get("PURCHASE_ORG")).containsExactly("ORG-1");
+        assertThat(refreshClaims.permissions()).isEmpty();
+        assertThat(refreshClaims.dataScopes()).isEmpty();
     }
 
     private static class MemoryIamMapper implements IamMapper {

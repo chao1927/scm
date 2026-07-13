@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 
 @RestController
 @RequestMapping("/api/wms/v1")
+@org.springframework.security.access.prepost.PreAuthorize("hasAnyAuthority('*', 'wms:*', 'wms:picking:write')")
 public class WavePickingController {
     private final WavePickingApplicationService service;
 

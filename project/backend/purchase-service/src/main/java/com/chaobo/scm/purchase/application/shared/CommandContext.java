@@ -16,7 +16,10 @@ public record CommandContext(
         Set<String> permissions) {
 
     public void requirePermission(String permission) {
-        if (permissions == null || !permissions.contains(permission)) {
+        boolean allowed = permissions != null && (permissions.contains("*") || permissions.contains(permission)
+                || permissions.stream().filter(value -> value.endsWith(":*"))
+                .map(value -> value.substring(0, value.length() - 1)).anyMatch(permission::startsWith));
+        if (!allowed) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "缺少功能权限: " + permission);
         }
     }

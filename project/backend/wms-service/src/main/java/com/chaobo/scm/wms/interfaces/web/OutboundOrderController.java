@@ -4,6 +4,7 @@ import com.chaobo.scm.common.api.ApiResponse;
 import com.chaobo.scm.common.error.BusinessException;
 import com.chaobo.scm.common.error.ErrorCode;
 import com.chaobo.scm.wms.application.outbound.OutboundApplicationService;
+import com.chaobo.scm.wms.infrastructure.security.WmsAccessControl;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -13,9 +14,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping
+@org.springframework.security.access.prepost.PreAuthorize("hasAnyAuthority('*', 'wms:*', 'wms:outbound:write')")
 public class OutboundOrderController {
     private final OutboundApplicationService service;
 
@@ -26,7 +29,8 @@ public class OutboundOrderController {
     @PostMapping("/openapi/wms/v1/outbound-orders")
     public ApiResponse<OutboundApplicationService.Result> create(
             @Valid @RequestBody Create body,
-            HttpServletRequest request
+            HttpServletRequest request,
+            Authentication authentication
     ) {
         var source = request.getHeader("X-Source-System");
         if (source == null || !source.equals(body.sourceType())) {
@@ -35,16 +39,21 @@ public class OutboundOrderController {
         if (request.getHeader("X-Idempotency-Key") == null) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED, "缺少幂等键");
         }
-        return ok(service.create(body.sourceType(), body.sourceNo(), body.warehouseId(), operator(request)), request);
+        WmsAccessControl.requireWarehouse(authentication, body.warehouseId());
+        return ok(service.create(body.sourceType(), body.sourceNo(), body.warehouseId(),
+                WmsAccessControl.operatorId(authentication)), request);
     }
 
     @PostMapping("/api/wms/v1/outbound-orders/allocate")
     public ApiResponse<OutboundApplicationService.Result> allocate(
             @Valid @RequestBody Change body,
-            HttpServletRequest request
+            HttpServletRequest request,
+            Authentication authentication
     ) {
+        WmsAccessControl.requireWarehouse(authentication, body.warehouseId());
         return ok(
-                service.allocate(body.sourceType(), body.sourceNo(), body.warehouseId(), body.version(), operator(request)),
+                service.allocate(body.sourceType(), body.sourceNo(), body.warehouseId(), body.version(),
+                        WmsAccessControl.operatorId(authentication)),
                 request
         );
     }
@@ -52,8 +61,10 @@ public class OutboundOrderController {
     @PostMapping("/openapi/wms/v1/outbound-orders/cancel")
     public ApiResponse<OutboundApplicationService.Result> cancel(
             @Valid @RequestBody Cancel body,
-            HttpServletRequest request
+            HttpServletRequest request,
+            Authentication authentication
     ) {
+        WmsAccessControl.requireWarehouse(authentication, body.warehouseId());
         return ok(
                 service.cancel(
                         body.sourceType(),
@@ -61,15 +72,10 @@ public class OutboundOrderController {
                         body.warehouseId(),
                         body.version(),
                         body.reason(),
-                        operator(request)
+                        WmsAccessControl.operatorId(authentication)
                 ),
                 request
         );
-    }
-
-    private static long operator(HttpServletRequest request) {
-        var value = request.getHeader("X-Operator-Id");
-        return value == null || value.isBlank() ? 0 : Long.parseLong(value);
     }
 
     private static <T> ApiResponse<T> ok(T data, HttpServletRequest request) {

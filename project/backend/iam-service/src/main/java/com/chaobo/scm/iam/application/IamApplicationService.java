@@ -4,20 +4,39 @@ import com.chaobo.scm.common.error.BusinessException;
 import com.chaobo.scm.common.error.ErrorCode;
 import com.chaobo.scm.iam.domain.SessionTokenAggregate;
 import com.chaobo.scm.iam.domain.UserAggregate;
+import com.chaobo.scm.iam.infrastructure.jwt.IamJwtService;
 import com.chaobo.scm.iam.infrastructure.persistence.IamMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class IamApplicationService {
     private final IamMapper mapper;
+    private final IamJwtService jwtService;
+    private final IamTokenClaimsProvider tokenClaimsProvider;
     private final AtomicLong ids = new AtomicLong(System.currentTimeMillis());
 
     public IamApplicationService(IamMapper mapper) {
+        this(mapper, new IamJwtService("01234567890123456789012345678901"));
+    }
+
+    public IamApplicationService(IamMapper mapper, IamJwtService jwtService) {
+        this(mapper, jwtService, userId -> new IamTokenClaimsProvider.PermissionClaims(Set.of(), Map.of()));
+    }
+
+    @Autowired
+    public IamApplicationService(IamMapper mapper, IamJwtService jwtService,
+                                 IamTokenClaimsProvider tokenClaimsProvider) {
         this.mapper = mapper;
+        this.jwtService = jwtService;
+        this.tokenClaimsProvider = tokenClaimsProvider;
     }
 
     @Transactional
@@ -41,8 +60,8 @@ public class IamApplicationService {
         user.authenticate(hash(password));
         mapper.updateUser(user.id(), user.passwordHash(), user.status(), user.failedAttempts(), user.version(), oldVersion);
         long sessionId = ids.incrementAndGet();
-        String access = "AT-" + sessionId;
-        String refresh = "RT-" + sessionId;
+        String access = issueToken(user.id(), username, "IAM", "AT-" + sessionId, "ACCESS", 3600, true);
+        String refresh = issueToken(user.id(), username, "IAM", "RT-" + sessionId, "REFRESH", 86400, false);
         mapper.insertSession(sessionId, user.id(), access, refresh, 1, 0);
         mapper.insertOperationLog(ids.incrementAndGet(), "LOGIN", username);
         return new LoginResult(access, refresh, user.id(), username);
@@ -50,6 +69,7 @@ public class IamApplicationService {
 
     @Transactional
     public LoginResult refresh(String refreshToken) {
+        jwtService.verify(refreshToken);
         var row = mapper.findSessionByRefresh(refreshToken);
         if (row == null || row.status() != 1) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "刷新令牌无效");
@@ -59,8 +79,8 @@ public class IamApplicationService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "用户不可登录");
         }
         long sessionId = ids.incrementAndGet();
-        String access = "AT-" + sessionId;
-        String refresh = "RT-" + sessionId;
+        String access = issueToken(user.id(), user.username(), "IAM", "AT-" + sessionId, "ACCESS", 3600, true);
+        String refresh = issueToken(user.id(), user.username(), "IAM", "RT-" + sessionId, "REFRESH", 86400, false);
         mapper.insertSession(sessionId, user.id(), access, refresh, 1, 0);
         return new LoginResult(access, refresh, user.id(), user.username());
     }
@@ -78,6 +98,7 @@ public class IamApplicationService {
     }
 
     public UserView me(String accessToken) {
+        jwtService.verify(accessToken);
         var session = mapper.findSessionByAccess(accessToken);
         if (session == null || session.status() != 1) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "访问令牌无效");
@@ -179,6 +200,16 @@ public class IamApplicationService {
 
     private static UserAggregate toUser(IamMapper.UserRow row) {
         return new UserAggregate(row.id(), row.username(), row.passwordHash(), row.status(), row.failedAttempts(), row.version());
+    }
+
+    private String issueToken(long userId, String username, String appCode, String jti, String tokenType,
+                              long secondsToLive, boolean includeAuthorization) {
+        long now = Instant.now().getEpochSecond();
+        IamTokenClaimsProvider.PermissionClaims authorization = includeAuthorization
+                ? tokenClaimsProvider.claimsFor(userId)
+                : new IamTokenClaimsProvider.PermissionClaims(Set.of(), Map.of());
+        return jwtService.issue(new IamJwtService.TokenClaims(String.valueOf(userId), username, appCode, jti,
+                tokenType, now, now + secondsToLive, authorization.permissions(), authorization.dataScopes()));
     }
 
     public record UserView(long id, String username, int status, int version) {}

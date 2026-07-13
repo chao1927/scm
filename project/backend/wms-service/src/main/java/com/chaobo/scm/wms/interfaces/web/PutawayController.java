@@ -2,6 +2,7 @@ package com.chaobo.scm.wms.interfaces.web;
 
 import com.chaobo.scm.common.api.ApiResponse;
 import com.chaobo.scm.wms.application.putaway.PutawayApplicationService;
+import com.chaobo.scm.wms.infrastructure.security.WmsAccessControl;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
@@ -13,11 +14,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.Authentication;
 
 import java.math.BigDecimal;
 
 @RestController
 @RequestMapping("/api/wms/v1")
+@org.springframework.security.access.prepost.PreAuthorize("hasAnyAuthority('*', 'wms:*', 'wms:putaway:write')")
 public class PutawayController {
     private final PutawayApplicationService service;
 
@@ -28,16 +31,20 @@ public class PutawayController {
     @PostMapping("/putaway-tasks")
     public ApiResponse<PutawayApplicationService.Result> create(
             @Valid @RequestBody Create body,
-            HttpServletRequest request
+            HttpServletRequest request,
+            Authentication authentication
     ) {
-        return ok(service.create(body.taskNo(), body.inspectionId(), body.requiredQty(), op(request)), request);
+        return ok(service.create(body.taskNo(), body.inspectionId(), body.requiredQty(),
+                WmsAccessControl.operatorId(authentication)), request);
     }
 
     @PostMapping("/pda/putaway/scan")
     public ApiResponse<PutawayApplicationService.Result> scan(
             @Valid @RequestBody Scan body,
-            HttpServletRequest request
+            HttpServletRequest request,
+            Authentication authentication
     ) {
+        WmsAccessControl.requireWarehouse(authentication, body.warehouseId());
         return ok(
                 service.scan(
                         body.taskNo(),
@@ -47,15 +54,10 @@ public class PutawayController {
                         body.skuCode(),
                         body.batchNo(),
                         body.qty(),
-                        op(request)
+                        WmsAccessControl.operatorId(authentication)
                 ),
                 request
         );
-    }
-
-    private static long op(HttpServletRequest request) {
-        var value = request.getHeader("X-Operator-Id");
-        return value == null || value.isBlank() ? 0 : Long.parseLong(value);
     }
 
     private static <T> ApiResponse<T> ok(T data, HttpServletRequest request) {

@@ -2,6 +2,7 @@ package com.chaobo.scm.wms.interfaces.web;
 
 import com.chaobo.scm.common.api.ApiResponse;
 import com.chaobo.scm.wms.application.inbox.WmsInboundEventApplicationService;
+import com.chaobo.scm.wms.infrastructure.security.WmsAccessControl;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -12,11 +13,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.Authentication;
 
 import java.util.List;
 
 @RestController
 @RequestMapping
+@org.springframework.security.access.prepost.PreAuthorize("hasAnyAuthority('*', 'wms:*', 'wms:event:manage')")
 public class WmsInboundEventController {
     private final WmsInboundEventApplicationService service;
 
@@ -27,7 +30,8 @@ public class WmsInboundEventController {
     @PostMapping("/internal/wms/v1/events")
     public ApiResponse<WmsInboundEventApplicationService.ConsumeResult> consume(
             @Valid @RequestBody EventRequest body,
-            HttpServletRequest request
+            HttpServletRequest request,
+            Authentication authentication
     ) {
         var envelope = new WmsInboundEventApplicationService.EventEnvelope(
                 body.sourceSystem(),
@@ -35,7 +39,7 @@ public class WmsInboundEventController {
                 body.eventType(),
                 body.payload()
         );
-        return ok(service.consume(envelope, operator(request)), request);
+        return ok(service.consume(envelope, WmsAccessControl.operatorId(authentication)), request);
     }
 
     @GetMapping("/api/wms/v1/operations/inbox/failed-events")
@@ -49,14 +53,10 @@ public class WmsInboundEventController {
     @PostMapping("/api/wms/v1/operations/inbox/failed-events/{inboxId}/replay")
     public ApiResponse<WmsInboundEventApplicationService.ConsumeResult> replay(
             @PathVariable long inboxId,
-            HttpServletRequest request
+            HttpServletRequest request,
+            Authentication authentication
     ) {
-        return ok(service.replay(inboxId, operator(request)), request);
-    }
-
-    private static long operator(HttpServletRequest request) {
-        var value = request.getHeader("X-Operator-Id");
-        return value == null || value.isBlank() ? 0 : Long.parseLong(value);
+        return ok(service.replay(inboxId, WmsAccessControl.operatorId(authentication)), request);
     }
 
     private static <T> ApiResponse<T> ok(T data, HttpServletRequest request) {

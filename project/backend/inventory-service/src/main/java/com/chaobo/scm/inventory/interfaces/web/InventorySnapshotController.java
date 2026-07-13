@@ -15,6 +15,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/inventory/v1")
+@org.springframework.security.access.prepost.PreAuthorize("hasAnyAuthority('*', 'inventory:*', 'inventory:reconciliation:manage')")
 public class InventorySnapshotController {
     private final InventorySnapshotApplicationService service;
 

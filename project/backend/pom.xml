@@ -18,6 +18,9 @@
         <module>iam-service</module>
         <module>mdm-service</module>
         <module>oms-service</module>
+        <module>tms-service</module>
+        <module>bms-service</module>
+        <module>integration-service</module>
     </modules>
 
     <properties>

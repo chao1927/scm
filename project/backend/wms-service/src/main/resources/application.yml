@@ -7,3 +7,8 @@ spring:
     password: root
   flyway:
     enabled: true
+
+scm:
+  security:
+    hmac-secret: ${IAM_JWT_SECRET:}
+    permission-namespace: wms

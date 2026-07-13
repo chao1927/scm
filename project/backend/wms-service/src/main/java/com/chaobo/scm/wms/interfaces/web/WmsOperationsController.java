@@ -17,6 +17,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/wms/v1/operations")
+@org.springframework.security.access.prepost.PreAuthorize("hasAnyAuthority('*', 'wms:*', 'wms:operations:manage')")
 public class WmsOperationsController {
     private final WmsOutboxDispatchApplicationService outbox;
 

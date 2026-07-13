@@ -3,16 +3,19 @@ package com.chaobo.scm.inventory.interfaces.web;
 import com.chaobo.scm.common.api.ApiResponse;
 import com.chaobo.scm.inventory.application.InventoryApplicationService;
 import com.chaobo.scm.inventory.infrastructure.persistence.InventoryMapper;
+import com.chaobo.scm.inventory.infrastructure.security.InventoryAccessControl;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication;
 
 import java.math.BigDecimal;
 import java.util.List;
 
 @RestController
 @RequestMapping
+@org.springframework.security.access.prepost.PreAuthorize("hasAnyAuthority('*', 'inventory:*', 'inventory:stock:write')")
 public class InventoryController {
     private final InventoryApplicationService service;
 
@@ -31,17 +34,23 @@ public class InventoryController {
     }
 
     @PostMapping("/openapi/inventory/v1/wms/inbound")
-    public ApiResponse<InventoryApplicationService.AccountResult> inbound(@Valid @RequestBody AccountRequest body, HttpServletRequest request) {
+    public ApiResponse<InventoryApplicationService.AccountResult> inbound(@Valid @RequestBody AccountRequest body,
+            HttpServletRequest request, Authentication authentication) {
+        InventoryAccessControl.requireAccountScope(authentication, body.ownerId(), body.warehouseId());
         return ok(service.inbound(command(body, "WMS")), request);
     }
 
     @PostMapping("/openapi/inventory/v1/wms/outbound")
-    public ApiResponse<InventoryApplicationService.AccountResult> outbound(@Valid @RequestBody AccountRequest body, HttpServletRequest request) {
+    public ApiResponse<InventoryApplicationService.AccountResult> outbound(@Valid @RequestBody AccountRequest body,
+            HttpServletRequest request, Authentication authentication) {
+        InventoryAccessControl.requireAccountScope(authentication, body.ownerId(), body.warehouseId());
         return ok(service.outbound(command(body, "WMS")), request);
     }
 
     @PostMapping("/openapi/inventory/v1/reservations")
-    public ApiResponse<InventoryApplicationService.ReservationResult> reserve(@Valid @RequestBody AccountRequest body, HttpServletRequest request) {
+    public ApiResponse<InventoryApplicationService.ReservationResult> reserve(@Valid @RequestBody AccountRequest body,
+            HttpServletRequest request, Authentication authentication) {
+        InventoryAccessControl.requireAccountScope(authentication, body.ownerId(), body.warehouseId());
         return ok(service.reserve(new InventoryApplicationService.ReservationCommand(body.ownerId(), body.warehouseId(), body.sku(), body.batchNo(), body.qty(), source(request), body.sourceNo())), request);
     }
 
@@ -51,17 +60,23 @@ public class InventoryController {
     }
 
     @PostMapping("/api/inventory/v1/freezes")
-    public ApiResponse<InventoryApplicationService.AccountResult> freeze(@Valid @RequestBody AccountRequest body, HttpServletRequest request) {
+    public ApiResponse<InventoryApplicationService.AccountResult> freeze(@Valid @RequestBody AccountRequest body,
+            HttpServletRequest request, Authentication authentication) {
+        InventoryAccessControl.requireAccountScope(authentication, body.ownerId(), body.warehouseId());
         return ok(service.freeze(command(body, "INVENTORY")), request);
     }
 
     @PostMapping("/api/inventory/v1/freezes/unfreeze")
-    public ApiResponse<InventoryApplicationService.AccountResult> unfreeze(@Valid @RequestBody AccountRequest body, HttpServletRequest request) {
+    public ApiResponse<InventoryApplicationService.AccountResult> unfreeze(@Valid @RequestBody AccountRequest body,
+            HttpServletRequest request, Authentication authentication) {
+        InventoryAccessControl.requireAccountScope(authentication, body.ownerId(), body.warehouseId());
         return ok(service.unfreeze(command(body, "INVENTORY")), request);
     }
 
     @PostMapping("/api/inventory/v1/adjustments")
-    public ApiResponse<InventoryApplicationService.AccountResult> adjust(@Valid @RequestBody AccountRequest body, HttpServletRequest request) {
+    public ApiResponse<InventoryApplicationService.AccountResult> adjust(@Valid @RequestBody AccountRequest body,
+            HttpServletRequest request, Authentication authentication) {
+        InventoryAccessControl.requireAccountScope(authentication, body.ownerId(), body.warehouseId());
         return ok(service.adjust(command(body, "INVENTORY")), request);
     }
 

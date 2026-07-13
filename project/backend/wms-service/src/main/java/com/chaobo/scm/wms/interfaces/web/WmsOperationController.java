@@ -15,6 +15,7 @@ import java.math.BigDecimal;
 
 @RestController
 @RequestMapping("/api/wms/v1")
+@org.springframework.security.access.prepost.PreAuthorize("hasAnyAuthority('*', 'wms:*', 'wms:operation:write')")
 public class WmsOperationController {
     private final WmsOperationApplicationService service;
 
