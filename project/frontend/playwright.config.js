@@ -9,6 +9,7 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:5174',
     trace: 'on-first-retry',
+    reducedMotion: 'reduce',
   },
   webServer: {
     command: 'npm run dev -- --host 127.0.0.1 --port 5174',

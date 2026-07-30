@@ -1,0 +1,38 @@
+spring:
+  config:
+    import:
+      - "optional:nacos:scm-common-prod.yaml?group=${NACOS_GROUP:@nacos.group@}&refreshEnabled=true"
+      - "optional:nacos:${spring.application.name}-prod.yaml?group=${NACOS_GROUP:@nacos.group@}&refreshEnabled=true"
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://mysql:3306/scm_supplier?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${MYSQL_USERNAME:scm_app}
+    password: ${MYSQL_PASSWORD:change-me}
+    hikari:
+      maximum-pool-size: ${MYSQL_MAX_POOL_SIZE:20}
+      minimum-idle: ${MYSQL_MIN_IDLE:4}
+      connection-timeout: ${MYSQL_CONNECTION_TIMEOUT_MS:3000}
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      username: ${REDIS_USERNAME:scm_app}
+      password: ${REDIS_PASSWORD:change-me}
+      database: ${REDIS_DATABASE:1}
+      timeout: ${REDIS_TIMEOUT:2s}
+
+scm:
+  dubbo:
+    registry-address: "${DUBBO_REGISTRY_ADDRESS:nacos://@nacos.server-addr@?username=@nacos.username@&password=@nacos.password@}"
+    timeout-ms: ${DUBBO_TIMEOUT_MS:2000}
+  rocketmq:
+    enabled: ${ROCKETMQ_ENABLED:true}
+    endpoints: ${ROCKETMQ_ENDPOINTS:rocketmq:8081}
+    topic: ${ROCKETMQ_SUPPLIER_TOPIC:supplier-domain-event}
+    master-data-consumer:
+      enabled: ${ROCKETMQ_MASTER_DATA_CONSUMER_ENABLED:true}
+      topic: ${ROCKETMQ_MASTER_DATA_TOPIC:master-data-domain-event}
+      group: ${ROCKETMQ_MASTER_DATA_CONSUMER_GROUP:supplier-master-data-snapshot}
+    contract-approval-consumer:
+      enabled: ${ROCKETMQ_CONTRACT_APPROVAL_CONSUMER_ENABLED:true}
+      topic: ${ROCKETMQ_CONTRACT_APPROVAL_TOPIC:iam-approval-domain-event}
+      group: ${ROCKETMQ_CONTRACT_APPROVAL_CONSUMER_GROUP:supplier-contract-approval}

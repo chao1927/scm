@@ -1,5 +1,7 @@
 export const menuPermissions = {
   'supplier-asn': 'supplier:asn:read',
+  'supplier-order': 'supplier:po_confirm:read',
+  'supplier-quality': 'supplier:quality:read',
   purchase: 'purchase:*',
   wms: 'wms:*',
   inventory: 'inventory:*',
@@ -7,7 +9,6 @@ export const menuPermissions = {
   tms: 'tms:*',
   bms: 'bms:*',
   mdm: 'mdm:*',
-  integration: 'integration:*',
   permission: 'iam:*',
 }
 
@@ -24,7 +25,7 @@ export function parsePermissionCodes(raw) {
 }
 
 export function shouldEnforceMenuAccess(accessToken, permissionCodes) {
-  return Boolean(accessToken && permissionCodes.length > 0)
+  return Boolean(accessToken)
 }
 
 export function hasPermission(permissionCodes, requiredPermission) {
@@ -32,6 +33,9 @@ export function hasPermission(permissionCodes, requiredPermission) {
     return true
   }
   if (permissionCodes.includes(requiredPermission) || permissionCodes.includes('*')) {
+    return true
+  }
+  if (permissionCodes.some((code) => code.endsWith(':*') && requiredPermission.startsWith(code.slice(0, -1)))) {
     return true
   }
   if (requiredPermission.endsWith(':*')) {

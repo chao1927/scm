@@ -20,15 +20,21 @@
         <module>oms-service</module>
         <module>tms-service</module>
         <module>bms-service</module>
-        <module>integration-service</module>
     </modules>
 
     <properties>
-        <java.version>21</java.version>
-        <maven.compiler.release>21</maven.compiler.release>
-        <spring-boot.version>4.1.0</spring-boot.version>
+        <java.version>17</java.version>
+        <maven.compiler.release>17</maven.compiler.release>
+        <spring-boot.version>4.0.0</spring-boot.version>
+        <spring-cloud-alibaba.version>2025.1.0.0</spring-cloud-alibaba.version>
         <mybatis-spring-boot.version>4.0.0</mybatis-spring-boot.version>
         <dubbo.version>3.3.6</dubbo.version>
+        <spring.profiles.active>test</spring.profiles.active>
+        <nacos.server-addr>127.0.0.1:8848</nacos.server-addr>
+        <nacos.namespace>scm-test</nacos.namespace>
+        <nacos.group>SCM_GROUP</nacos.group>
+        <nacos.username>nacos</nacos.username>
+        <nacos.password>nacos</nacos.password>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>
@@ -42,10 +48,35 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <dependency>
+                <groupId>com.alibaba.cloud</groupId>
+                <artifactId>spring-cloud-alibaba-dependencies</artifactId>
+                <version>${spring-cloud-alibaba.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>application*.yml</include>
+                    <include>application*.yaml</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>application*.yml</exclude>
+                    <exclude>application*.yaml</exclude>
+                </excludes>
+            </resource>
+        </resources>
         <pluginManagement>
             <plugins>
                 <plugin>
@@ -61,8 +92,92 @@
                     <groupId>org.springframework.boot</groupId>
                     <artifactId>spring-boot-maven-plugin</artifactId>
                     <version>${spring-boot.version}</version>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>repackage</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.3.1</version>
+                    <configuration>
+                        <delimiters>
+                            <delimiter>@</delimiter>
+                        </delimiters>
+                        <useDefaultDelimiters>false</useDefaultDelimiters>
+                    </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>
     </build>
+
+    <profiles>
+        <profile>
+            <id>test</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <properties>
+                <spring.profiles.active>test</spring.profiles.active>
+                <nacos.server-addr>127.0.0.1:8848</nacos.server-addr>
+                <nacos.namespace>scm-test</nacos.namespace>
+                <nacos.group>SCM_GROUP</nacos.group>
+                <nacos.username>nacos</nacos.username>
+                <nacos.password>nacos</nacos.password>
+            </properties>
+        </profile>
+        <profile>
+            <id>prod</id>
+            <properties>
+                <spring.profiles.active>prod</spring.profiles.active>
+                <nacos.server-addr>nacos:8848</nacos.server-addr>
+                <nacos.namespace>scm-prod</nacos.namespace>
+                <nacos.group>SCM_GROUP</nacos.group>
+                <nacos.username>nacos</nacos.username>
+                <nacos.password>nacos</nacos.password>
+            </properties>
+        </profile>
+        <profile>
+            <id>ali-check</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-pmd-plugin</artifactId>
+                        <version>3.21.2</version>
+                        <dependencies>
+                            <dependency>
+                                <groupId>com.alibaba.p3c</groupId>
+                                <artifactId>p3c-pmd</artifactId>
+                                <version>2.1.1</version>
+                            </dependency>
+                        </dependencies>
+                        <configuration>
+                            <targetJdk>17</targetJdk>
+                            <linkXRef>false</linkXRef>
+                            <includeTests>true</includeTests>
+                            <printFailingErrors>true</printFailingErrors>
+                            <failOnViolation>true</failOnViolation>
+                            <rulesets>
+                                <ruleset>rulesets/java/ali-naming.xml</ruleset>
+                                <ruleset>rulesets/java/ali-comment.xml</ruleset>
+                                <ruleset>rulesets/java/ali-constant.xml</ruleset>
+                                <ruleset>rulesets/java/ali-oop.xml</ruleset>
+                                <ruleset>rulesets/java/ali-set.xml</ruleset>
+                                <ruleset>rulesets/java/ali-flowcontrol.xml</ruleset>
+                                <ruleset>rulesets/java/ali-concurrent.xml</ruleset>
+                                <ruleset>rulesets/java/ali-exception.xml</ruleset>
+                                <ruleset>rulesets/java/ali-orm.xml</ruleset>
+                                <ruleset>rulesets/java/ali-other.xml</ruleset>
+                            </rulesets>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

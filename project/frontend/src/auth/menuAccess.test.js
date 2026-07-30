@@ -8,15 +8,16 @@ describe('menuAccess', () => {
     expect(parsePermissionCodes('')).toEqual([])
   })
 
-  it('enforces access only when token and permissions exist', () => {
+  it('enforces access for every authenticated session', () => {
     expect(shouldEnforceMenuAccess('token', ['iam:*'])).toBe(true)
-    expect(shouldEnforceMenuAccess('token', [])).toBe(false)
+    expect(shouldEnforceMenuAccess('token', [])).toBe(true)
     expect(shouldEnforceMenuAccess('', ['iam:*'])).toBe(false)
   })
 
   it('supports global and scoped wildcard permissions', () => {
     expect(hasPermission(['*'], 'purchase:*')).toBe(true)
     expect(hasPermission(['purchase:po:read'], 'purchase:*')).toBe(true)
+    expect(hasPermission(['purchase:*'], 'purchase:po:approve')).toBe(true)
     expect(hasPermission(['wms:receipt:read'], 'purchase:*')).toBe(false)
   })
 
@@ -24,6 +25,8 @@ describe('menuAccess', () => {
     expect(canAccessMenu('purchase', ['purchase:po:read'], true)).toBe(true)
     expect(canAccessMenu('permission', ['purchase:po:read'], true)).toBe(false)
     expect(canAccessMenu('permission', [], false)).toBe(true)
+    expect(canAccessMenu('supplier-order', ['supplier:po_confirm:read'], true)).toBe(true)
+    expect(canAccessMenu('supplier-quality', ['supplier:po_confirm:read'], true)).toBe(false)
   })
 
   it('decorates leaf menu items without disabling parent groups', () => {

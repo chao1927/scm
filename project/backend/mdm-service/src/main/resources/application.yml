@@ -1,10 +1,16 @@
 spring:
   application:
     name: mdm-service
-  datasource:
-    url: jdbc:mysql://localhost:3306/scm_mdm?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-    username: root
-    password: root
+  profiles:
+    active: @spring.profiles.active@
+  cloud:
+    nacos:
+      username: ${NACOS_USERNAME:@nacos.username@}
+      password: ${NACOS_PASSWORD:@nacos.password@}
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:@nacos.server-addr@}
+        namespace: ${NACOS_NAMESPACE:@nacos.namespace@}
+        group: ${NACOS_GROUP:@nacos.group@}
   flyway:
     enabled: true
   jackson:
@@ -14,3 +20,7 @@ mybatis:
     map-underscore-to-camel-case: true
 server:
   port: 8098
+scm:
+  security:
+    hmac-secret: ${IAM_JWT_SECRET:}
+    permission-namespace: mdm

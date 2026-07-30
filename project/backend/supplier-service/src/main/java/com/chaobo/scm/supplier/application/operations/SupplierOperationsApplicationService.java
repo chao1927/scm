@@ -1,2 +1,496 @@
-package com.chaobo.scm.supplier.application.operations;import com.chaobo.scm.common.error.*;import com.chaobo.scm.supplier.application.shared.*;import com.chaobo.scm.supplier.domain.shared.IdentifierGenerator;import com.chaobo.scm.supplier.infrastructure.persistence.operations.SupplierOperationsMapper;import org.springframework.stereotype.Service;import org.springframework.transaction.annotation.Transactional;import java.math.BigDecimal;import java.time.LocalDate;import java.util.*;
-@Service public class SupplierOperationsApplicationService{private final SupplierOperationsMapper mapper;private final IdentifierGenerator ids;private final AuditLogRepository audit;public SupplierOperationsApplicationService(SupplierOperationsMapper mapper,IdentifierGenerator ids,AuditLogRepository audit){this.mapper=mapper;this.ids=ids;this.audit=audit;}@Transactional public void accept(OperationsEvent e){switch(e.eventType()){case "RfqPublished"->work(e,"QUOTE","RFQ",2);case "SupplierContractSubmitted"->work(e,"CONTRACT_APPROVAL","CONTRACT",1);case "PurchaseOrderReleased"->work(e,"PO_CONFIRM","PURCHASE_ORDER",2);case "SupplierRectificationRequested"->work(e,"RECTIFICATION","QUALITY_ISSUE",2);case "BmsReconciliationIssued"->work(e,"RECONCILIATION","RECONCILIATION",2);case "SupplierReturnConfirmationRequested"->work(e,"RETURN_CONFIRM","SUPPLIER_RETURN",2);case "SupplierQualificationExpiring"->warning(e,"QUALIFICATION_EXPIRING","QUALIFICATION",2);case "SupplierContractExpiring"->warning(e,"CONTRACT_EXPIRING","CONTRACT",2);case "SupplierQuoteExpiring"->warning(e,"QUOTE_EXPIRING","QUOTE",1);case "AsnDelayed","TmsShipmentDelayed","SupplierRectificationOverdue"->warning(e,e.eventType().toUpperCase(),e.businessType(),3);case "SupplierScorePublished"->warning(e,"LOW_SCORE","SCORE_RESULT",2);default->throw new BusinessException(ErrorCode.BUSINESS_RULE_FAILED,"不支持的运营事件: "+e.eventType());}}@Transactional(readOnly=true)public List<OperationViews.WorkItem> workItems(Long supplierId,Long scope,Integer status,int page,int size){check(page,size);return mapper.workItems(scope==null?supplierId:scope,status,(page-1)*size,size);}@Transactional(readOnly=true)public List<OperationViews.Warning> warnings(Long supplierId,Long scope,Integer status,int page,int size){check(page,size);return mapper.warnings(scope==null?supplierId:scope,status,(page-1)*size,size);}@Transactional public void processWork(long id,int version,boolean close,CommandContext c){c.requirePermission("supplier:work-item:process");if(mapper.processWork(id,version,close?4:3)!=1)throw conflict();audit.save(c,"PROCESS_WORK_ITEM","WORK_ITEM",id,String.valueOf(id),null,"{\"status\":"+(close?4:3)+"}");}@Transactional public void processWarning(long id,int version,boolean close,CommandContext c){c.requirePermission("supplier:warning:process");if(mapper.processWarning(id,version,close?3:2)!=1)throw conflict();audit.save(c,"PROCESS_WARNING","WARNING",id,String.valueOf(id),null,"{\"status\":"+(close?3:2)+"}");}@Transactional(readOnly=true)public List<OperationViews.FailedEvent> failedEvents(){var all=new ArrayList<OperationViews.FailedEvent>();all.addAll(mapper.failedInbound(100));all.addAll(mapper.failedOutbound(100));all.sort(Comparator.comparing(OperationViews.FailedEvent::updatedAt).reversed());return all;}@Transactional public void replay(long id,String direction,String reason,CommandContext c){c.requirePermission("supplier:event:replay");if(reason==null||reason.isBlank())throw rule("人工重放必须说明原因");int changed="OUTBOUND".equals(direction)?mapper.replayOutbound(id,reason):mapper.replayInbound(id,reason);if(changed!=1)throw conflict();audit.save(c,"REPLAY_"+direction+"_EVENT","EVENT",id,String.valueOf(id),null,"{\"reason\":\""+reason.replace("\"","")+"\"}");}@Transactional public void reconcile(String type,String target,LocalDate date,long remoteCount,BigDecimal remoteAmount,CommandContext c){c.requirePermission("supplier:data-reconciliation:execute");long localCount;BigDecimal localAmount=null;switch(type){case "ASN"->localCount=mapper.localAsnCount(date);case "SUPPLIER_RETURN"->localCount=mapper.localReturnCount(date);case "STATEMENT"->{localCount=mapper.localStatementCount(date);localAmount=mapper.localStatementAmount(date);}default->throw rule("不支持的对账类型");}boolean amountSame=localAmount==null||remoteAmount!=null&&localAmount.compareTo(remoteAmount)==0,same=localCount==remoteCount&&amountSame;String detail=same?null:"本地数量="+localCount+"，对方数量="+remoteCount+(localAmount==null?"":"，本地金额="+localAmount+"，对方金额="+remoteAmount);mapper.upsertReconciliation(ids.nextId(),type,target,date,localCount,remoteCount,localAmount,remoteAmount,detail,same?1:2,c.operatorId());}@Transactional(readOnly=true)public List<OperationViews.Reconciliation> reconciliations(){return mapper.reconciliations();}@Transactional(readOnly=true)public OperationViews.Dashboard dashboard(){return mapper.dashboard();}@Transactional public long createExport(String type,Long supplierId,String queryJson,CommandContext c){c.requirePermission("supplier:export:create");if(!Set.of("WORK_ITEM","WARNING","FAILED_EVENT","RECONCILIATION","SCORE","QUALITY","RETURN").contains(type))throw rule("不支持的导出类型");if(c.supplierScopeId()!=null&&supplierId!=null&&!c.supplierScopeId().equals(supplierId))throw new BusinessException(ErrorCode.SUPPLIER_SCOPE_DENIED,"无权导出该供应商数据");long id=ids.nextId();mapper.insertExport(id,type,c.supplierScopeId()==null?supplierId:c.supplierScopeId(),queryJson==null?"{}":queryJson,c.operatorId());audit.save(c,"CREATE_EXPORT_TASK","EXPORT_TASK",id,Long.toString(id),null,"{\"type\":\""+type+"\"}");return id;}@Transactional(readOnly=true)public List<OperationViews.ExportTask> exportTasks(Long supplierId,Long scope,Integer status,int page,int size){check(page,size);return mapper.exportTasks(scope==null?supplierId:scope,status,(page-1)*size,size);}@Transactional(readOnly=true)public OperationViews.ExportTask exportTask(long id){var task=mapper.exportTask(id);if(task==null)throw new BusinessException(ErrorCode.NOT_FOUND,"导出任务不存在");return task;}@Transactional public void completeExport(long id,int version,String fileUrl,CommandContext c){c.requirePermission("supplier:export:complete");if(fileUrl==null||fileUrl.isBlank())throw rule("导出文件地址不能为空");if(mapper.completeExport(id,version,fileUrl)!=1)throw conflict();audit.save(c,"COMPLETE_EXPORT_TASK","EXPORT_TASK",id,Long.toString(id),null,"{\"fileUrl\":\""+fileUrl.replace("\"","")+"\"}");}@Transactional public void failExport(long id,int version,String reason,CommandContext c){c.requirePermission("supplier:export:complete");if(reason==null||reason.isBlank())throw rule("导出失败原因不能为空");if(mapper.failExport(id,version,reason)!=1)throw conflict();audit.save(c,"FAIL_EXPORT_TASK","EXPORT_TASK",id,Long.toString(id),null,"{\"reason\":\""+reason.replace("\"","")+"\"}");}private void work(OperationsEvent e,String type,String business,int assignee){mapper.insertWork(ids.nextId(),type,e.supplierId(),business,e.businessId(),e.businessNo(),e.message(),assignee,e.dueAt(),e.eventCode());}private void warning(OperationsEvent e,String type,String business,int level){mapper.insertWarning(ids.nextId(),type,e.supplierId(),business,e.businessId(),level,e.message(),e.occurredAt(),e.eventCode());}private static void check(int p,int s){if(p<1||s<1||s>100)throw rule("分页参数不合法");}private static BusinessException rule(String m){return new BusinessException(ErrorCode.BUSINESS_RULE_FAILED,m);}private static BusinessException conflict(){return new BusinessException(ErrorCode.VERSION_CONFLICT,"状态或版本已变更");}}
+package com.chaobo.scm.supplier.application.operations;
+
+import com.chaobo.scm.common.error.*;
+import com.chaobo.scm.supplier.application.shared.*;
+import com.chaobo.scm.supplier.domain.shared.IdentifierGenerator;
+import com.chaobo.scm.supplier.infrastructure.persistence.operations.SupplierOperationsMapper;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.*;
+
+/**
+ * SupplierOperationsApplicationService。
+ *
+ * <p>位于应用层，负责用例编排、事务边界、幂等处理和跨端口协作，核心不变量仍由领域对象保护。面向调用方提供应用用例，协调权限、聚合、资源库和事件发布。该类型只在所属限界上下文内表达该语义，跨上下文协作应通过已声明的接口或事件完成。
+ *
+ * @author SCM Team
+ * @since 0.1.0
+ */
+@Service
+public class SupplierOperationsApplicationService {
+
+    /**
+     * mapper（类型：{@code SupplierOperationsMapper}）。
+     *
+     * <p>保存当前对象所需的持久化访问依赖；其具体生命周期由所属对象统一管理。
+     */
+    private final SupplierOperationsMapper mapper;
+
+    /**
+     * ids（类型：{@code IdentifierGenerator}）。
+     *
+     * <p>保存当前对象所需的业务或技术标识；其具体生命周期由所属对象统一管理。
+     */
+    private final IdentifierGenerator ids;
+
+    /**
+     * audit（类型：{@code AuditLogRepository}）。
+     *
+     * <p>保存当前对象所需的业务处理参数或成员；其具体生命周期由所属对象统一管理。
+     */
+    private final AuditLogRepository audit;
+
+    /**
+     * 创建 SupplierOperationsApplicationService。
+     *
+     * <p>构造阶段集中接收必需依赖或恢复对象状态，确保实例创建后即可安全参与所属用例。
+     * @param mapper 持久化访问依赖，类型为 {@code SupplierOperationsMapper}
+     * @param ids 业务或技术标识，类型为 {@code IdentifierGenerator}
+     * @param audit 业务处理参数或成员，类型为 {@code AuditLogRepository}
+     */
+    public SupplierOperationsApplicationService(SupplierOperationsMapper mapper, IdentifierGenerator ids, AuditLogRepository audit) {
+        this.mapper = mapper;
+        this.ids = ids;
+        this.audit = audit;
+    }
+
+    /**
+     * 处理当前类型职责中的操作 {@code accept}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @param e 业务处理参数或成员，类型为 {@code OperationsEvent}
+     */
+    @Transactional(rollbackFor = Exception.class)
+    @SuppressWarnings("PMD.SwitchStatementRule")
+    public void accept(OperationsEvent e) {
+        switch(e.eventType()) {
+            case "RfqPublished" ->
+                work(e, "QUOTE", "RFQ", 2);
+            case "SupplierContractSubmitted" ->
+                work(e, "CONTRACT_APPROVAL", "CONTRACT", 1);
+            case "PurchaseOrderReleased" ->
+                work(e, "PO_CONFIRM", "PURCHASE_ORDER", 2);
+            case "SupplierRectificationRequested" ->
+                work(e, "RECTIFICATION", "QUALITY_ISSUE", 2);
+            case "BmsReconciliationIssued" ->
+                work(e, "RECONCILIATION", "RECONCILIATION", 2);
+            case "SupplierReturnConfirmationRequested" ->
+                work(e, "RETURN_CONFIRM", "SUPPLIER_RETURN", 2);
+            case "SupplierQualificationExpiring" ->
+                warning(e, "QUALIFICATION_EXPIRING", "QUALIFICATION", 2);
+            case "SupplierContractExpiring" ->
+                warning(e, "CONTRACT_EXPIRING", "CONTRACT", 2);
+            case "SupplierQuoteExpiring" ->
+                warning(e, "QUOTE_EXPIRING", "QUOTE", 1);
+            case "AsnDelayed", "TmsShipmentDelayed", "SupplierRectificationOverdue" ->
+                warning(e, e.eventType().toUpperCase(), e.businessType(), 3);
+            case "SupplierScorePublished" ->
+                warning(e, "LOW_SCORE", "SCORE_RESULT", 2);
+            default ->
+                throw new BusinessException(ErrorCode.BUSINESS_RULE_FAILED, "不支持的运营事件: " + e.eventType());
+        }
+    }
+
+    /**
+     * 处理当前类型职责中的操作 {@code workItems}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @param supplierId 业务或技术标识，类型为 {@code Long}
+     * @param scope 业务处理参数或成员，类型为 {@code Long}
+     * @param status 生命周期状态，类型为 {@code Integer}
+     * @param page 业务处理参数或成员，类型为 {@code int}
+     * @param size 业务处理参数或成员，类型为 {@code int}
+     * @return 处理当前类型职责中的操作的结果，类型为 {@code List<OperationViews.WorkItem>}
+     */
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public List<OperationViews.WorkItem> workItems(Long supplierId, Long scope, Integer status, int page, int size) {
+        check(page, size);
+        return mapper.workItems(scope == null ? supplierId : scope, status, (page - 1) * size, size);
+    }
+
+    /**
+     * 处理当前类型职责中的操作 {@code warnings}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @param supplierId 业务或技术标识，类型为 {@code Long}
+     * @param scope 业务处理参数或成员，类型为 {@code Long}
+     * @param status 生命周期状态，类型为 {@code Integer}
+     * @param page 业务处理参数或成员，类型为 {@code int}
+     * @param size 业务处理参数或成员，类型为 {@code int}
+     * @return 处理当前类型职责中的操作的结果，类型为 {@code List<OperationViews.Warning>}
+     */
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public List<OperationViews.Warning> warnings(Long supplierId, Long scope, Integer status, int page, int size) {
+        check(page, size);
+        return mapper.warnings(scope == null ? supplierId : scope, status, (page - 1) * size, size);
+    }
+
+    /**
+     * 处理当前类型职责中的操作 {@code processWork}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @param id 业务或技术标识，类型为 {@code long}
+     * @param version 乐观锁或契约版本，类型为 {@code int}
+     * @param close 业务处理参数或成员，类型为 {@code boolean}
+     * @param c 业务处理参数或成员，类型为 {@code CommandContext}
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void processWork(long id, int version, boolean close, CommandContext c) {
+        c.requirePermission("supplier:work-item:process");
+        if (mapper.processWork(id, version, close ? PROCESS_WORK_VALUE_4 : PROCESS_WARNING_VALUE_3) != 1) {
+            throw conflict();
+        }
+        audit.save(c, "PROCESS_WORK_ITEM", "WORK_ITEM", id, String.valueOf(id), null, "{\"status\":" + (close ? 4 : 3) + "}");
+    }
+
+    /**
+     * 处理当前类型职责中的操作 {@code processWarning}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @param id 业务或技术标识，类型为 {@code long}
+     * @param version 乐观锁或契约版本，类型为 {@code int}
+     * @param close 业务处理参数或成员，类型为 {@code boolean}
+     * @param c 业务处理参数或成员，类型为 {@code CommandContext}
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void processWarning(long id, int version, boolean close, CommandContext c) {
+        c.requirePermission("supplier:warning:process");
+        if (mapper.processWarning(id, version, close ? PROCESS_WARNING_VALUE_3 : PROCESS_WARNING_VALUE_2) != 1) {
+            throw conflict();
+        }
+        audit.save(c, "PROCESS_WARNING", "WARNING", id, String.valueOf(id), null, "{\"status\":" + (close ? 3 : 2) + "}");
+    }
+
+    /**
+     * 处理当前类型职责中的操作 {@code failedEvents}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @return 处理当前类型职责中的操作的结果，类型为 {@code List<OperationViews.FailedEvent>}
+     */
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public List<OperationViews.FailedEvent> failedEvents() {
+        var all = new ArrayList<OperationViews.FailedEvent>();
+        all.addAll(mapper.failedInbound(100));
+        all.addAll(mapper.failedOutbound(100));
+        all.sort(Comparator.comparing(OperationViews.FailedEvent::updatedAt).reversed());
+        return all;
+    }
+
+    /**
+     * 执行命令 {@code replay}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @param id 业务或技术标识，类型为 {@code long}
+     * @param direction 业务处理参数或成员，类型为 {@code String}
+     * @param reason 业务处理参数或成员，类型为 {@code String}
+     * @param c 业务处理参数或成员，类型为 {@code CommandContext}
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void replay(long id, String direction, String reason, CommandContext c) {
+        c.requirePermission("supplier:event:replay");
+        if (reason == null || reason.isBlank()) {
+            throw rule("人工重放必须说明原因");
+        }
+        int changed = "OUTBOUND".equals(direction) ? mapper.replayOutbound(id, reason) : mapper.replayInbound(id, reason);
+        if (changed != 1) {
+            throw conflict();
+        }
+        audit.save(c, "REPLAY_" + direction + "_EVENT", "EVENT", id, String.valueOf(id), null, "{\"reason\":\"" + reason.replace("\"", "") + "\"}");
+    }
+
+    /**
+     * 处理当前类型职责中的操作 {@code reconcile}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @param type 业务处理参数或成员，类型为 {@code String}
+     * @param target 业务处理参数或成员，类型为 {@code String}
+     * @param date 业务时间，类型为 {@code LocalDate}
+     * @param remoteCount 数量值，类型为 {@code long}
+     * @param remoteAmount 金额或计费值，类型为 {@code BigDecimal}
+     * @param c 业务处理参数或成员，类型为 {@code CommandContext}
+     */
+    @Transactional(rollbackFor = Exception.class)
+    @SuppressWarnings("PMD.SwitchStatementRule")
+    public void reconcile(String type, String target, LocalDate date, long remoteCount, BigDecimal remoteAmount, CommandContext c) {
+        c.requirePermission("supplier:data-reconciliation:execute");
+        long localCount;
+        BigDecimal localAmount = null;
+        switch(type) {
+            case "ASN" ->
+                localCount = mapper.localAsnCount(date);
+            case "SUPPLIER_RETURN" ->
+                localCount = mapper.localReturnCount(date);
+            case "STATEMENT" ->
+                {
+                    localCount = mapper.localStatementCount(date);
+                    localAmount = mapper.localStatementAmount(date);
+                }
+            default ->
+                throw rule("不支持的对账类型");
+        }
+        boolean amountSame = localAmount == null || remoteAmount != null && localAmount.compareTo(remoteAmount) == 0, same = localCount == remoteCount && amountSame;
+        String detail = same ? null : "本地数量=" + localCount + "，对方数量=" + remoteCount + (localAmount == null ? "" : "，本地金额=" + localAmount + "，对方金额=" + remoteAmount);
+        mapper.upsertReconciliation(ids.nextId(), type, target, date, localCount, remoteCount, localAmount, remoteAmount, detail, same ? 1 : 2, c.operatorId());
+    }
+
+    /**
+     * 处理当前类型职责中的操作 {@code reconciliations}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @return 处理当前类型职责中的操作的结果，类型为 {@code List<OperationViews.Reconciliation>}
+     */
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public List<OperationViews.Reconciliation> reconciliations() {
+        return mapper.reconciliations();
+    }
+
+    /**
+     * 处理当前类型职责中的操作 {@code dashboard}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @return 处理当前类型职责中的操作的结果，类型为 {@code OperationViews.Dashboard}
+     */
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public OperationViews.Dashboard dashboard() {
+        return mapper.dashboard();
+    }
+
+    /**
+     * 执行命令 {@code createExport}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @param type 业务处理参数或成员，类型为 {@code String}
+     * @param supplierId 业务或技术标识，类型为 {@code Long}
+     * @param queryJson 业务处理参数或成员，类型为 {@code String}
+     * @param c 业务处理参数或成员，类型为 {@code CommandContext}
+     * @return 执行命令的结果，类型为 {@code long}
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public long createExport(String type, Long supplierId, String queryJson, CommandContext c) {
+        c.requirePermission("supplier:export:create");
+        if (!Set.of(WORK_ITEM, WARNING, FAILED_EVENT, RECONCILIATION, SCORE, QUALITY, RETURN).contains(type)) {
+            throw rule("不支持的导出类型");
+        }
+        if (c.supplierScopeId() != null && supplierId != null && !c.supplierScopeId().equals(supplierId)) {
+            throw new BusinessException(ErrorCode.SUPPLIER_SCOPE_DENIED, "无权导出该供应商数据");
+        }
+        long id = ids.nextId();
+        mapper.insertExport(id, type, c.supplierScopeId() == null ? supplierId : c.supplierScopeId(), queryJson == null ? "{}" : queryJson, c.operatorId());
+        audit.save(c, "CREATE_EXPORT_TASK", "EXPORT_TASK", id, Long.toString(id), null, "{\"type\":\"" + type + "\"}");
+        return id;
+    }
+
+    /**
+     * 处理当前类型职责中的操作 {@code exportTasks}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @param supplierId 业务或技术标识，类型为 {@code Long}
+     * @param scope 业务处理参数或成员，类型为 {@code Long}
+     * @param status 生命周期状态，类型为 {@code Integer}
+     * @param page 业务处理参数或成员，类型为 {@code int}
+     * @param size 业务处理参数或成员，类型为 {@code int}
+     * @return 处理当前类型职责中的操作的结果，类型为 {@code List<OperationViews.ExportTask>}
+     */
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public List<OperationViews.ExportTask> exportTasks(Long supplierId, Long scope, Integer status, int page, int size) {
+        check(page, size);
+        return mapper.exportTasks(scope == null ? supplierId : scope, status, (page - 1) * size, size);
+    }
+
+    /**
+     * 处理当前类型职责中的操作 {@code exportTask}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @param id 业务或技术标识，类型为 {@code long}
+     * @return 处理当前类型职责中的操作的结果，类型为 {@code OperationViews.ExportTask}
+     */
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public OperationViews.ExportTask exportTask(long id) {
+        var task = mapper.exportTask(id);
+        if (task == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "导出任务不存在");
+        }
+        return task;
+    }
+
+    /**
+     * 执行命令 {@code completeExport}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @param id 业务或技术标识，类型为 {@code long}
+     * @param version 乐观锁或契约版本，类型为 {@code int}
+     * @param fileUrl 业务处理参数或成员，类型为 {@code String}
+     * @param c 业务处理参数或成员，类型为 {@code CommandContext}
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void completeExport(long id, int version, String fileUrl, CommandContext c) {
+        c.requirePermission("supplier:export:complete");
+        if (fileUrl == null || fileUrl.isBlank()) {
+            throw rule("导出文件地址不能为空");
+        }
+        if (mapper.completeExport(id, version, fileUrl) != 1) {
+            throw conflict();
+        }
+        audit.save(c, "COMPLETE_EXPORT_TASK", "EXPORT_TASK", id, Long.toString(id), null, "{\"fileUrl\":\"" + fileUrl.replace("\"", "") + "\"}");
+    }
+
+    /**
+     * 处理当前类型职责中的操作 {@code failExport}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @param id 业务或技术标识，类型为 {@code long}
+     * @param version 乐观锁或契约版本，类型为 {@code int}
+     * @param reason 业务处理参数或成员，类型为 {@code String}
+     * @param c 业务处理参数或成员，类型为 {@code CommandContext}
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void failExport(long id, int version, String reason, CommandContext c) {
+        c.requirePermission("supplier:export:complete");
+        if (reason == null || reason.isBlank()) {
+            throw rule("导出失败原因不能为空");
+        }
+        if (mapper.failExport(id, version, reason) != 1) {
+            throw conflict();
+        }
+        audit.save(c, "FAIL_EXPORT_TASK", "EXPORT_TASK", id, Long.toString(id), null, "{\"reason\":\"" + reason.replace("\"", "") + "\"}");
+    }
+
+    /**
+     * 处理当前类型职责中的操作 {@code work}。
+     *
+     * <p>该内部步骤用于收敛重复逻辑或保护局部规则，调用方应通过当前类型公开的业务入口使用该能力。
+     * @param e 业务处理参数或成员，类型为 {@code OperationsEvent}
+     * @param type 业务处理参数或成员，类型为 {@code String}
+     * @param business 业务处理参数或成员，类型为 {@code String}
+     * @param assignee 业务处理参数或成员，类型为 {@code int}
+     */
+    private void work(OperationsEvent e, String type, String business, int assignee) {
+        mapper.insertWork(ids.nextId(), type, e.supplierId(), business, e.businessId(), e.businessNo(), e.message(), assignee, e.dueAt(), e.eventCode());
+    }
+
+    /**
+     * 处理当前类型职责中的操作 {@code warning}。
+     *
+     * <p>该内部步骤用于收敛重复逻辑或保护局部规则，调用方应通过当前类型公开的业务入口使用该能力。
+     * @param e 业务处理参数或成员，类型为 {@code OperationsEvent}
+     * @param type 业务处理参数或成员，类型为 {@code String}
+     * @param business 业务处理参数或成员，类型为 {@code String}
+     * @param level 业务处理参数或成员，类型为 {@code int}
+     */
+    private void warning(OperationsEvent e, String type, String business, int level) {
+        mapper.insertWarning(ids.nextId(), type, e.supplierId(), business, e.businessId(), level, e.message(), e.occurredAt(), e.eventCode());
+    }
+
+    /**
+     * 校验业务约束 {@code check}。
+     *
+     * <p>该内部步骤用于收敛重复逻辑或保护局部规则，调用方应通过当前类型公开的业务入口使用该能力。
+     * @param p 业务处理参数或成员，类型为 {@code int}
+     * @param s 业务处理参数或成员，类型为 {@code int}
+     */
+    private static void check(int p, int s) {
+        if (p < 1 || s < 1 || s > CHECK_VALUE_100) {
+            throw rule("分页参数不合法");
+        }
+    }
+
+    /**
+     * 处理当前类型职责中的操作 {@code rule}。
+     *
+     * <p>该内部步骤用于收敛重复逻辑或保护局部规则，调用方应通过当前类型公开的业务入口使用该能力。
+     * @param m 业务处理参数或成员，类型为 {@code String}
+     * @return 处理当前类型职责中的操作的结果，类型为 {@code BusinessException}
+     */
+    private static BusinessException rule(String m) {
+        return new BusinessException(ErrorCode.BUSINESS_RULE_FAILED, m);
+    }
+
+    /**
+     * 处理当前类型职责中的操作 {@code conflict}。
+     *
+     * <p>该内部步骤用于收敛重复逻辑或保护局部规则，调用方应通过当前类型公开的业务入口使用该能力。
+     * @return 处理当前类型职责中的操作的结果，类型为 {@code BusinessException}
+     */
+    private static BusinessException conflict() {
+        return new BusinessException(ErrorCode.VERSION_CONFLICT, "状态或版本已变更");
+    }
+
+    /**
+     * 业务常量 {@code CHECK_VALUE_100}。
+     *
+     * <p>集中表达当前用例使用的固定业务值，避免含义不明的字面量散落在判断或调用参数中。
+     */
+    private static final int CHECK_VALUE_100 = 100;
+
+    /**
+     * 业务常量 {@code FAILED_EVENT}。
+     *
+     * <p>集中表达当前用例使用的固定业务值，避免含义不明的字面量散落在判断或调用参数中。
+     */
+    private static final String FAILED_EVENT = "FAILED_EVENT";
+
+    /**
+     * 业务常量 {@code QUALITY}。
+     *
+     * <p>集中表达当前用例使用的固定业务值，避免含义不明的字面量散落在判断或调用参数中。
+     */
+    private static final String QUALITY = "QUALITY";
+
+    /**
+     * 业务常量 {@code RECONCILIATION}。
+     *
+     * <p>集中表达当前用例使用的固定业务值，避免含义不明的字面量散落在判断或调用参数中。
+     */
+    private static final String RECONCILIATION = "RECONCILIATION";
+
+    /**
+     * 业务常量 {@code RETURN}。
+     *
+     * <p>集中表达当前用例使用的固定业务值，避免含义不明的字面量散落在判断或调用参数中。
+     */
+    private static final String RETURN = "RETURN";
+
+    /**
+     * 业务常量 {@code SCORE}。
+     *
+     * <p>集中表达当前用例使用的固定业务值，避免含义不明的字面量散落在判断或调用参数中。
+     */
+    private static final String SCORE = "SCORE";
+
+    /**
+     * 业务常量 {@code WARNING}。
+     *
+     * <p>集中表达当前用例使用的固定业务值，避免含义不明的字面量散落在判断或调用参数中。
+     */
+    private static final String WARNING = "WARNING";
+
+    /**
+     * 业务常量 {@code WORK_ITEM}。
+     *
+     * <p>集中表达当前用例使用的固定业务值，避免含义不明的字面量散落在判断或调用参数中。
+     */
+    private static final String WORK_ITEM = "WORK_ITEM";
+
+    /**
+     * 业务常量 {@code PROCESS_WARNING_VALUE_2}。
+     *
+     * <p>集中表达当前用例使用的固定业务值，避免含义不明的字面量散落在判断或调用参数中。
+     */
+    private static final int PROCESS_WARNING_VALUE_2 = 2;
+
+    /**
+     * 业务常量 {@code PROCESS_WARNING_VALUE_3}。
+     *
+     * <p>集中表达当前用例使用的固定业务值，避免含义不明的字面量散落在判断或调用参数中。
+     */
+    private static final int PROCESS_WARNING_VALUE_3 = 3;
+
+    /**
+     * 业务常量 {@code PROCESS_WORK_VALUE_4}。
+     *
+     * <p>集中表达当前用例使用的固定业务值，避免含义不明的字面量散落在判断或调用参数中。
+     */
+    private static final int PROCESS_WORK_VALUE_4 = 4;
+}

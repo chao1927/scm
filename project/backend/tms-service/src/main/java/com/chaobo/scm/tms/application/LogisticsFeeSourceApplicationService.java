@@ -7,28 +7,66 @@ import com.chaobo.scm.tms.infrastructure.persistence.TransportTaskMapper;
 import com.chaobo.scm.tms.infrastructure.persistence.WaybillMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * LogisticsFeeSourceApplicationService。
+ *
+ * <p>位于当前子系统模块，负责其名称所表达的单一职责。面向调用方提供应用用例，协调权限、聚合、资源库和事件发布。该类型只在所属限界上下文内表达该语义，跨上下文协作应通过已声明的接口或事件完成。
+ *
+ * @author SCM Team
+ * @since 0.1.0
+ */
 @Service
 public class LogisticsFeeSourceApplicationService {
+
+    /**
+     * mapper（类型：{@code LogisticsSettlementMapper}）。
+     *
+     * <p>保存当前对象所需的持久化访问依赖；其具体生命周期由所属对象统一管理。
+     */
     private final LogisticsSettlementMapper mapper;
+
+    /**
+     * waybillService（类型：{@code WaybillApplicationService}）。
+     *
+     * <p>保存当前对象所需的应用或外部协作依赖；其具体生命周期由所属对象统一管理。
+     */
     private final WaybillApplicationService waybillService;
+
+    /**
+     * sequence（类型：{@code AtomicLong}）。
+     *
+     * <p>保存当前对象所需的业务处理参数或成员；其具体生命周期由所属对象统一管理。
+     */
     private final AtomicLong sequence = new AtomicLong(130000);
 
-    public LogisticsFeeSourceApplicationService(LogisticsSettlementMapper mapper,
-                                                WaybillApplicationService waybillService) {
+    /**
+     * 创建 LogisticsFeeSourceApplicationService。
+     *
+     * <p>构造阶段集中接收必需依赖或恢复对象状态，确保实例创建后即可安全参与所属用例。
+     * @param mapper 持久化访问依赖，类型为 {@code LogisticsSettlementMapper}
+     * @param waybillService 应用或外部协作依赖，类型为 {@code WaybillApplicationService}
+     */
+    public LogisticsFeeSourceApplicationService(LogisticsSettlementMapper mapper, WaybillApplicationService waybillService) {
         this.mapper = mapper;
         this.waybillService = waybillService;
     }
 
-    @Transactional
+    /**
+     * 处理当前类型职责中的操作 {@code generate}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @param waybillNo 可追踪业务编码，类型为 {@code String}
+     * @param command 用例输入命令，类型为 {@code GenerateCommand}
+     * @return 处理当前类型职责中的操作的结果，类型为 {@code LogisticsSettlementMapper.FeeSourceRow}
+     */
+    @Transactional(rollbackFor = Exception.class)
     public LogisticsSettlementMapper.FeeSourceRow generate(String waybillNo, GenerateCommand command) {
-        LogisticsSettlementMapper.FeeSourceRow existing = mapper.findFeeSourceByWaybillAndItem(waybillNo,
-                command.feeItemCode());
+        LogisticsSettlementMapper.FeeSourceRow existing = mapper.findFeeSourceByWaybillAndItem(waybillNo, command.feeItemCode());
         if (existing != null) {
             return existing;
         }
@@ -36,9 +74,7 @@ public class LogisticsFeeSourceApplicationService {
         if (waybill == null) {
             throw new IllegalArgumentException("waybill not found");
         }
-        LogisticsFeeSourceAggregate aggregate = LogisticsFeeSourceAggregate.generate("FEE" + sequence.incrementAndGet(),
-                waybillNo, waybill.carrierCode(), waybill.logisticsProductCode(), command.feeItemCode(),
-                command.amount(), command.currency(), command.billingPeriod(), command.responsibleParty());
+        LogisticsFeeSourceAggregate aggregate = LogisticsFeeSourceAggregate.generate("FEE" + sequence.incrementAndGet(), waybillNo, waybill.carrierCode(), waybill.logisticsProductCode(), command.feeItemCode(), command.amount(), command.currency(), command.billingPeriod(), command.responsibleParty());
         LogisticsSettlementMapper.FeeSourceRow row = toRow(aggregate);
         mapper.insertFeeSource(row);
         saveEvents(aggregate.pullEvents());
@@ -46,7 +82,15 @@ public class LogisticsFeeSourceApplicationService {
         return row;
     }
 
-    @Transactional
+    /**
+     * 处理当前类型职责中的操作 {@code pushBms}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @param feeSourceNo 可追踪业务编码，类型为 {@code String}
+     * @param command 用例输入命令，类型为 {@code PushCommand}
+     * @return 处理当前类型职责中的操作的结果，类型为 {@code LogisticsSettlementMapper.FeeSourceRow}
+     */
+    @Transactional(rollbackFor = Exception.class)
     public LogisticsSettlementMapper.FeeSourceRow pushBms(String feeSourceNo, PushCommand command) {
         LogisticsFeeSourceAggregate aggregate = load(feeSourceNo);
         aggregate.pushToBms(command.bmsReceiveNo());
@@ -57,41 +101,86 @@ public class LogisticsFeeSourceApplicationService {
         return mapper.findFeeSource(feeSourceNo);
     }
 
+    /**
+     * 查询并返回 {@code list}。
+     *
+     * <p>该方法只读取或转换当前上下文数据，不应绕过数据权限，也不应产生业务状态副作用。
+     * @return 查询并返回的结果，类型为 {@code List<LogisticsSettlementMapper.FeeSourceRow>}
+     */
     public List<LogisticsSettlementMapper.FeeSourceRow> list() {
         return mapper.listFeeSources();
     }
 
+    /**
+     * 查询并返回 {@code load}。
+     *
+     * <p>该方法只读取或转换当前上下文数据，不应绕过数据权限，也不应产生业务状态副作用。
+     * @param feeSourceNo 可追踪业务编码，类型为 {@code String}
+     * @return 查询并返回的结果，类型为 {@code LogisticsFeeSourceAggregate}
+     */
     private LogisticsFeeSourceAggregate load(String feeSourceNo) {
         LogisticsSettlementMapper.FeeSourceRow row = mapper.findFeeSource(feeSourceNo);
         if (row == null) {
             throw new IllegalArgumentException("logistics fee source not found");
         }
-        return LogisticsFeeSourceAggregate.restore(row.feeSourceNo(), row.waybillNo(), row.carrierCode(),
-                row.logisticsProductCode(), row.feeItemCode(), row.amount(), row.currency(), row.billingPeriod(),
-                row.responsibleParty(), row.pushStatus(), row.bmsReceiveNo(), row.failureReason(), row.version());
+        return LogisticsFeeSourceAggregate.restore(row.feeSourceNo(), row.waybillNo(), row.carrierCode(), row.logisticsProductCode(), row.feeItemCode(), row.amount(), row.currency(), row.billingPeriod(), row.responsibleParty(), row.pushStatus(), row.bmsReceiveNo(), row.failureReason(), row.version());
     }
 
+    /**
+     * 转换数据模型 {@code toRow}。
+     *
+     * <p>该内部步骤用于收敛重复逻辑或保护局部规则，调用方应通过当前类型公开的业务入口使用该能力。
+     * @param aggregate 业务处理参数或成员，类型为 {@code LogisticsFeeSourceAggregate}
+     * @return 转换数据模型的结果，类型为 {@code LogisticsSettlementMapper.FeeSourceRow}
+     */
     private LogisticsSettlementMapper.FeeSourceRow toRow(LogisticsFeeSourceAggregate aggregate) {
-        return new LogisticsSettlementMapper.FeeSourceRow(null, aggregate.feeSourceNo(), aggregate.waybillNo(),
-                aggregate.carrierCode(), aggregate.logisticsProductCode(), aggregate.feeItemCode(),
-                aggregate.amount(), aggregate.currency(), aggregate.billingPeriod(), aggregate.responsibleParty(),
-                aggregate.pushStatus(), aggregate.bmsReceiveNo(), aggregate.failureReason(), aggregate.version());
+        return new LogisticsSettlementMapper.FeeSourceRow(null, aggregate.feeSourceNo(), aggregate.waybillNo(), aggregate.carrierCode(), aggregate.logisticsProductCode(), aggregate.feeItemCode(), aggregate.amount(), aggregate.currency(), aggregate.billingPeriod(), aggregate.responsibleParty(), aggregate.pushStatus(), aggregate.bmsReceiveNo(), aggregate.failureReason(), aggregate.version());
     }
 
+    /**
+     * 执行命令 {@code saveEvents}。
+     *
+     * <p>该内部步骤用于收敛重复逻辑或保护局部规则，调用方应通过当前类型公开的业务入口使用该能力。
+     * @param events 业务处理参数或成员，类型为 {@code List<TmsEvent>}
+     */
     private void saveEvents(List<TmsEvent> events) {
         for (TmsEvent event : events) {
-            mapper.insertOutbox(new TransportTaskMapper.OutboxRow(event.eventType(), event.businessNo(),
-                    event.payload(), 1, event.occurredAt()));
+            mapper.insertOutbox(new TransportTaskMapper.OutboxRow(event.eventType(), event.businessNo(), event.payload(), 1, event.occurredAt()));
         }
     }
 
+    /**
+     * 处理当前类型职责中的操作 {@code log}。
+     *
+     * <p>该内部步骤用于收敛重复逻辑或保护局部规则，调用方应通过当前类型公开的业务入口使用该能力。
+     * @param operationType 业务处理参数或成员，类型为 {@code String}
+     * @param businessNo 可追踪业务编码，类型为 {@code String}
+     * @param operatorId 业务或技术标识，类型为 {@code Long}
+     * @param idempotencyKey 业务或技术标识，类型为 {@code String}
+     */
     private void log(String operationType, String businessNo, Long operatorId, String idempotencyKey) {
-        mapper.insertOperationLog(new TransportTaskMapper.OperationLogRow(operationType, businessNo, operatorId,
-                idempotencyKey, LocalDateTime.now()));
+        mapper.insertOperationLog(new TransportTaskMapper.OperationLogRow(operationType, businessNo, operatorId, idempotencyKey, LocalDateTime.now()));
     }
 
-    public record GenerateCommand(String feeItemCode, BigDecimal amount, String currency, String billingPeriod,
-                                  String responsibleParty, Long operatorId, String idempotencyKey) {}
+    /**
+     * GenerateCommand。
+     *
+     * <p>位于当前子系统模块，负责其名称所表达的单一职责。作为不可变数据载体集中表达一组相关业务参数或查询结果。该类型只在所属限界上下文内表达该语义，跨上下文协作应通过已声明的接口或事件完成。
+     *
+     * @author SCM Team
+     * @since 0.1.0
+     */
+    public record GenerateCommand(String feeItemCode, BigDecimal amount, String currency, String billingPeriod, String responsibleParty, Long operatorId, String idempotencyKey) {
+    }
 
-    public record PushCommand(String bmsReceiveNo, Long operatorId, String idempotencyKey) {}
+    /**
+     * PushCommand。
+     *
+     * <p>位于当前子系统模块，负责其名称所表达的单一职责。作为不可变数据载体集中表达一组相关业务参数或查询结果。该类型只在所属限界上下文内表达该语义，跨上下文协作应通过已声明的接口或事件完成。
+     *
+     * @author SCM Team
+     * @since 0.1.0
+     */
+    public record PushCommand(String bmsReceiveNo, Long operatorId, String idempotencyKey) {
+    }
 }

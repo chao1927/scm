@@ -1,87 +1,99 @@
-import {
-  ApiOutlined,
-  AppstoreOutlined,
-  AuditOutlined,
-  BankOutlined,
-  CarOutlined,
-  DatabaseOutlined,
-  DeploymentUnitOutlined,
-  SafetyCertificateOutlined,
-  ShopOutlined,
-} from '@ant-design/icons'
-import { Layout, Menu, Space, Tag, Typography } from 'antd'
-import { lazy, Suspense, useMemo, useState } from 'react'
-import { decorateMenuItems, parsePermissionCodes, shouldEnforceMenuAccess } from './auth/menuAccess'
+import { Result, Spin } from 'antd'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import { login, logout, queryCurrentUser, queryMenus, queryPermissionSnapshot } from './api/auth'
+import { hasPermission } from './auth/menuAccess'
+import { clearTokens, permissionCodesFromSnapshot, storeTokens } from './auth/session'
+import { systemsById } from './config/systemCatalog'
+import ApplicationLayout from './layout/ApplicationLayout'
 
-const { Header, Sider, Content } = Layout
-const AsnPage = lazy(() => import('./pages/AsnPage'))
-const FulfillmentSettlementPage = lazy(() => import('./pages/FulfillmentSettlementPage'))
-const IntegrationPage = lazy(() => import('./pages/IntegrationPage'))
-const MdmIamPage = lazy(() => import('./pages/MdmIamPage'))
-const PurchasePage = lazy(() => import('./pages/PurchasePage'))
-const WarehouseInventoryPage = lazy(() => import('./pages/WarehouseInventoryPage'))
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const ResourceDetailPage = lazy(() => import('./pages/ResourceDetailPage'))
+const ResourceListPage = lazy(() => import('./pages/ResourceListPage'))
+const SystemWorkbenchPage = lazy(() => import('./pages/SystemWorkbenchPage'))
 const WorkbenchPage = lazy(() => import('./pages/WorkbenchPage'))
 
 export default function App() {
-  const [selectedKey, setSelectedKey] = useState('workbench')
-  const accessToken = globalThis.sessionStorage?.getItem('access_token') || ''
-  const permissionCodes = useMemo(() => parsePermissionCodes(globalThis.sessionStorage?.getItem('permission_codes')), [])
-  const enforceMenuAccess = shouldEnforceMenuAccess(accessToken, permissionCodes)
-  const menuItems = useMemo(() => decorateMenuItems([
-    { key: 'workbench', icon: <AppstoreOutlined />, label: '运营工作台' },
-    { key: 'supplier', icon: <ShopOutlined />, label: '供应商协同', children: [
-      { key: 'supplier-asn', label: 'ASN 发货通知' },
-      { key: 'supplier-order', label: '采购订单确认', disabled: true },
-      { key: 'supplier-quality', label: '质量整改', disabled: true },
-    ] },
-    { key: 'purchase', icon: <AuditOutlined />, label: '采购中心' },
-    { key: 'wms', icon: <BankOutlined />, label: '仓储作业' },
-    { key: 'inventory', icon: <DatabaseOutlined />, label: '中央库存' },
-    { key: 'oms', icon: <DeploymentUnitOutlined />, label: '订单履约' },
-    { key: 'tms', icon: <CarOutlined />, label: '物流运输' },
-    { key: 'bms', icon: <BankOutlined />, label: '费用结算' },
-    { key: 'mdm', icon: <DatabaseOutlined />, label: '主数据' },
-    { key: 'integration', icon: <ApiOutlined />, label: '集成中心' },
-    { key: 'permission', icon: <SafetyCertificateOutlined />, label: '权限管理' },
-  ], permissionCodes, enforceMenuAccess), [enforceMenuAccess, permissionCodes])
+  const [session, setSession] = useState(() => sessionStorage.getItem('access_token')
+    ? { status: 'loading', user: null, permissions: [], menus: [], error: '' }
+    : { status: 'anonymous', user: null, permissions: [], menus: [], error: '' })
 
-  const pageTitle = selectedKey === 'supplier-asn'
-    ? '供应商系统'
-    : selectedKey === 'purchase' ? '采购中心'
-    : ['wms', 'inventory'].includes(selectedKey) ? '仓储与库存'
-    : ['oms', 'tms', 'bms'].includes(selectedKey) ? '履约、物流与结算'
-    : ['mdm', 'permission'].includes(selectedKey) ? '主数据与权限'
-    : selectedKey === 'integration' ? '集成中心' : '供应链平台'
+  const loadSession = async () => {
+    const [userResult, snapshot, menus] = await Promise.all([queryCurrentUser(), queryPermissionSnapshot(), queryMenus()])
+    setSession({ status: 'authenticated', user: userResult.data, permissions: permissionCodesFromSnapshot(snapshot), menus, error: '' })
+  }
+
+  useEffect(() => {
+    if (session.status !== 'loading') return
+    loadSession().catch(() => {
+      clearTokens()
+      setSession({ status: 'anonymous', user: null, permissions: [], menus: [], error: '登录已失效，请重新登录' })
+    })
+  }, [session.status])
+
+  const handleLogin = async ({ username, password }) => {
+    setSession((current) => ({ ...current, status: 'authenticating', error: '' }))
+    try {
+      storeTokens(await login(username, password))
+      await loadSession()
+    } catch (error) {
+      clearTokens()
+      setSession({ status: 'anonymous', user: null, permissions: [], menus: [], error: error?.message || '登录失败' })
+    }
+  }
+
+  const handleLogout = async () => {
+    const refreshToken = sessionStorage.getItem('refresh_token')
+    try {
+      if (refreshToken) await logout(refreshToken)
+    } finally {
+      clearTokens()
+      setSession({ status: 'anonymous', user: null, permissions: [], menus: [], error: '' })
+    }
+  }
+
+  if (session.status === 'anonymous' || session.status === 'authenticating') {
+    return <Suspense fallback={<div className="auth-loading"><Spin /></div>}><LoginPage loading={session.status === 'authenticating'} error={session.error} onLogin={handleLogin} /></Suspense>
+  }
+  if (session.status === 'loading') {
+    return <div className="auth-loading"><Spin size="large" description="正在加载 IAM 权限" /></div>
+  }
 
   return (
-    <Layout className="app-shell">
-      <Sider width={224} theme="light" className="app-sider">
-        <div className="brand"><ShopOutlined /> 供应链系统</div>
-        <Menu
-          mode="inline"
-          selectedKeys={[selectedKey]}
-          defaultOpenKeys={['supplier']}
-          items={menuItems}
-          onClick={({ key }) => setSelectedKey(key)}
-        />
-      </Sider>
-      <Layout>
-        <Header className="app-header">
-          <Typography.Text strong>{pageTitle}</Typography.Text>
-          <Space><Tag color="blue">开发环境</Tag><Typography.Text type="secondary">端到端供应链系统</Typography.Text></Space>
-        </Header>
-        <Content className="app-content">
-          <Suspense fallback={<div className="page-loading">页面加载中</div>}>
-            {selectedKey === 'supplier-asn' && <AsnPage />}
-            {selectedKey === 'purchase' && <PurchasePage />}
-            {['wms', 'inventory'].includes(selectedKey) && <WarehouseInventoryPage />}
-            {['oms', 'tms', 'bms'].includes(selectedKey) && <FulfillmentSettlementPage />}
-            {['mdm', 'permission'].includes(selectedKey) && <MdmIamPage />}
-            {selectedKey === 'integration' && <IntegrationPage />}
-            {!['supplier-asn', 'purchase', 'wms', 'inventory', 'oms', 'tms', 'bms', 'mdm', 'permission', 'integration'].includes(selectedKey) && <WorkbenchPage onOpenAsn={() => setSelectedKey('supplier-asn')} />}
-          </Suspense>
-        </Content>
-      </Layout>
-    </Layout>
+    <Suspense fallback={<div className="auth-loading"><Spin size="large" description="页面加载中" /></div>}>
+      <Routes>
+        <Route element={<ApplicationLayout session={session} onLogout={handleLogout} />}>
+          <Route index element={<Navigate to="/workbench" replace />} />
+          <Route path="workbench" element={<PlatformWorkbenchRoute />} />
+          <Route path=":systemId" element={<SystemAccessGuard session={session}><SystemIndexRedirect /></SystemAccessGuard>} />
+          <Route path=":systemId/workbench" element={<SystemAccessGuard session={session}><SystemWorkbenchPage /></SystemAccessGuard>} />
+          <Route path=":systemId/:pageId" element={<SystemAccessGuard session={session}><ResourceListPage /></SystemAccessGuard>} />
+          <Route path=":systemId/:pageId/:recordId" element={<SystemAccessGuard session={session}><ResourceDetailPage /></SystemAccessGuard>} />
+          <Route path="*" element={<Navigate to="/workbench" replace />} />
+        </Route>
+      </Routes>
+    </Suspense>
   )
+}
+
+function PlatformWorkbenchRoute() {
+  const navigate = useNavigate()
+  return <WorkbenchPage onOpenAsn={() => navigate('/supplier/asns')} />
+}
+
+function SystemIndexRedirect() {
+  const { systemId } = useParams()
+  return <Navigate to={`/${systemId}/workbench`} replace />
+}
+
+function SystemAccessGuard({ session, children }) {
+  const { systemId } = useParams()
+  const system = systemsById.get(systemId)
+  if (!system) {
+    return <Navigate to="/workbench" replace />
+  }
+  if (!hasPermission(session.permissions, system.permission)) {
+    return <Result status="403" title="无权访问该子系统" subTitle={`当前用户缺少 ${system.permission} 或对应细分权限。`} />
+  }
+  return children
 }

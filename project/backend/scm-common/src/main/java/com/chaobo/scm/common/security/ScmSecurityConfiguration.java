@@ -10,38 +10,53 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 
+/**
+ * ScmSecurityConfiguration。
+ *
+ * <p>位于公共/base 模块，仅提供稳定的跨模块类型和技术约定，不拥有任何子系统业务状态。集中声明框架装配和运行配置，保持业务代码不感知基础设施初始化细节。该类型只在所属限界上下文内表达该语义，跨上下文协作应通过已声明的接口或事件完成。
+ *
+ * @author SCM Team
+ * @since 0.1.0
+ */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
 @EnableConfigurationProperties(ScmSecurityProperties.class)
 public class ScmSecurityConfiguration {
+
+    /**
+     * 处理当前类型职责中的操作 {@code scmJwtDecoder}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @param properties 业务处理参数或成员，类型为 {@code ScmSecurityProperties}
+     * @return 处理当前类型职责中的操作的结果，类型为 {@code JwtDecoder}
+     */
     @Bean
     JwtDecoder scmJwtDecoder(ScmSecurityProperties properties) {
         return NimbusJwtDecoder.withSecretKey(properties.secretKey()).build();
     }
 
+    /**
+     * 处理当前类型职责中的操作 {@code scmSecurityFilterChain}。
+     *
+     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
+     * @param http 业务处理参数或成员，类型为 {@code HttpSecurity}
+     * @param properties 业务处理参数或成员，类型为 {@code ScmSecurityProperties}
+     * @return 处理当前类型职责中的操作的结果，类型为 {@code SecurityFilterChain}
+     */
     @Bean
     SecurityFilterChain scmSecurityFilterChain(HttpSecurity http, ScmSecurityProperties properties) throws Exception {
-        return http
-                .csrf(csrf -> csrf.disable())
-                .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                        .anyRequest().access((authentication, context) -> {
-                            var auth = authentication.get();
-                            if (auth == null || !auth.isAuthenticated()) {
-                                return new AuthorizationDecision(false);
-                            }
-                            String namespace = properties.getPermissionNamespace();
-                            if (namespace.isBlank()) {
-                                return new AuthorizationDecision(true);
-                            }
-                            String prefix = namespace + ":";
-                            boolean allowed = auth.getAuthorities().stream()
-                                    .map(authority -> authority.getAuthority())
-                                    .anyMatch(value -> value.equals("*") || value.startsWith(prefix));
-                            return new AuthorizationDecision(allowed);
-                        }))
-                .oauth2ResourceServer(resourceServer -> resourceServer
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(new ScmJwtAuthenticationConverter())))
-                .build();
+        return http.csrf(csrf -> csrf.disable()).authorizeHttpRequests(authorize -> authorize.requestMatchers("/actuator/health", "/actuator/info").permitAll().anyRequest().access((authentication, context) -> {
+            var auth = authentication.get();
+            if (auth == null || !auth.isAuthenticated()) {
+                return new AuthorizationDecision(false);
+            }
+            String namespace = properties.getPermissionNamespace();
+            if (namespace.isBlank()) {
+                return new AuthorizationDecision(true);
+            }
+            String prefix = namespace + ":";
+            boolean allowed = auth.getAuthorities().stream().map(authority -> authority.getAuthority()).anyMatch(value -> "*".equals(value) || value.startsWith(prefix));
+            return new AuthorizationDecision(allowed);
+        })).oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt.jwtAuthenticationConverter(new ScmJwtAuthenticationConverter()))).build();
     }
 }

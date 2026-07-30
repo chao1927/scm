@@ -1,10 +1,16 @@
 spring:
   application:
     name: purchase-service
-  datasource:
-    url: jdbc:mysql://localhost:3306/scm_purchase?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-    username: root
-    password: root
+  profiles:
+    active: @spring.profiles.active@
+  cloud:
+    nacos:
+      username: ${NACOS_USERNAME:@nacos.username@}
+      password: ${NACOS_PASSWORD:@nacos.password@}
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:@nacos.server-addr@}
+        namespace: ${NACOS_NAMESPACE:@nacos.namespace@}
+        group: ${NACOS_GROUP:@nacos.group@}
   flyway:
     enabled: true
 
@@ -12,7 +18,34 @@ mybatis:
   configuration:
     map-underscore-to-camel-case: true
 
+server:
+  port: ${SERVER_PORT:8102}
+
 scm:
   security:
     hmac-secret: ${IAM_JWT_SECRET:}
     permission-namespace: purchase
+  integration:
+    access-token: ${SUBSYSTEM_SERVICE_TOKEN:}
+    connect-timeout-ms: 1000
+    read-timeout-ms: 3000
+    failure-threshold: 5
+    circuit-open-ms: 30000
+    batch-size: 50
+    max-retries: 8
+    fixed-delay: 1000
+    routes:
+      supplier-create-po-confirm-todo:
+        url: ${PURCHASE_ROUTE_SUPPLIER_PO_CONFIRM_URL:}
+      wms-create-purchase-inbound-plan:
+        url: ${PURCHASE_ROUTE_WMS_INBOUND_URL:}
+      bms-create-purchase-payable-plan:
+        url: ${PURCHASE_ROUTE_BMS_PAYABLE_URL:}
+      inventory-lock-supplier-return:
+        url: ${PURCHASE_ROUTE_INVENTORY_RETURN_LOCK_URL:}
+      wms-create-supplier-return-outbound:
+        url: ${PURCHASE_ROUTE_WMS_RETURN_OUTBOUND_URL:}
+      tms-create-supplier-return-transport:
+        url: ${PURCHASE_ROUTE_TMS_RETURN_TRANSPORT_URL:}
+      bms-create-supplier-return-offset:
+        url: ${PURCHASE_ROUTE_BMS_RETURN_OFFSET_URL:}

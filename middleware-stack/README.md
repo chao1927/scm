@@ -1,197 +1,82 @@
-# SCM Middleware Stack
+# Mac Docker 单机中间件栈
 
-包含：
+用于 SCM 本地开发，固定版本、持久化、开启鉴权，所有宿主机端口只绑定 `127.0.0.1`。MySQL、Redis、RocketMQ NameServer、RocketMQ Broker、Nacos、Nginx 每个运行容器的内存上限均为 `1 GiB`。
 
-- MySQL 8.x，单机
-- Redis Cluster，单容器 3 节点，无副本，适合开发机资源有限场景
-- RocketMQ 5.x，NameServer + 单 Broker
-- Nacos 2.x，standalone，嵌入式存储
-- Nginx，反向代理 Nacos
+## 一键启动
 
-## 启动
+前置条件：Docker Desktop 已启动，建议分配至少 8 GiB 内存。
 
 ```bash
-docker compose up -d
+cd middleware-stack
+./bin/dev.sh up
 ```
 
-查看状态：
+首次启动会：
+
+1. 生成不提交 Git 的 `.env` 随机密码；
+2. 生成 Redis ACL 和 Nginx htpasswd；
+3. 启动全部单机组件并等待健康；
+4. 初始化 Nacos 3 管理员；
+5. 检查鉴权、连通性和 1 GiB 内存限制。
+
+## 常用命令
 
 ```bash
-docker compose ps
+./bin/dev.sh status
+./bin/dev.sh check
+./bin/dev.sh logs
+./bin/dev.sh logs nacos
+./bin/dev.sh down
 ```
 
-查看日志：
+删除所有本地中间件数据卷：
 
 ```bash
-docker logs -f scm-mysql
-docker logs -f scm-redis-cluster
-docker logs -f scm-rocketmq-namesrv
-docker logs -f scm-rocketmq-broker
-docker logs -f scm-nacos
-docker logs -f scm-nginx
+./bin/dev.sh reset
 ```
 
-## 访问地址
+`reset` 会二次确认；执行后数据不可恢复，但 `.env` 密码文件会保留。
 
-### MySQL
+## 地址
 
-```text
-host: localhost
-port: 3306
-root password: Root@123456
-database: scm
-user: scm
-password: Scm@123456
+| 组件 | Mac 宿主机地址 | 账号 |
+| --- | --- | --- |
+| MySQL | `127.0.0.1:3306` | `scm_app` |
+| Redis | `127.0.0.1:6379` | `scm_app` |
+| RocketMQ 5.x Proxy | `127.0.0.1:8081` | 本地单机未启 ACL |
+| RocketMQ NameServer | `127.0.0.1:9876` | 本地单机未启 ACL |
+| Nacos OpenAPI/SDK | `127.0.0.1:8848` | `nacos` |
+| Nacos 原始控制台 | <http://127.0.0.1:8080/> | `nacos` |
+| Nginx 保护后的控制台 | <http://127.0.0.1:8088/> | `admin` |
+
+密码在本机 `middleware-stack/.env`，文件权限为 `600`，不会提交 Git。
+
+## 单机拓扑
+
+```mermaid
+flowchart LR
+    IDE["Mac IDE：Provider / Consumer"] -->|MySQL 协议| MYSQL["MySQL 单实例"]
+    IDE -->|RESP + ACL| REDIS["Redis 单实例"]
+    IDE -->|gRPC :8081| RMQ["RocketMQ 单 Broker + Proxy"]
+    RMQ --> NS["单 NameServer"]
+    IDE -->|注册/发现 :8848| NACOS["Nacos standalone"]
+    NACOS -->|持久化| MYSQL
+    NGINX["Nginx 单实例"] -->|控制台反代| NACOS
+    IDE -->|Triple 真实 RPC| IDE
 ```
 
-### Redis Cluster
+## Spring Boot / Dubbo
 
-```text
-nodes:
-127.0.0.1:7000
-127.0.0.1:7001
-127.0.0.1:7002
+参考 [application-local-example.yml](config/backend/application-local-example.yml)。
 
-password:
-Redis@123456
-```
+本地 Java 服务运行在 Mac IDE 时：
 
-测试：
+- 容器中间件使用 `127.0.0.1 + 发布端口`；
+- Dubbo Provider 向 Nacos 注册 `127.0.0.1 + 唯一 tri 端口`；
+- Consumer 从 Nacos发现地址后直接连接 Provider，Nacos 不转发 RPC；
+- 每个 Provider 使用不同端口，例如 `50051`、`50052`、`50053`；
+- Provider 必须使用真实 `@DubboService`，Consumer 使用 `@DubboReference` 或等价的 `ReferenceConfig`。
 
-```bash
-docker exec -it scm-redis-cluster redis-cli -a Redis@123456 -c -p 7000 cluster nodes
-```
+如果将 Java 服务也放入 Docker，组件地址应改为 Compose 服务名，并让容器内 Consumer 能访问 Provider 注册的地址；不能继续注册 `127.0.0.1`。
 
-注意：当前 Redis Cluster 的 `cluster-announce-ip=127.0.0.1`，适合宿主机应用连接。如果 Java 应用也放在 Docker 网络中，需要调整 announce IP。
-
-### RocketMQ
-
-```text
-namesrv: localhost:9876
-broker: localhost:10911
-```
-
-测试：
-
-```bash
-docker exec -it scm-rocketmq-namesrv sh mqadmin clusterList -n 127.0.0.1:9876
-```
-
-注意：`broker.conf` 中 `brokerIP1=127.0.0.1`，适合宿主机 Java 应用连接。如果应用在 Docker 网络里，需要改成容器可达地址。
-
-### Nacos
-
-直连：
-
-```text
-http://localhost:8848/nacos
-```
-
-通过 Nginx：
-
-```text
-http://localhost/nacos/
-```
-
-Nginx Basic Auth：
-
-```text
-username: admin
-password: Admin@123456
-```
-
-Nacos 自身账号通常初始化为：
-
-```text
-username: nacos
-password: nacos
-```
-
-如果你启用了新版本 Nacos 的强制密码策略，请在控制台首次登录后修改。
-
-### Nginx
-
-```text
-http://localhost
-http://localhost/health
-```
-
-## 停止
-
-```bash
-docker compose down
-```
-
-保留数据。
-
-完全清理数据：
-
-```bash
-docker compose down
-rm -rf ./data ./logs
-```
-
-## 目录说明
-
-```text
-docker-compose.yml
-.env
-config/
-  mysql/my.cnf
-  redis/redis-7000.conf
-  redis/redis-7001.conf
-  redis/redis-7002.conf
-  rocketmq/broker.conf
-  nacos/application.properties
-  nginx/nginx.conf
-  nginx/conf.d/default.conf
-  nginx/htpasswd
-init/
-  mysql/01-init.sql
-scripts/
-  redis/start-redis-cluster.sh
-data/
-logs/
-```
-
-## 安全提醒
-
-当前账号密码是开发环境示例，生产或共享环境必须修改：
-
-- MYSQL_ROOT_PASSWORD
-- MYSQL_PASSWORD
-- REDIS_PASSWORD
-- NACOS_AUTH_TOKEN
-- Nginx htpasswd
-
-## Spring Boot 示例配置
-
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/scm?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
-    username: scm
-    password: Scm@123456
-
-  data:
-    redis:
-      password: Redis@123456
-      cluster:
-        nodes:
-          - 127.0.0.1:7000
-          - 127.0.0.1:7001
-          - 127.0.0.1:7002
-
-rocketmq:
-  name-server: localhost:9876
-```
-
-## 镜像拉取慢
-
-如果 Docker Hub 拉不下来，先测试：
-
-```bash
-docker pull hello-world
-```
-
-如果失败，说明 Docker Hub 网络或镜像源有问题，需要配置 Docker Desktop 的 registry mirrors。
+完整说明见 [Mac Docker 本地开发与 Dubbo 真实 RPC 手册](../docs/14-Mac-Docker-本地开发与Dubbo真实RPC手册.md)。

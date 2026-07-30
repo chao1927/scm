@@ -13,26 +13,27 @@ import { Button, Col, Descriptions, Empty, Progress, Row, Space, Table, Tag, Tim
 
 const systemRows = [
   { key: 'supplier', system: '供应商系统', owner: '供应商协同', status: '首轮完成', progress: 86, focus: '准入、报价、合同、ASN、对账、评分', risk: '真实 MQ/Dubbo 联调' },
-  { key: 'purchase', system: '采购系统', owner: '采购中心', status: '首轮完成', progress: 88, focus: '请购、询价、比价、PO、到货、退供', risk: '集成命令分发器' },
+  { key: 'purchase', system: '采购系统', owner: '采购中心', status: '首轮完成', progress: 88, focus: '请购、询价、比价、PO、到货、退供', risk: '生产目标路由配置' },
   { key: 'wms', system: 'WMS 系统', owner: '仓储执行', status: '首轮完成', progress: 84, focus: '入库、收货、质检、上架、出库、盘点', risk: '行级模型与真实联调' },
   { key: 'inventory', system: '中央库存', owner: '库存事实', status: '首轮完成', progress: 82, focus: '账户、流水、预占、冻结、快照、对账', risk: '事件载荷版本化' },
   { key: 'oms', system: 'OMS 系统', owner: '订单履约', status: '首轮完成', progress: 80, focus: '渠道订单、分仓、预占、WMS 出库、取消售后', risk: '退货入库增强' },
   { key: 'tms', system: 'TMS 系统', owner: '运输协同', status: '首轮完成', progress: 81, focus: '运输任务、运单、面单、轨迹、签收、费用来源', risk: '承运商签名验签' },
   { key: 'bms', system: 'BMS 系统', owner: '费用结算', status: '首轮完成', progress: 83, focus: '计费、费用、对账、账单、发票、财务、退款', risk: '财税支付沙箱' },
-  { key: 'integration', system: '集成中心', owner: '平台集成', status: '增强完成', progress: 78, focus: '路由、运行面、HTTP、端点预检、死信重放', risk: '真实 MQ/Dubbo 接入' },
+  { key: 'mdm', system: '主数据系统', owner: '数据治理', status: '首轮完成', progress: 82, focus: '类型、模板、记录、发布订阅、导入质量', risk: '下游版本兼容' },
+  { key: 'iam', system: '权限系统', owner: '身份权限', status: '首轮完成', progress: 84, focus: '用户、角色、权限、菜单、数据范围、审计', risk: '生产密钥轮换' },
 ]
 
 const priorityRows = [
-  { key: 'p1', priority: 'P1', item: 'RocketMQ Producer、Dubbo 泛化调用、ERP/税务/支付沙箱联调', status: '外部环境待准备', owner: '平台集成' },
-  { key: 'p2', priority: 'P2', item: '前端业务页面、权限 Web 测试、生产化集成测试', status: '开发中', owner: '前端与 QA' },
-  { key: 'p3', priority: 'P3', item: '统一报表分析、压测、告警、容灾和上线治理', status: '计划中', owner: '运维治理' },
+  { key: 'p1', priority: 'P1', item: '各子系统 RocketMQ/Dubbo 契约与 ERP、税务、支付沙箱联调', status: '外部环境待准备', owner: '业务子系统' },
+  { key: 'p2', priority: 'P2', item: '补齐九子系统缺失的列表/详情读模型与生产化集成测试', status: '持续建设', owner: '业务子系统与 QA' },
+  { key: 'p3', priority: 'P3', item: '按事实拥有者补齐报表分析、压测、告警、容灾和上线治理', status: '计划中', owner: '业务子系统与运维' },
 ]
 
 const activityItems = [
-  { color: 'green', children: 'BMS 计费结算首轮完成，费用来源到财务交接链路具备本地验证。' },
-  { color: 'green', children: '集成中心完成 HTTP/OpenAPI 通道、端点熔断、RocketMQ/Dubbo 契约预检。' },
-  { color: 'blue', children: '前端开始补齐供应链运营工作台与系统导航。' },
-  { color: 'orange', children: 'P1 真实联调等待 nameserver、注册中心、财税支付沙箱资料。' },
+  { color: 'green', content: 'BMS 计费结算首轮完成，费用来源到财务交接链路具备本地验证。' },
+  { color: 'green', content: '跨系统可靠投递已收敛到各业务子系统的 Outbox、Inbox 与失败重放能力。' },
+  { color: 'green', content: '前端已按九个业务子系统完成标准工作台、列表和详情路由重构。' },
+  { color: 'orange', content: 'P1 真实联调等待 nameserver、注册中心、财税支付沙箱资料。' },
 ]
 
 const systemColumns = [
@@ -57,7 +58,7 @@ export default function WorkbenchPage({ onOpenAsn }) {
       <div className="page-heading">
         <div>
           <Typography.Title level={3}>供应链运营工作台</Typography.Title>
-          <Typography.Text type="secondary">查看系统完成情况、集成风险和下一步开发优先级</Typography.Text>
+          <Typography.Text type="secondary">查看九个业务子系统的完成情况、协作风险和下一步开发优先级</Typography.Text>
         </div>
         <Space wrap>
           <Button icon={<SyncOutlined />}>刷新状态</Button>
@@ -66,10 +67,10 @@ export default function WorkbenchPage({ onOpenAsn }) {
       </div>
 
       <Row gutter={[16, 16]} className="metric-row">
-        <Col xs={24} sm={12} xl={6}><Metric icon={<CheckCircleOutlined />} label="首轮完成系统" value="10" hint="含 BMS 与集成中心" /></Col>
-        <Col xs={24} sm={12} xl={6}><Metric icon={<ApiOutlined />} label="集成通道能力" value="4" hint="HTTP、OpenAPI、MQ 预检、Dubbo 预检" /></Col>
+        <Col xs={24} sm={12} xl={6}><Metric icon={<CheckCircleOutlined />} label="首轮完成系统" value="9" hint="九个业务子系统" /></Col>
+        <Col xs={24} sm={12} xl={6}><Metric icon={<ApiOutlined />} label="可靠协作能力" value="4" hint="Outbox、Inbox、重试、人工重放" /></Col>
         <Col xs={24} sm={12} xl={6}><Metric icon={<SafetyCertificateOutlined />} label="P1 阻塞项" value="1" hint="依赖外部中间件与沙箱" /></Col>
-        <Col xs={24} sm={12} xl={6}><Metric icon={<FieldTimeOutlined />} label="前端切片" value="开发中" hint="工作台与 ASN 页面" /></Col>
+        <Col xs={24} sm={12} xl={6}><Metric icon={<FieldTimeOutlined />} label="前端结构" value="已完成" hint="九子系统工作台、列表与详情" /></Col>
       </Row>
 
       <div className="section-band">

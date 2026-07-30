@@ -22,3 +22,9 @@ Thumbs.db
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Local Docker middleware secrets and runtime-generated files
+middleware-stack/.env
+middleware-stack/runtime/
+project/backend/.runtime/
+project/frontend/.runtime/

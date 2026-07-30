@@ -1,0 +1,277 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: scm-infra
+  labels:
+    app.kubernetes.io/part-of: scm
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: scm-infra
+  labels:
+    app.kubernetes.io/name: nginx
+    app.kubernetes.io/part-of: scm
+data:
+  nginx.conf: |
+    worker_processes 1;
+    error_log /dev/stderr notice;
+    pid /tmp/nginx.pid;
+
+    events {
+        worker_connections 1024;
+    }
+
+    http {
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+
+        log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                        '$status $body_bytes_sent "$http_referer" '
+                        '"$http_user_agent" "$http_x_forwarded_for"';
+        access_log /dev/stdout main;
+
+        sendfile on;
+        tcp_nopush on;
+        keepalive_timeout 65;
+        server_tokens off;
+
+        client_body_temp_path /tmp/client_temp;
+        proxy_temp_path /tmp/proxy_temp;
+        fastcgi_temp_path /tmp/fastcgi_temp;
+        uwsgi_temp_path /tmp/uwsgi_temp;
+        scgi_temp_path /tmp/scgi_temp;
+
+        gzip on;
+        gzip_min_length 1024;
+        gzip_types text/plain text/css application/json application/javascript application/xml;
+
+        include /etc/nginx-custom/conf.d/*.conf;
+    }
+
+  default.conf: |
+    server {
+        listen 8080;
+        server_name _;
+
+        root /etc/nginx-custom/html;
+        index index.html;
+        charset utf-8;
+
+        auth_basic "SCM Nginx";
+        auth_basic_user_file /etc/nginx-auth/auth;
+
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "no-referrer" always;
+
+        location = /healthz {
+            auth_basic off;
+            access_log off;
+            default_type text/plain;
+            return 200 "ok\n";
+        }
+
+        location / {
+            try_files $uri $uri/ =404;
+
+            limit_except GET {
+                deny all;
+            }
+        }
+
+        location ~ /\. {
+            deny all;
+        }
+    }
+
+  index.html: |
+    <!doctype html>
+    <html lang="zh-CN">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <title>SCM Nginx</title>
+      <style>
+        body { max-width: 760px; margin: 10vh auto; padding: 0 24px; font: 16px/1.7 system-ui, sans-serif; color: #172033; }
+        main { border: 1px solid #d8deea; border-radius: 16px; padding: 32px; box-shadow: 0 10px 30px #23304a14; }
+        code { background: #f3f5f8; padding: 2px 6px; border-radius: 5px; }
+      </style>
+    </head>
+    <body>
+      <main>
+        <h1>SCM Nginx 已部署</h1>
+        <p>HTTP Basic Authentication 验证成功。</p>
+        <p>配置来源：<code>ConfigMap/nginx-config</code></p>
+      </main>
+    </body>
+    </html>
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  namespace: scm-infra
+  labels:
+    app.kubernetes.io/name: nginx
+    app.kubernetes.io/part-of: scm
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: nginx
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: scm-infra
+  labels:
+    app.kubernetes.io/name: nginx
+    app.kubernetes.io/part-of: scm
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  minReadySeconds: 5
+  progressDeadlineSeconds: 600
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nginx
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nginx
+        app.kubernetes.io/part-of: scm
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: nginx
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10101
+        runAsGroup: 10101
+        fsGroup: 10101
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: nginx
+          image: nginx:1.30.4-alpine3.24
+          imagePullPolicy: IfNotPresent
+          command:
+            - nginx
+          args:
+            - -c
+            - /etc/nginx-custom/nginx.conf
+            - -g
+            - daemon off;
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+              ephemeral-storage: 32Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+              ephemeral-storage: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+              scheme: HTTP
+            failureThreshold: 30
+            periodSeconds: 2
+            timeoutSeconds: 2
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+              scheme: HTTP
+            failureThreshold: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+              scheme: HTTP
+            failureThreshold: 3
+            periodSeconds: 10
+            timeoutSeconds: 2
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - nginx
+                  - -c
+                  - /etc/nginx-custom/nginx.conf
+                  - -s
+                  - quit
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx-custom
+              readOnly: true
+            - name: auth
+              mountPath: /etc/nginx-auth
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: nginx-config
+            defaultMode: 0444
+            items:
+              - key: nginx.conf
+                path: nginx.conf
+              - key: default.conf
+                path: conf.d/default.conf
+              - key: index.html
+                path: html/index.html
+        - name: auth
+          secret:
+            secretName: nginx-auth
+            defaultMode: 0440
+        - name: tmp
+          emptyDir:
+            sizeLimit: 128Mi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nginx
+  namespace: scm-infra
+  labels:
+    app.kubernetes.io/name: nginx
+    app.kubernetes.io/part-of: scm
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nginx
