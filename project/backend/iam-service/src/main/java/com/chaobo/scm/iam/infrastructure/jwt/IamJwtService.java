@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.LongSupplier;
 
 /**
  * IamJwtService。
@@ -34,7 +35,13 @@ public class IamJwtService {
      *
      * <p>保存当前对象所需的业务处理参数或成员；其具体生命周期由所属对象统一管理。
      */
-    private final byte[] secret;
+    private final String activeKid;
+
+    private final byte[] activeSecret;
+
+    private final Map<String, ResolvedVerificationKey> verificationKeys;
+
+    private final LongSupplier currentEpochSecond;
 
     /**
      * json（类型：{@code ObjectMapper}）。
@@ -50,11 +57,29 @@ public class IamJwtService {
      * @param secret 业务处理参数或成员，类型为 {@code String}
      */
     public IamJwtService(String secret) {
-        byte[] candidate = secret == null ? new byte[0] : secret.getBytes(StandardCharsets.UTF_8);
-        if (candidate.length < MINIMUM_SECRET_BYTES) {
-            throw new IllegalArgumentException("IAM JWT signing secret must contain at least 32 bytes");
+        this("active", secret, Map.of(), () -> Instant.now().getEpochSecond());
+    }
+
+    public IamJwtService(String activeKid, String activeSecret,
+                         Map<String, VerificationKey> previousKeys,
+                         LongSupplier currentEpochSecond) {
+        if (activeKid == null || activeKid.isBlank()) {
+            throw new IllegalArgumentException("IAM JWT active kid is required");
         }
-        this.secret = candidate.clone();
+        this.activeKid = activeKid;
+        this.activeSecret = validatedSecret(activeSecret);
+        Map<String, ResolvedVerificationKey> keys = new LinkedHashMap<>();
+        keys.put(activeKid, new ResolvedVerificationKey(this.activeSecret, Long.MAX_VALUE));
+        if (previousKeys != null) {
+            previousKeys.forEach((kid, key) -> {
+                if (kid == null || kid.isBlank() || key == null || activeKid.equals(kid)) {
+                    throw new IllegalArgumentException("invalid previous JWT key configuration");
+                }
+                keys.put(kid, new ResolvedVerificationKey(validatedSecret(key.secret()), key.validUntilEpochSecond()));
+            });
+        }
+        this.verificationKeys = Map.copyOf(keys);
+        this.currentEpochSecond = currentEpochSecond;
     }
 
     /**
@@ -65,7 +90,7 @@ public class IamJwtService {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code String}
      */
     public String issue(TokenClaims claims) {
-        Map<String, Object> header = Map.of("alg", "HS256", "typ", "JWT");
+        Map<String, Object> header = Map.of("alg", "HS256", "typ", "JWT", "kid", activeKid);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("sub", claims.subject());
         payload.put("username", claims.username());
@@ -78,7 +103,7 @@ public class IamJwtService {
         payload.put("data_scopes", claims.dataScopes());
         try {
             String signingInput = base64Url(json.writeValueAsBytes(header)) + "." + base64Url(json.writeValueAsBytes(payload));
-            return signingInput + "." + sign(signingInput);
+            return signingInput + "." + sign(signingInput, activeSecret);
         } catch (JacksonException exception) {
             throw new IllegalStateException("jwt serialization failed", exception);
         }
@@ -97,20 +122,28 @@ public class IamJwtService {
         if (parts.length != VERIFY_VALUE_3) {
             throw new IllegalArgumentException("invalid jwt format");
         }
+        String kid = keyId(token);
+        ResolvedVerificationKey key = verificationKeys.get(kid);
+        if (key == null) {
+            throw new IllegalArgumentException("unknown jwt kid");
+        }
+        if (currentEpochSecond.getAsLong() > key.validUntilEpochSecond()) {
+            throw new IllegalArgumentException("jwt verification window expired");
+        }
         String signingInput = parts[0] + "." + parts[1];
-        if (!constantTimeEquals(sign(signingInput), parts[VERIFY_VALUE_2])) {
+        if (!constantTimeEquals(sign(signingInput, key.secret()), parts[VERIFY_VALUE_2])) {
             throw new IllegalArgumentException("invalid jwt signature");
         }
         try {
             Map<String, Object> values = json.readValue(Base64.getUrlDecoder().decode(parts[1]), Map.class);
             long exp = number(values.get("exp"));
-            if (Instant.now().getEpochSecond() >= exp) {
+            if (currentEpochSecond.getAsLong() >= exp) {
                 throw new IllegalArgumentException("jwt expired");
             }
             Set<String> permissions = stringSet(values.get("permissions"));
             Map<String, Set<String>> dataScopes = new LinkedHashMap<>();
             if (values.get(DATA_SCOPES) instanceof Map<?, ?> rawScopes) {
-                rawScopes.forEach((key, value) -> dataScopes.put(String.valueOf(key), stringSet(value)));
+                rawScopes.forEach((scopeKey, value) -> dataScopes.put(String.valueOf(scopeKey), stringSet(value)));
             }
             return new TokenClaims(text(values, "sub"), text(values, "username"), text(values, "app"), text(values, "jti"), text(values, "type"), number(values.get("iat")), exp, permissions, dataScopes);
         } catch (RuntimeException exception) {
@@ -128,7 +161,7 @@ public class IamJwtService {
      * @param signingInput 业务处理参数或成员，类型为 {@code String}
      * @return 处理当前类型职责中的操作的结果，类型为 {@code String}
      */
-    private String sign(String signingInput) {
+    private String sign(String signingInput, byte[] secret) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secret, "HmacSHA256"));
@@ -136,6 +169,31 @@ public class IamJwtService {
         } catch (Exception exception) {
             throw new IllegalStateException("jwt signing failed", exception);
         }
+    }
+
+    public String keyId(String token) {
+        String[] parts = token == null ? new String[0] : token.split("\\.");
+        if (parts.length != VERIFY_VALUE_3) {
+            throw new IllegalArgumentException("invalid jwt format");
+        }
+        try {
+            Map<String, Object> header = json.readValue(Base64.getUrlDecoder().decode(parts[0]), Map.class);
+            String kid = text(header, "kid");
+            if (kid.isBlank()) {
+                throw new IllegalArgumentException("jwt kid is required");
+            }
+            return kid;
+        } catch (JacksonException exception) {
+            throw new IllegalArgumentException("invalid jwt header", exception);
+        }
+    }
+
+    private static byte[] validatedSecret(String secret) {
+        byte[] candidate = secret == null ? new byte[0] : secret.getBytes(StandardCharsets.UTF_8);
+        if (candidate.length < MINIMUM_SECRET_BYTES) {
+            throw new IllegalArgumentException("IAM JWT signing secret must contain at least 32 bytes");
+        }
+        return candidate.clone();
     }
 
     /**
@@ -247,6 +305,12 @@ public class IamJwtService {
         public TokenClaims(String subject, String username, String appCode, String jti, String tokenType, long issuedAtEpochSecond, long expiresAtEpochSecond) {
             this(subject, username, appCode, jti, tokenType, issuedAtEpochSecond, expiresAtEpochSecond, Set.of(), Map.of());
         }
+    }
+
+    public record VerificationKey(String secret, long validUntilEpochSecond) {
+    }
+
+    private record ResolvedVerificationKey(byte[] secret, long validUntilEpochSecond) {
     }
 
     /**

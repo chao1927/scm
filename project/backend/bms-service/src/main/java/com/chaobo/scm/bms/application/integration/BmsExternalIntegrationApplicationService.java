@@ -4,6 +4,7 @@ import com.chaobo.scm.bms.application.BmsApplicationService;
 import com.chaobo.scm.bms.domain.BmsDomain;
 import com.chaobo.scm.bms.infrastructure.persistence.BmsExternalTaskMapper;
 import com.chaobo.scm.bms.infrastructure.persistence.BmsMapper;
+import com.chaobo.scm.common.security.ScmAccessContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +29,7 @@ public class BmsExternalIntegrationApplicationService {
     private static final String ERP_POST = "ERP_POST";
     private static final String TAX_ISSUE = "TAX_ISSUE";
     private static final String PAYMENT_REFUND = "PAYMENT_REFUND";
+    private static final String BILLING_OBJECT_SCOPE = "BILLING_OBJECT";
     private static final int MAX_DISPATCH_LIMIT = 100;
 
     private final BmsExternalTaskMapper tasks;
@@ -122,11 +124,20 @@ public class BmsExternalIntegrationApplicationService {
      * 人工恢复最终失败任务。
      */
     @Transactional(rollbackFor = Exception.class)
-    public void retryFinalFailure(String taskNo) {
+    public void retryFinalFailure(String taskNo, String reason, ScmAccessContext access) {
+        var task = require(tasks.find(taskNo), "external task not found");
+        access.requireScope(BILLING_OBJECT_SCOPE, billingObjectCode(task));
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("manual retry reason is required");
+        }
+        if (reason.trim().length() > 128) {
+            throw new IllegalArgumentException("manual retry reason is too long");
+        }
         if (tasks.retryFinalFailure(taskNo) == 0) {
             throw new IllegalStateException("only final failed task can be retried");
         }
-        var task = tasks.find(taskNo);
+        tasks.insertRetryAudit(taskNo, access.operatorId(), reason.trim());
+        task = tasks.find(taskNo);
         if (PAYMENT_REFUND.equals(task.taskType())) {
             var refund = require(bmsMapper.findRefundSettlement(task.businessNo()),
                 "refund not found");
@@ -136,6 +147,22 @@ public class BmsExternalIntegrationApplicationService {
                         refund.version(), null, taskNo + ":manual-retry"));
             }
         }
+    }
+
+    private String billingObjectCode(BmsExternalTaskMapper.ExternalTaskRow task) {
+        String billNo = switch (task.taskType()) {
+            case ERP_POST -> require(
+                bmsMapper.findFinanceHandover(task.businessNo()),
+                "finance handover not found").billNo();
+            case TAX_ISSUE -> require(
+                bmsMapper.findInvoice(task.businessNo()), "invoice not found").billNo();
+            case PAYMENT_REFUND -> require(
+                bmsMapper.findRefundSettlement(task.businessNo()),
+                "refund not found").billNo();
+            default -> throw new IllegalArgumentException(
+                "unsupported BMS external task: " + task.taskType());
+        };
+        return require(bmsMapper.findBill(billNo), "bill not found").objectCode();
     }
 
     private String execute(BmsExternalTaskMapper.ExternalTaskRow task) {

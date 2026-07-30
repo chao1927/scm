@@ -3,6 +3,7 @@ package com.chaobo.scm.iam.infrastructure.jwt;
 import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Map;
 import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -16,6 +17,62 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @since 0.1.0
  */
 class IamJwtServiceTest {
+
+    @Test
+    void issuesWithActiveKidAndAcceptsPreviousOnlyInsideRotationWindow() {
+        Instant now = Instant.parse("2026-07-30T00:00:00Z");
+        IamJwtService oldIssuer = new IamJwtService(
+                "old",
+                "01234567890123456789012345678901",
+                Map.of(),
+                now::getEpochSecond);
+        String oldToken = oldIssuer.issue(new IamJwtService.TokenClaims(
+                "1", "admin", "IAM", "old-jti", "ACCESS",
+                now.getEpochSecond(), now.plusSeconds(600).getEpochSecond()));
+        IamJwtService rotating = new IamJwtService(
+                "new",
+                "abcdefghijklmnopqrstuvwxyzABCDEF",
+                Map.of("old", new IamJwtService.VerificationKey(
+                        "01234567890123456789012345678901",
+                        now.plusSeconds(300).getEpochSecond())),
+                now::getEpochSecond);
+
+        assertThat(rotating.keyId(oldToken)).isEqualTo("old");
+        assertThat(rotating.verify(oldToken).jti()).isEqualTo("old-jti");
+
+        IamJwtService expiredWindow = new IamJwtService(
+                "new",
+                "abcdefghijklmnopqrstuvwxyzABCDEF",
+                Map.of("old", new IamJwtService.VerificationKey(
+                        "01234567890123456789012345678901",
+                        now.minusSeconds(1).getEpochSecond())),
+                now::getEpochSecond);
+        assertThatThrownBy(() -> expiredWindow.verify(oldToken))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("verification window");
+    }
+
+    @Test
+    void rejectsUnknownKidInsteadOfTryingEverySecret() {
+        Instant now = Instant.parse("2026-07-30T00:00:00Z");
+        IamJwtService issuer = new IamJwtService(
+                "unknown",
+                "01234567890123456789012345678901",
+                Map.of(),
+                now::getEpochSecond);
+        String token = issuer.issue(new IamJwtService.TokenClaims(
+                "1", "admin", "IAM", "jti", "ACCESS",
+                now.getEpochSecond(), now.plusSeconds(60).getEpochSecond()));
+        IamJwtService verifier = new IamJwtService(
+                "active",
+                "abcdefghijklmnopqrstuvwxyzABCDEF",
+                Map.of(),
+                now::getEpochSecond);
+
+        assertThatThrownBy(() -> verifier.verify(token))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("unknown jwt kid");
+    }
 
     /**
      * 处理当前类型职责中的操作 {@code signedJwtCanBeVerifiedAndTamperingIsRejected}。

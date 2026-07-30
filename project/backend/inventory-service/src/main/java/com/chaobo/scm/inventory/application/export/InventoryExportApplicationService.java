@@ -8,10 +8,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -52,7 +53,7 @@ public class InventoryExportApplicationService {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw rule("导出幂等键不能为空");
         }
-        String queryJson = write(command.query() == null ? Map.of() : command.query());
+        String queryJson = write(canonicalMap(command.query()));
         String ownerScope = write(scope(access, OWNER, command.ownerId()));
         String warehouseScope = write(scope(access, WAREHOUSE, command.warehouseId()));
         String fingerprint = sha256(
@@ -136,7 +137,7 @@ public class InventoryExportApplicationService {
         if (raw.contains(WILDCARD)) {
             return List.of(WILDCARD);
         }
-        LinkedHashSet<String> valid = new LinkedHashSet<>();
+        TreeSet<String> valid = new TreeSet<>();
         for (String value : raw) {
             try {
                 if (Long.parseLong(value) > 0) {
@@ -150,6 +151,33 @@ public class InventoryExportApplicationService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "缺少" + scopeType + "数据范围");
         }
         return List.copyOf(valid);
+    }
+
+    private static Map<String, Object> canonicalMap(Map<String, Object> source) {
+        if (source == null || source.isEmpty()) {
+            return Map.of();
+        }
+        TreeMap<String, Object> result = new TreeMap<>();
+        source.forEach((key, value) -> result.put(key, canonicalValue(value)));
+        return result;
+    }
+
+    private static Object canonicalValue(Object value) {
+        if (value instanceof Map<?, ?> values) {
+            TreeMap<String, Object> result = new TreeMap<>();
+            values.forEach((key, nested) -> result.put(
+                    String.valueOf(key),
+                    canonicalValue(nested)));
+            return result;
+        }
+        if (value instanceof Set<?> values) {
+            return values.stream().map(String::valueOf).sorted().toList();
+        }
+        if (value instanceof List<?> values) {
+            return values.stream().map(InventoryExportApplicationService::canonicalValue)
+                    .toList();
+        }
+        return value;
     }
 
     private String write(Object value) {

@@ -41,6 +41,20 @@ public class JdbcInventoryOperationReadModel implements InventoryOperationReadMo
                 json_unquote(json_extract(payload_json,'$.warehouseId'))
             ) as unsigned)
             """;
+    private static final String EVENT_SKU = """
+            coalesce(
+                json_unquote(json_extract(envelope_json,'$.payload.sku')),
+                json_unquote(json_extract(envelope_json,'$.payload.skuCode')),
+                json_unquote(json_extract(payload_json,'$.sku')),
+                json_unquote(json_extract(payload_json,'$.skuCode'))
+            )
+            """;
+    private static final String EVENT_BATCH = """
+            coalesce(
+                json_unquote(json_extract(envelope_json,'$.payload.batchNo')),
+                json_unquote(json_extract(payload_json,'$.batchNo'))
+            )
+            """;
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -168,7 +182,7 @@ public class JdbcInventoryOperationReadModel implements InventoryOperationReadMo
                            i.event_version,
                            %s owner_id,%s warehouse_id,
                            i.aggregate_type,i.aggregate_id,i.status,i.retry_count,
-                           i.last_error,i.updated_at,0 quantity,null sku_code,null batch_no
+                           i.last_error,i.updated_at,0 quantity,%s sku_code,%s batch_no
                       from inv_inbox_event i
                     union all
                     select 'OUTBOUND' direction,'INVENTORY' source_system,o.event_code,
@@ -183,7 +197,11 @@ public class JdbcInventoryOperationReadModel implements InventoryOperationReadMo
                            json_unquote(json_extract(o.payload_json,'$.batchNo')) batch_no
                       from inv_outbox_event o
                 ) e
-                """.formatted(EVENT_OWNER, EVENT_WAREHOUSE);
+                """.formatted(
+                        EVENT_OWNER,
+                        EVENT_WAREHOUSE,
+                        EVENT_SKU,
+                        EVENT_BATCH);
         QuerySql sql = scoped("from " + events + " where 1=1 ", "e", scope, query);
         return page(
                 """

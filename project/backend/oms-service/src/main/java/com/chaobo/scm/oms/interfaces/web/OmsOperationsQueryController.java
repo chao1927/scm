@@ -34,9 +34,12 @@ public class OmsOperationsQueryController {
             @RequestParam(required = false) Integer status,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(defaultValue = "updatedAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDirection,
             Authentication authentication,
             HttpServletRequest request) {
-        return ok(service.audits(query(keyword, status, pageNo, pageSize),
+        return ok(service.audits(query(keyword, status, pageNo, pageSize,
+                        sortBy, sortDirection),
                 ScmAccessContexts.require(authentication)), request);
     }
 
@@ -54,9 +57,12 @@ public class OmsOperationsQueryController {
             @RequestParam(required = false) Integer status,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(defaultValue = "updatedAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDirection,
             Authentication authentication,
             HttpServletRequest request) {
-        return ok(service.reservations(query(keyword, status, pageNo, pageSize),
+        return ok(service.reservations(query(keyword, status, pageNo, pageSize,
+                        sortBy, sortDirection),
                 ScmAccessContexts.require(authentication)), request);
     }
 
@@ -74,9 +80,12 @@ public class OmsOperationsQueryController {
             @RequestParam(required = false) Integer status,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(defaultValue = "updatedAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDirection,
             Authentication authentication,
             HttpServletRequest request) {
-        return ok(service.cancellations(query(keyword, status, pageNo, pageSize),
+        return ok(service.cancellations(query(keyword, status, pageNo, pageSize,
+                        sortBy, sortDirection),
                 ScmAccessContexts.require(authentication)), request);
     }
 
@@ -94,9 +103,12 @@ public class OmsOperationsQueryController {
             @RequestParam(required = false) Integer status,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(defaultValue = "updatedAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDirection,
             Authentication authentication,
             HttpServletRequest request) {
-        return ok(service.afterSales(query(keyword, status, pageNo, pageSize),
+        return ok(service.afterSales(query(keyword, status, pageNo, pageSize,
+                        sortBy, sortDirection),
                 ScmAccessContexts.require(authentication)), request);
     }
 
@@ -114,9 +126,12 @@ public class OmsOperationsQueryController {
             @RequestParam(required = false) Integer status,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(defaultValue = "updatedAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDirection,
             Authentication authentication,
             HttpServletRequest request) {
-        return ok(service.exceptions(query(keyword, status, pageNo, pageSize),
+        return ok(service.exceptions(query(keyword, status, pageNo, pageSize,
+                        sortBy, sortDirection),
                 ScmAccessContexts.require(authentication)), request);
     }
 
@@ -134,9 +149,12 @@ public class OmsOperationsQueryController {
             @RequestParam(required = false) Integer status,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDirection,
             Authentication authentication,
             HttpServletRequest request) {
-        return ok(service.operationLogs(query(keyword, status, pageNo, pageSize),
+        return ok(service.operationLogs(query(keyword, status, pageNo, pageSize,
+                        sortBy, sortDirection),
                 ScmAccessContexts.require(authentication)), request);
     }
 
@@ -148,9 +166,10 @@ public class OmsOperationsQueryController {
     }
 
     private static OmsOperationsQueryApplicationService.PageQuery query(
-            String keyword, Integer status, int pageNo, int pageSize) {
+            String keyword, Integer status, int pageNo, int pageSize,
+            String sortBy, String sortDirection) {
         return new OmsOperationsQueryApplicationService.PageQuery(
-                keyword, status, pageNo, pageSize);
+                keyword, status, pageNo, pageSize, sortBy, sortDirection);
     }
 
     private static <T> ApiResponse<T> ok(T data, HttpServletRequest request) {

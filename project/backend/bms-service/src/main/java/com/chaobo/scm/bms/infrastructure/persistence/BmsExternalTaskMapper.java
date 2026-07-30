@@ -119,6 +119,16 @@ public interface BmsExternalTaskMapper {
         + "where task_no=#{taskNo} and status=4")
     int retryFinalFailure(@Param("taskNo") String taskNo);
 
+    /**
+     * 记录外部财税支付任务的人工恢复审计事实。
+     */
+    @Insert("insert into bms_operation_audit_log(operation_type,business_no,"
+        + "operator_id,idempotency_key,created_at) values("
+        + "'EXTERNAL_TASK_MANUAL_RETRY',#{taskNo},#{operatorId},#{reason},now(3))")
+    int insertRetryAudit(@Param("taskNo") String taskNo,
+                         @Param("operatorId") long operatorId,
+                         @Param("reason") String reason);
+
     record ExternalTaskRow(String taskNo, String taskType, String businessNo,
                            String idempotencyKey, int status, int attemptCount,
                            int maxAttempts, LocalDateTime nextRetryAt,

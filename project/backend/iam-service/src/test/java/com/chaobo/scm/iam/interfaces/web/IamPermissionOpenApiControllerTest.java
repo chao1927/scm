@@ -52,7 +52,8 @@ class IamPermissionOpenApiControllerTest {
          * <p>构造阶段集中接收必需依赖或恢复对象状态，确保实例创建后即可安全参与所属用例。
          */
         StubPermissionService() {
-            super(null, null);
+            super(null, null, new com.chaobo.scm.iam.infrastructure.jwt.IamJwtService(
+                    "01234567890123456789012345678901"), null);
         }
 
         /**

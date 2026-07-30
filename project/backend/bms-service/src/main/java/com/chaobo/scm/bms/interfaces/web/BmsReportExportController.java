@@ -5,6 +5,7 @@ import com.chaobo.scm.bms.application.storage.BmsReportObjectStoragePort;
 import com.chaobo.scm.bms.infrastructure.persistence.BmsReportExportMapper;
 import com.chaobo.scm.common.security.ScmAccessContext;
 import com.chaobo.scm.common.security.ScmAccessContexts;
+import com.chaobo.scm.common.api.PageResult;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -58,10 +59,12 @@ public class BmsReportExportController {
      */
     @GetMapping
     @PreAuthorize("hasAnyAuthority('*','bms:*','bms:report:read')")
-    public List<BmsReportExportMapper.ExportTaskRow> list(
+    public PageResult<BmsReportExportMapper.ExportTaskRow> list(
         @RequestParam(required = false) String objectCode,
+        @RequestParam(defaultValue = "1") int pageNo,
+        @RequestParam(defaultValue = "20") int pageSize,
         Authentication authentication) {
-        return service.list(objectCode, access(authentication));
+        return service.list(objectCode, pageNo, pageSize, access(authentication));
     }
 
     /**
@@ -69,8 +72,9 @@ public class BmsReportExportController {
      */
     @PostMapping("/{exportNo}/retry")
     @PreAuthorize("hasAnyAuthority('*','bms:*','bms:report:retry')")
-    public void retry(@PathVariable String exportNo, Authentication authentication) {
-        service.retry(exportNo, access(authentication));
+    public void retry(@PathVariable String exportNo, @RequestBody RetryRequest request,
+                      Authentication authentication) {
+        service.retry(exportNo, request.reason(), access(authentication));
     }
 
     /**
@@ -93,5 +97,11 @@ public class BmsReportExportController {
 
     private ScmAccessContext access(Authentication authentication) {
         return ScmAccessContexts.require(authentication);
+    }
+
+    /**
+     * 最终失败导出任务的人工恢复请求。
+     */
+    public record RetryRequest(String reason) {
     }
 }

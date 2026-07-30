@@ -11,6 +11,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 
 /**
  * MdmOpenApiApplicationServiceTest。
@@ -58,6 +63,51 @@ class MdmOpenApiApplicationServiceTest {
         assertThat(openApiMapper.inbox.get("evt-1").status()).isEqualTo(2);
     }
 
+    @Test
+    void applicationScopeAndFieldAllowlistAreEnforced() throws Exception {
+        MasterDataRecordApplicationServiceTest.MemoryRecordMapper recordMapper =
+                new MasterDataRecordApplicationServiceTest.MemoryRecordMapper();
+        recordMapper.records.put("MDR200001", new MasterDataRecordMapper.RecordRow(null, "MDR200001",
+                "SKU", "CN-SKU-001", "测试商品", "{\"name\":\"A\",\"cost\":99}",
+                MasterDataRecordAggregate.ENABLED, 1, null, 3));
+        MemoryOpenApiMapper mapper = new MemoryOpenApiMapper();
+        mapper.clients.put("oms", new MdmOpenApiMapper.OpenApiClientRow(
+                "oms", "secret", "SKU", "CN-", "SKU:*", true));
+        MdmOpenApiApplicationService service = new MdmOpenApiApplicationService(recordMapper, mapper, null, null);
+        long timestamp = Instant.now().getEpochSecond();
+
+        String emptyHash = java.util.HexFormat.of().formatHex(
+                java.security.MessageDigest.getInstance("SHA-256").digest(new byte[0]));
+        var access = service.authenticate("oms", timestamp,
+                signature("secret", "oms\n" + timestamp + "\nlegacy\n" + emptyHash));
+        var unrestricted = service.snapshot(access, "SKU", "CN-SKU-001", false);
+        mapper.clients.put("oms", new MdmOpenApiMapper.OpenApiClientRow(
+                "oms", "secret", "SKU", "CN-", "SKU:name", true));
+        var restrictedAccess = service.authenticate("oms", timestamp,
+                signature("secret", "oms\n" + timestamp + "\nlegacy\n" + emptyHash));
+        var snapshot = service.snapshot(restrictedAccess, "SKU", "CN-SKU-001", false);
+
+        assertThat(unrestricted.dataPayload()).contains("cost");
+        assertThat(snapshot.dataPayload()).isEqualTo("{\"name\":\"A\"}");
+        assertThat(mapper.snapshots).containsKey("SKU:CN-SKU-001");
+    }
+
+    @Test
+    void batchQueryDoesNotExposeDisabledMasterData() {
+        MasterDataRecordApplicationServiceTest.MemoryRecordMapper recordMapper =
+                new MasterDataRecordApplicationServiceTest.MemoryRecordMapper();
+        recordMapper.records.put("MDR200002", new MasterDataRecordMapper.RecordRow(null, "MDR200002",
+                "SKU", "SKU-DISABLED", "停用商品", "{}", MasterDataRecordAggregate.DISABLED,
+                1, null, 2));
+        MdmOpenApiApplicationService service = new MdmOpenApiApplicationService(
+                recordMapper, new MemoryOpenApiMapper(), null, null);
+
+        assertThatThrownBy(() -> service.query(new MdmOpenApiApplicationService.QueryRequest(
+                List.of(new MdmOpenApiApplicationService.QueryItem("SKU", "SKU-DISABLED")))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("not enabled");
+    }
+
     /**
      * MemoryOpenApiMapper。
      *
@@ -81,6 +131,23 @@ class MdmOpenApiApplicationServiceTest {
          * <p>保存当前对象所需的业务处理参数或成员；其具体生命周期由所属对象统一管理。
          */
         final List<MdmMapper.OutboxRow> outbox = new ArrayList<>();
+        final Map<String, MdmOpenApiMapper.OpenApiClientRow> clients = new LinkedHashMap<>();
+        final Map<String, MdmOpenApiMapper.OpenApiSnapshotRow> snapshots = new LinkedHashMap<>();
+
+        @Override
+        public MdmOpenApiMapper.OpenApiClientRow findClient(String appCode) {
+            return clients.get(appCode);
+        }
+
+        @Override
+        public MdmOpenApiMapper.OpenApiSnapshotRow findSnapshot(String typeCode, String dataCode) {
+            return snapshots.get(typeCode + ':' + dataCode);
+        }
+
+        @Override
+        public void upsertSnapshot(MdmOpenApiMapper.OpenApiSnapshotRow row) {
+            snapshots.put(row.typeCode() + ':' + row.dataCode(), row);
+        }
 
         /**
          * 处理当前类型职责中的操作 {@code claimEvent}。
@@ -141,5 +208,11 @@ class MdmOpenApiApplicationServiceTest {
         public List<MdmMapper.OutboxRow> listOutbox() {
             return outbox;
         }
+    }
+
+    private String signature(String secret, String content) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        return java.util.HexFormat.of().formatHex(mac.doFinal(content.getBytes(StandardCharsets.UTF_8)));
     }
 }

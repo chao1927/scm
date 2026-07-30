@@ -27,6 +27,9 @@ export default function ApplicationLayout({ session, onLogout }) {
   const activeSystem = findSystem(params.systemId || 'supplier')
   const activePageId = isPlatformPage ? 'workbench' : selectedPageFromPath(location.pathname, activeSystem.id)
   const activePage = activeSystem.pages.find((item) => item.id === activePageId) || activeSystem.pages[0]
+  const currentPageName = isPlatformPage
+    ? '供应链管理平台 · 平台工作台'
+    : `${activeSystem.name} · ${activePage.label}`
   const menuOverrides = useMemo(() => menuOverridesFromResources(session.menus), [session.menus])
   const hasDynamicMenu = menuOverrides.size > 0
   const menuConfiguredForSystem = (system) => !hasDynamicMenu
@@ -68,7 +71,7 @@ export default function ApplicationLayout({ session, onLogout }) {
   }
 
   const moduleNavigation = (
-    <>
+    <nav className="module-navigation" aria-label={`${isPlatformPage ? '供应链管理平台' : activeSystem.name}功能导航`}>
       <div className="module-context">
         <span className={`module-context-icon ${isPlatformPage ? 'platform-tone' : `system-tone-${activeSystem.id}`}`}>{isPlatformPage ? <AppstoreOutlined /> : activeSystem.shortName.slice(0, 1)}</span>
         <div>
@@ -81,7 +84,7 @@ export default function ApplicationLayout({ session, onLogout }) {
         <Typography.Text strong>当前数据范围</Typography.Text>
         <Typography.Text type="secondary">按 IAM 组织、仓库、货主和本人权限过滤</Typography.Text>
       </div>
-    </>
+    </nav>
   )
 
   const userItems = [
@@ -92,26 +95,28 @@ export default function ApplicationLayout({ session, onLogout }) {
   return (
     <Layout className="scm-shell">
       <Sider width={76} theme="dark" className="system-rail">
-        <button className="scm-logo" aria-label="打开平台工作台" onClick={() => navigate('/workbench')}>SC</button>
-        <div className="system-rail-list">
-          {systemCatalog.map((system) => {
-            const allowed = hasPermission(session.permissions, system.permission) && menuConfiguredForSystem(system)
-            return (
-              <Tooltip key={system.id} title={allowed ? system.name : `无${system.name}访问权限`} placement="right">
-                <button
-                  className={`system-rail-item ${activeSystem.id === system.id && !isPlatformPage ? 'active' : ''}`}
-                  disabled={!allowed}
-                  aria-label={system.name}
-                  aria-current={activeSystem.id === system.id && !isPlatformPage ? 'page' : undefined}
-                  onClick={() => openSystem(system)}
-                >
-                  <span className={`system-glyph system-tone-${system.id}`}>{system.shortName.slice(0, 1)}</span>
-                  <span>{system.shortName}</span>
-                </button>
-              </Tooltip>
-            )
-          })}
-        </div>
+        <nav className="system-rail-navigation" aria-label="供应链子系统导航">
+          <button className="scm-logo" aria-label="打开平台工作台" aria-current={isPlatformPage ? 'page' : undefined} onClick={() => navigate('/workbench')}>SC</button>
+          <div className="system-rail-list">
+            {systemCatalog.map((system) => {
+              const allowed = hasPermission(session.permissions, system.permission) && menuConfiguredForSystem(system)
+              return (
+                <Tooltip key={system.id} title={allowed ? system.name : `无${system.name}访问权限`} placement="right">
+                  <button
+                    className={`system-rail-item ${activeSystem.id === system.id && !isPlatformPage ? 'active' : ''}`}
+                    disabled={!allowed}
+                    aria-label={system.name}
+                    aria-current={activeSystem.id === system.id && !isPlatformPage ? 'page' : undefined}
+                    onClick={() => openSystem(system)}
+                  >
+                    <span className={`system-glyph system-tone-${system.id}`}>{system.shortName.slice(0, 1)}</span>
+                    <span>{system.shortName}</span>
+                  </button>
+                </Tooltip>
+              )
+            })}
+          </div>
+        </nav>
       </Sider>
 
       <Layout className="system-workspace">
@@ -121,13 +126,14 @@ export default function ApplicationLayout({ session, onLogout }) {
         <Layout>
           <Header className="scm-header">
             <Button className="mobile-menu-button" icon={<MenuFoldOutlined />} onClick={() => setMobileMenuOpen(true)} aria-label="打开功能菜单" />
-            <div className="scm-breadcrumb">
-              {isPlatformPage
-                ? <span>供应链管理平台</span>
-                : <button onClick={() => openSystem(activeSystem)}>{activeSystem.name}</button>}
-              <span>/</span>
-              <strong>{isPlatformPage ? '平台工作台' : activePage.label}</strong>
-            </div>
+            <nav className="scm-breadcrumb" aria-label="面包屑">
+              <ol>
+                <li>{isPlatformPage
+                  ? <span>供应链管理平台</span>
+                  : <button onClick={() => openSystem(activeSystem)}>{activeSystem.name}</button>}</li>
+                <li aria-current="page"><strong>{isPlatformPage ? '平台工作台' : activePage.label}</strong></li>
+              </ol>
+            </nav>
             <div className="header-actions">
               <Dropdown
                 menu={{ items: userItems, onClick: ({ key }) => key === 'logout' && onLogout() }}
@@ -140,7 +146,8 @@ export default function ApplicationLayout({ session, onLogout }) {
               </Dropdown>
             </div>
           </Header>
-          <Content className="scm-content">
+          <Content className="scm-content" aria-labelledby="current-page-title">
+            <Typography.Title id="current-page-title" level={1} className="visually-hidden">{currentPageName}</Typography.Title>
             <Outlet context={{ session }} />
           </Content>
         </Layout>
@@ -152,7 +159,7 @@ export default function ApplicationLayout({ session, onLogout }) {
 
       <nav className="mobile-system-nav" aria-label="移动端子系统">
         {systemCatalog.map((system) => (
-          <button key={system.id} disabled={!hasPermission(session.permissions, system.permission) || !menuConfiguredForSystem(system)} className={activeSystem.id === system.id && !isPlatformPage ? 'active' : ''} onClick={() => openSystem(system)}>
+          <button key={system.id} disabled={!hasPermission(session.permissions, system.permission) || !menuConfiguredForSystem(system)} className={activeSystem.id === system.id && !isPlatformPage ? 'active' : ''} aria-current={activeSystem.id === system.id && !isPlatformPage ? 'page' : undefined} aria-label={system.name} onClick={() => openSystem(system)}>
             <span className={`system-glyph system-tone-${system.id}`}>{system.shortName.slice(0, 1)}</span>
             <span>{system.shortName}</span>
           </button>

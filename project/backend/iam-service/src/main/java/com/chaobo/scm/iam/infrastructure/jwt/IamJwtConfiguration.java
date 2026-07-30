@@ -3,6 +3,8 @@ package com.chaobo.scm.iam.infrastructure.jwt;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import java.time.Instant;
+import java.util.Map;
 
 /**
  * IamJwtConfiguration。
@@ -23,7 +25,15 @@ public class IamJwtConfiguration {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code IamJwtService}
      */
     @Bean
-    IamJwtService iamJwtService(@Value("${scm.iam.jwt.hmac-secret}") String secret) {
-        return new IamJwtService(secret);
+    IamJwtService iamJwtService(
+            @Value("${scm.iam.jwt.active-kid:active}") String activeKid,
+            @Value("${scm.iam.jwt.hmac-secret}") String secret,
+            @Value("${scm.iam.jwt.previous-kid:}") String previousKid,
+            @Value("${scm.iam.jwt.previous-hmac-secret:}") String previousSecret,
+            @Value("${scm.iam.jwt.previous-valid-until-epoch-second:0}") long previousValidUntil) {
+        Map<String, IamJwtService.VerificationKey> previous = previousKid.isBlank()
+                ? Map.of()
+                : Map.of(previousKid, new IamJwtService.VerificationKey(previousSecret, previousValidUntil));
+        return new IamJwtService(activeKid, secret, previous, () -> Instant.now().getEpochSecond());
     }
 }

@@ -45,6 +45,8 @@ public class IamPermissionOpenApiApplicationService {
      */
     private final IamJwtService jwtService;
 
+    private final TokenCachePort tokenCache;
+
     /**
      * eventIds（类型：{@code AtomicLong}）。
      *
@@ -59,10 +61,6 @@ public class IamPermissionOpenApiApplicationService {
      * @param iamMapper 持久化访问依赖，类型为 {@code IamMapper}
      * @param mapper 持久化访问依赖，类型为 {@code IamPermissionOpenApiMapper}
      */
-    public IamPermissionOpenApiApplicationService(IamMapper iamMapper, IamPermissionOpenApiMapper mapper) {
-        this(iamMapper, mapper, new IamJwtService("01234567890123456789012345678901"));
-    }
-
     /**
      * 创建 IamPermissionOpenApiApplicationService。
      *
@@ -72,10 +70,12 @@ public class IamPermissionOpenApiApplicationService {
      * @param jwtService 应用或外部协作依赖，类型为 {@code IamJwtService}
      */
     @Autowired
-    public IamPermissionOpenApiApplicationService(IamMapper iamMapper, IamPermissionOpenApiMapper mapper, IamJwtService jwtService) {
+    public IamPermissionOpenApiApplicationService(IamMapper iamMapper, IamPermissionOpenApiMapper mapper,
+                                                   IamJwtService jwtService, TokenCachePort tokenCache) {
         this.iamMapper = iamMapper;
         this.mapper = mapper;
         this.jwtService = jwtService;
+        this.tokenCache = tokenCache;
     }
 
     /**
@@ -87,8 +87,8 @@ public class IamPermissionOpenApiApplicationService {
      */
     public TokenValidationResult validateToken(TokenValidationCommand command) {
         IamJwtService.TokenClaims claims = verifyAccessToken(command.accessToken());
-        IamMapper.SessionRow session = iamMapper.findSessionByAccess(command.accessToken());
-        if (session == null || session.status() != 1) {
+        TokenCachePort.OnlineSession session = tokenCache.findByAccessJti(claims.jti()).orElse(null);
+        if (session == null || !session.active() || !claims.jti().equals(session.accessJti())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "Token已撤销");
         }
         IamMapper.UserRow user = iamMapper.findUserById(session.userId());

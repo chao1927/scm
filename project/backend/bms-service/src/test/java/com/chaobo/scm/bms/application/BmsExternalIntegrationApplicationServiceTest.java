@@ -8,12 +8,15 @@ import com.chaobo.scm.bms.application.integration.TaxInvoiceGateway;
 import com.chaobo.scm.bms.domain.BmsDomain;
 import com.chaobo.scm.bms.infrastructure.persistence.BmsExternalTaskMapper;
 import com.chaobo.scm.bms.infrastructure.persistence.BmsMapper;
+import com.chaobo.scm.common.error.BusinessException;
+import com.chaobo.scm.common.security.ScmAccessContext;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -65,6 +68,40 @@ class BmsExternalIntegrationApplicationServiceTest {
         assertThat(mapper.refundReceipts).isEmpty();
     }
 
+    @Test
+    void manualRetryRequiresBillingObjectScopeAndWritesAudit() {
+        var mapper = new BmsApplicationServiceTest.MemoryBmsMapper();
+        mapper.bills.put("B-1", new BmsMapper.BillRow(
+            1L, "B-1", "RC-1", "OBJ-A", new BigDecimal("100.00"), 2, 1));
+        mapper.finances.put("FH-1", new BmsMapper.FinanceHandoverRow(
+            1L, "FH-1", "B-1", BmsDomain.FinanceHandoverAggregate.FAILED,
+            null, "ERP unavailable", 1));
+        var taskMapper = new MemoryTaskMapper();
+        taskMapper.rows.put("TASK-1", new BmsExternalTaskMapper.ExternalTaskRow(
+            "TASK-1", "ERP_POST", "FH-1", "idem-1",
+            BmsExternalIntegrationApplicationService.FINAL_FAILED,
+            8, 8, null, "ERP unavailable", null, 2));
+        var service = integration(mapper, taskMapper,
+            request -> new ErpFinanceGateway.PostingResult("VOUCHER-1"),
+            request -> new TaxInvoiceGateway.IssueResult("TAX-1"),
+            request -> new PaymentGateway.RefundResult("PAY-1"));
+
+        assertThatThrownBy(() -> service.retryFinalFailure(
+            "TASK-1", "人工复核后重试", access("OBJ-B")))
+            .isInstanceOf(BusinessException.class);
+        service.retryFinalFailure("TASK-1", "人工复核后重试", access("OBJ-A"));
+
+        assertThat(taskMapper.find("TASK-1").status())
+            .isEqualTo(BmsExternalIntegrationApplicationService.PENDING);
+        assertThat(taskMapper.lastAuditReason).isEqualTo("人工复核后重试");
+    }
+
+    private static ScmAccessContext access(String objectCode) {
+        return new ScmAccessContext(1001, "finance", "BMS",
+            Set.of("bms:external-task:retry"),
+            Map.of("BILLING_OBJECT", Set.of(objectCode)));
+    }
+
     private static BmsExternalIntegrationApplicationService integration(
             BmsApplicationServiceTest.MemoryBmsMapper mapper,
             BmsExternalTaskMapper tasks, ErpFinanceGateway erp,
@@ -75,6 +112,7 @@ class BmsExternalIntegrationApplicationServiceTest {
 
     private static final class MemoryTaskMapper implements BmsExternalTaskMapper {
         private final Map<String, ExternalTaskRow> rows = new LinkedHashMap<>();
+        private String lastAuditReason;
 
         @Override
         public ExternalTaskRow findByIdempotencyKey(String idempotencyKey) {
@@ -144,6 +182,12 @@ class BmsExternalIntegrationApplicationServiceTest {
             rows.put(taskNo, copy(row,
                 BmsExternalIntegrationApplicationService.PENDING,
                 0, row.externalRef(), null, row.version() + 1));
+            return 1;
+        }
+
+        @Override
+        public int insertRetryAudit(String taskNo, long operatorId, String reason) {
+            lastAuditReason = reason;
             return 1;
         }
 

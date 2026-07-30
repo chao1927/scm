@@ -24,30 +24,30 @@
 | [x] | WMS-NEXT-001A | root-coordinator | PAR-NEXT-001 | WMS 入库作业读模型 |
 | [x] | INV-NEXT-001A | inventory-domain | 无 | 库存冻结与调整独立聚合 |
 | [x] | INV-NEXT-001B | inventory-domain | INV-NEXT-001A | 库存事件载荷版本与失败治理 |
-| [-] | INV-NEXT-001C | inventory-domain | PAR-NEXT-001、INV-NEXT-001B | 库存运营读模型与导出 |
+| [x] | INV-NEXT-001C | inventory-operations | PAR-NEXT-001、INV-NEXT-001B | 库存运营读模型与导出 |
 
 ## 批次 2：履约、运输、结算与主数据
 
 | 状态 | 编号 | Agent | 依赖 | 任务 |
 | --- | --- | --- | --- | --- |
-| [-] | OMS-NEXT-001A | plan-governance | PAR-NEXT-001 | OMS 履约、售后和异常读模型 |
-| [ ] | OMS-NEXT-001B | 未领取 | OMS-NEXT-001A | OMS 履约指标与异步导出 |
+| [x] | OMS-NEXT-001A | oms-read-models | PAR-NEXT-001 | OMS 履约、售后和异常读模型 |
+| [x] | OMS-NEXT-001B | oms-read-models | OMS-NEXT-001A | OMS 履约指标与异步导出 |
 | [x] | TMS-NEXT-001A | root-coordinator | 无 | 承运商回调验签与运单状态推进 |
 | [x] | TMS-NEXT-001B | frontend-foundation | PAR-NEXT-001、TMS-NEXT-001A | 面单附件与 TMS 标准页面 |
 | [x] | BMS-NEXT-001A | root-coordinator | 无 | 财税支付防腐层 |
-| [-] | BMS-NEXT-001B | frontend-foundation | PAR-NEXT-001、BMS-NEXT-001A | 财务页面与异步报表 |
-| [-] | MDM-NEXT-001A | root-coordinator | 无 | 主数据真实文件导入导出 |
-| [ ] | MDM-NEXT-001B | 未领取 | PAR-NEXT-001、MDM-NEXT-001A | OpenAPI 数据边界与页面 |
+| [x] | BMS-NEXT-001B | bms-finance-reports | PAR-NEXT-001、BMS-NEXT-001A | 财务页面与异步报表 |
+| [x] | MDM-NEXT-001A | root-coordinator | 无 | 主数据真实文件导入导出 |
+| [x] | MDM-NEXT-001B | root-coordinator | PAR-NEXT-001、MDM-NEXT-001A | OpenAPI 数据边界与页面 |
 
 ## 批次 3：权限、剩余 WMS、公共前端与 QA
 
 | 状态 | 编号 | Agent | 依赖 | 任务 |
 | --- | --- | --- | --- | --- |
-| [ ] | IAM-NEXT-001A | 未领取 | 无 | Redis TokenCache 与密钥轮换 |
-| [ ] | IAM-NEXT-001B | 未领取 | PAR-NEXT-001、IAM-NEXT-001A | OAuth/OIDC、MFA 与管理页面 |
+| [x] | IAM-NEXT-001A | iam-token-cache | 无 | Redis TokenCache 与密钥轮换 |
+| [-] | IAM-NEXT-001B | iam-feature-agents | PAR-NEXT-001、IAM-NEXT-001A | OAuth/OIDC、MFA 与管理页面 |
 | [x] | WMS-NEXT-001B | root-coordinator | WMS-NEXT-001A | WMS 出库作业读模型 |
 | [x] | WMS-NEXT-001C | root-coordinator | WMS-NEXT-001B | WMS 退货、盘点与异常读模型 |
-| [ ] | FE-NEXT-001 | 未领取 | 九子系统页面任务 | 统一交互与可访问性回归 |
+| [-] | FE-NEXT-001 | frontend-shell-agents | 九子系统页面任务 | 统一交互与可访问性回归 |
 | [ ] | QA-NEXT-001 | 未领取 | 各批次增量、最终依赖全部 NEXT | 九服务真实 API 与数据库回归 |
 
 ## 外部阻塞
@@ -63,4 +63,4 @@
 - `INT-REQ-001~005A`、`FE-REQ-002`、`RPT-REQ-001` 已迁移或撤销，不得重新领取。
 - 2026-07-13、2026-07-16 任务表仅作历史记录。
 
-下一项：并行领取 `PAR-NEXT-001`、`PAR-NEXT-002`，完成 CP-0 后进入批次 1。
+下一项：完成 `IAM-NEXT-001A` 后继续 `IAM-NEXT-001B`；IAM 页面完成后并行推进 `FE-NEXT-001` 与 `QA-NEXT-001`。

@@ -24,7 +24,8 @@ class InventoryInboundEventDispatcherTest {
                 null,
                 null,
                 (type, aggregateType, aggregateId, payload) -> events.add(type),
-                new InventoryEventEnvelopeCodec(new tools.jackson.databind.ObjectMapper()));
+                new InventoryEventEnvelopeCodec(new tools.jackson.databind.ObjectMapper()),
+                (stockId, expiryDate, sourceEvent, factAt) -> { });
         InventoryEventEnvelope event = new InventoryEventEnvelope(
                 "WMS-E-1",
                 "InboundOrderPutawayCompleted",
@@ -68,7 +69,17 @@ class InventoryInboundEventDispatcherTest {
         public AccountResult inbound(AccountCommand command) {
             inboundCalls++;
             lastCommand = command;
-            return null;
+            return new AccountResult(
+                    1L,
+                    command.ownerId(),
+                    command.warehouseId(),
+                    command.sku(),
+                    command.batchNo(),
+                    command.qty(),
+                    command.qty(),
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    0);
         }
     }
 }

@@ -27,4 +27,19 @@ class ScmSecurityPropertiesTest {
         properties.setHmacSecret("01234567890123456789012345678901");
         assertThat(properties.secretKey().getEncoded()).hasSize(32);
     }
+
+    @Test
+    void exposesActiveAndPreviousKeysForKidBasedRotation() {
+        var properties = new ScmSecurityProperties();
+        properties.setActiveKid("2026-07");
+        properties.setHmacSecret("01234567890123456789012345678901");
+        properties.setPreviousKid("2026-06");
+        properties.setPreviousHmacSecret("abcdefghijklmnopqrstuvwxyzABCDEF");
+        properties.setPreviousValidUntilEpochSecond(1_800_000_000L);
+
+        assertThat(properties.getActiveKid()).isEqualTo("2026-07");
+        assertThat(properties.activeSecretKey().getEncoded()).hasSize(32);
+        assertThat(properties.previousSecretKey().orElseThrow().getEncoded()).hasSize(32);
+        assertThat(properties.getPreviousValidUntilEpochSecond()).isEqualTo(1_800_000_000L);
+    }
 }

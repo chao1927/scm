@@ -10,9 +10,6 @@ import java.util.Map;
  */
 public final class InventoryExportDefinitions {
 
-    private static final List<InventoryCsvWriter.Column> OPERATION_COLUMNS = columns(
-            "ownerId", "货主ID", "warehouseId", "仓库ID", "sku", "SKU",
-            "batchNo", "批次号", "status", "状态", "updatedAt", "更新时间");
     private static final List<InventoryCsvWriter.Column> METRIC_COLUMNS = columns(
             "ownerId", "货主ID", "warehouseId", "仓库ID", "sku", "SKU",
             "batchNo", "批次号", "bookQty", "账面数量", "physicalQty", "实盘数量",
@@ -20,11 +17,41 @@ public final class InventoryExportDefinitions {
             "inactiveDays", "未动销天数", "expiryDate", "效期",
             "daysToExpiry", "剩余天数", "basis", "指标口径", "factAt", "事实时间");
     private static final Map<String, List<InventoryCsvWriter.Column>> DEFINITIONS = Map.ofEntries(
-            Map.entry("RESERVATION", OPERATION_COLUMNS),
-            Map.entry("FREEZE", OPERATION_COLUMNS),
-            Map.entry("ADJUSTMENT", OPERATION_COLUMNS),
-            Map.entry("EVENT_LOG", OPERATION_COLUMNS),
-            Map.entry("OPERATION_LOG", OPERATION_COLUMNS),
+            Map.entry("RESERVATION", columns(
+                    "reservationNo", "预占单号", "ownerId", "货主ID",
+                    "warehouseId", "仓库ID", "sku", "SKU", "batchNo", "批次号",
+                    "sourceSystem", "来源系统", "sourceNo", "来源单号",
+                    "reservedQty", "预占数量", "releasedQty", "已释放数量",
+                    "status", "状态", "version", "版本", "updatedAt", "更新时间")),
+            Map.entry("FREEZE", columns(
+                    "freezeNo", "冻结单号", "ownerId", "货主ID",
+                    "warehouseId", "仓库ID", "sku", "SKU", "batchNo", "批次号",
+                    "freezeQty", "冻结数量", "unfrozenQty", "已解冻数量",
+                    "reason", "冻结原因", "status", "状态",
+                    "approvalStatus", "审批状态", "version", "版本",
+                    "updatedAt", "更新时间")),
+            Map.entry("ADJUSTMENT", columns(
+                    "adjustmentNo", "调整单号", "ownerId", "货主ID",
+                    "warehouseId", "仓库ID", "sku", "SKU", "batchNo", "批次号",
+                    "adjustQty", "调整数量", "adjustmentType", "调整类型",
+                    "reason", "调整原因", "status", "状态",
+                    "approvalStatus", "审批状态", "version", "版本",
+                    "updatedAt", "更新时间")),
+            Map.entry("EVENT_LOG", columns(
+                    "direction", "方向", "sourceSystem", "来源系统",
+                    "eventCode", "事件编码", "eventType", "事件类型",
+                    "eventVersion", "版本", "ownerId", "货主ID",
+                    "warehouseId", "仓库ID", "aggregateType", "聚合类型",
+                    "aggregateId", "聚合标识", "status", "状态",
+                    "retryCount", "重试次数", "lastError", "最近错误",
+                    "updatedAt", "更新时间")),
+            Map.entry("OPERATION_LOG", columns(
+                    "logId", "日志ID", "ownerId", "货主ID",
+                    "warehouseId", "仓库ID", "operatorId", "操作人ID",
+                    "operationType", "操作类型", "operationReason", "操作原因",
+                    "targetType", "对象类型", "targetNo", "对象编号",
+                    "result", "结果", "requestId", "请求ID",
+                    "operationAt", "操作时间")),
             Map.entry("BOOK_PHYSICAL", METRIC_COLUMNS),
             Map.entry("STOCK_AGE", METRIC_COLUMNS),
             Map.entry("SLOW_MOVING", METRIC_COLUMNS),

@@ -3,6 +3,7 @@ package com.chaobo.scm.bms.interfaces.web;
 import com.chaobo.scm.bms.application.BmsReadQueryApplicationService;
 import com.chaobo.scm.bms.infrastructure.persistence.BmsReadQueryMapper;
 import com.chaobo.scm.common.security.ScmAccessContexts;
+import com.chaobo.scm.common.api.PageResult;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,59 +35,81 @@ public class BmsReadQueryController {
     }
 
     @GetMapping("/charge-details")
-    public List<BmsReadQueryMapper.ChargeView> charges(
+    public PageResult<BmsReadQueryMapper.ChargeView> charges(
         @RequestParam(required = false) String objectCode,
         @RequestParam(required = false) String billingPeriod,
+        @RequestParam(defaultValue = "1") int pageNo,
+        @RequestParam(defaultValue = "20") int pageSize,
         Authentication authentication) {
-        return service.charges(objectCode, billingPeriod,
+        return service.charges(objectCode, billingPeriod, pageNo, pageSize,
             ScmAccessContexts.require(authentication));
     }
 
     @GetMapping("/billing-rule-views")
-    public List<BmsReadQueryMapper.RuleView> rules(
+    public PageResult<BmsReadQueryMapper.RuleView> rules(
         @RequestParam(required = false) String objectCode,
+        @RequestParam(defaultValue = "1") int pageNo,
+        @RequestParam(defaultValue = "20") int pageSize,
         Authentication authentication) {
-        return service.rules(objectCode, ScmAccessContexts.require(authentication));
+        return service.rules(objectCode, pageNo, pageSize,
+            ScmAccessContexts.require(authentication));
     }
 
     @GetMapping("/reconciliations")
-    public List<BmsReadQueryMapper.ReconciliationView> reconciliations(
+    public PageResult<BmsReadQueryMapper.ReconciliationView> reconciliations(
         @RequestParam(required = false) String billingPeriod,
+        @RequestParam(defaultValue = "1") int pageNo,
+        @RequestParam(defaultValue = "20") int pageSize,
         Authentication authentication) {
-        return service.reconciliations(
-            billingPeriod, ScmAccessContexts.require(authentication));
+        return service.reconciliations(billingPeriod, pageNo, pageSize,
+            ScmAccessContexts.require(authentication));
     }
 
     @GetMapping("/bill-views")
-    public List<BmsReadQueryMapper.BillView> bills(
+    public PageResult<BmsReadQueryMapper.BillView> bills(
         @RequestParam(required = false) String billingPeriod,
+        @RequestParam(defaultValue = "1") int pageNo,
+        @RequestParam(defaultValue = "20") int pageSize,
         Authentication authentication) {
-        return service.bills(billingPeriod, ScmAccessContexts.require(authentication));
+        return service.bills(billingPeriod, pageNo, pageSize,
+            ScmAccessContexts.require(authentication));
     }
 
     @GetMapping("/invoice-views")
-    public List<BmsReadQueryMapper.InvoiceView> invoices(
+    public PageResult<BmsReadQueryMapper.InvoiceView> invoices(
         @RequestParam(required = false) String billingPeriod,
+        @RequestParam(defaultValue = "1") int pageNo,
+        @RequestParam(defaultValue = "20") int pageSize,
         Authentication authentication) {
-        return service.invoices(
-            billingPeriod, ScmAccessContexts.require(authentication));
+        return service.invoices(billingPeriod, pageNo, pageSize,
+            ScmAccessContexts.require(authentication));
     }
 
     @GetMapping("/finance-handoff-views")
-    public List<BmsReadQueryMapper.FinanceView> finance(Authentication authentication) {
-        return service.finance(ScmAccessContexts.require(authentication));
+    public PageResult<BmsReadQueryMapper.FinanceView> finance(
+        @RequestParam(defaultValue = "1") int pageNo,
+        @RequestParam(defaultValue = "20") int pageSize,
+        Authentication authentication) {
+        return service.finance(pageNo, pageSize,
+            ScmAccessContexts.require(authentication));
     }
 
     @GetMapping("/refund-views")
-    public List<BmsReadQueryMapper.RefundView> refunds(Authentication authentication) {
-        return service.refunds(ScmAccessContexts.require(authentication));
+    public PageResult<BmsReadQueryMapper.RefundView> refunds(
+        @RequestParam(defaultValue = "1") int pageNo,
+        @RequestParam(defaultValue = "20") int pageSize,
+        Authentication authentication) {
+        return service.refunds(pageNo, pageSize,
+            ScmAccessContexts.require(authentication));
     }
 
     @GetMapping("/settlement-report-views")
-    public List<BmsReadQueryMapper.SettlementView> settlement(
+    public PageResult<BmsReadQueryMapper.SettlementView> settlement(
         @RequestParam(required = false) String billingPeriod,
+        @RequestParam(defaultValue = "1") int pageNo,
+        @RequestParam(defaultValue = "20") int pageSize,
         Authentication authentication) {
-        return service.settlement(
-            billingPeriod, ScmAccessContexts.require(authentication));
+        return service.settlement(billingPeriod, pageNo, pageSize,
+            ScmAccessContexts.require(authentication));
     }
 }

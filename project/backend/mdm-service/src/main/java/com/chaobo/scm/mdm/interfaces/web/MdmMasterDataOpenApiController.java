@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestHeader;
 
 /**
  * MdmMasterDataOpenApiController。
@@ -47,7 +48,15 @@ public class MdmMasterDataOpenApiController {
      * @return 查询并返回的结果，类型为 {@code MdmOpenApiApplicationService.QueryResponse}
      */
     @PostMapping("/master-data/query")
-    public MdmOpenApiApplicationService.QueryResponse query(@RequestBody MdmOpenApiApplicationService.QueryRequest request) {
+    public MdmOpenApiApplicationService.QueryResponse query(
+            @RequestHeader("X-App-Code") String appCode,
+            @RequestHeader("X-Timestamp") long timestamp,
+            @RequestHeader("X-Signature") String signature,
+            @RequestBody MdmOpenApiApplicationService.QueryRequest request) {
+        return service.query(service.authenticate(appCode, timestamp, signature, "MASTER_DATA_QUERY", request), request);
+    }
+
+    MdmOpenApiApplicationService.QueryResponse query(MdmOpenApiApplicationService.QueryRequest request) {
         return service.query(request);
     }
 
@@ -59,8 +68,12 @@ public class MdmMasterDataOpenApiController {
      * @return 校验业务约束的结果，类型为 {@code MdmOpenApiApplicationService.ValidateResponse}
      */
     @PostMapping("/master-data/validate")
-    public MdmOpenApiApplicationService.ValidateResponse validate(@RequestBody MdmOpenApiApplicationService.ValidateRequest request) {
-        return service.validate(request);
+    public MdmOpenApiApplicationService.ValidateResponse validate(
+            @RequestHeader("X-App-Code") String appCode,
+            @RequestHeader("X-Timestamp") long timestamp,
+            @RequestHeader("X-Signature") String signature,
+            @RequestBody MdmOpenApiApplicationService.ValidateRequest request) {
+        return service.validate(service.authenticate(appCode, timestamp, signature, "MASTER_DATA_VALIDATE", request), request);
     }
 
     /**
@@ -73,7 +86,16 @@ public class MdmMasterDataOpenApiController {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code MdmOpenApiApplicationService.Snapshot}
      */
     @GetMapping("/master-data/{typeCode}/{dataCode}")
-    public MdmOpenApiApplicationService.Snapshot snapshot(@PathVariable String typeCode, @PathVariable String dataCode, @RequestParam(defaultValue = "false") boolean includeDisabled) {
-        return service.snapshot(typeCode, dataCode, includeDisabled);
+    public MdmOpenApiApplicationService.Snapshot snapshot(
+            @RequestHeader("X-App-Code") String appCode,
+            @RequestHeader("X-Timestamp") long timestamp,
+            @RequestHeader("X-Signature") String signature,
+            @PathVariable String typeCode,
+            @PathVariable String dataCode,
+            @RequestParam(defaultValue = "false") boolean includeDisabled) {
+        String signedPayload = typeCode + ':' + dataCode + ':' + includeDisabled;
+        return service.snapshot(service.authenticate(appCode, timestamp, signature, "MASTER_DATA_SNAPSHOT",
+                        signedPayload), typeCode, dataCode,
+                includeDisabled);
     }
 }

@@ -4,6 +4,7 @@ import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
+import org.apache.ibatis.annotations.Param;
 import java.util.List;
 
 /**
@@ -16,6 +17,15 @@ import java.util.List;
  */
 @Mapper
 public interface MdmOpenApiMapper {
+
+    @Select("select app_code appCode,secret_value secretValue,type_scope typeScope,data_code_prefixes dataCodePrefixes,field_allowlist fieldAllowlist,enabled from mdm_openapi_client where app_code=#{appCode}")
+    OpenApiClientRow findClient(@Param("appCode") String appCode);
+
+    @Select("select record_no recordNo,type_code typeCode,data_code dataCode,data_name dataName,data_payload dataPayload,record_status status,current_version_no currentVersionNo,record_version version from mdm_openapi_snapshot where type_code=#{typeCode} and data_code=#{dataCode}")
+    OpenApiSnapshotRow findSnapshot(@Param("typeCode") String typeCode, @Param("dataCode") String dataCode);
+
+    @Insert("insert into mdm_openapi_snapshot(record_no,type_code,data_code,data_name,data_payload,record_status,current_version_no,record_version,projected_at) values(#{recordNo},#{typeCode},#{dataCode},#{dataName},#{dataPayload},#{status},#{currentVersionNo},#{version},now()) on duplicate key update record_no=values(record_no),data_name=values(data_name),data_payload=values(data_payload),record_status=values(record_status),current_version_no=values(current_version_no),record_version=values(record_version),projected_at=now()")
+    void upsertSnapshot(OpenApiSnapshotRow row);
 
     /**
      * 处理当前类型职责中的操作 {@code claimEvent}。
@@ -62,4 +72,12 @@ public interface MdmOpenApiMapper {
      */
     @Select("select event_type eventType,business_no businessNo,payload,event_status status,occurred_at occurredAt from mdm_outbox_event order by id desc")
     List<MdmMapper.OutboxRow> listOutbox();
+
+    record OpenApiClientRow(String appCode, String secretValue, String typeScope,
+                            String dataCodePrefixes, String fieldAllowlist, boolean enabled) {
+    }
+
+    record OpenApiSnapshotRow(String recordNo, String typeCode, String dataCode, String dataName,
+                              String dataPayload, int status, int currentVersionNo, long version) {
+    }
 }

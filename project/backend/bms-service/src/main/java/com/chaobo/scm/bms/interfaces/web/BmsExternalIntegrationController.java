@@ -3,9 +3,11 @@ package com.chaobo.scm.bms.interfaces.web;
 import com.chaobo.scm.bms.application.integration.BmsExternalIntegrationApplicationService;
 import com.chaobo.scm.bms.application.integration.PaymentCallbackApplicationService;
 import com.chaobo.scm.bms.infrastructure.persistence.BmsExternalTaskMapper;
+import com.chaobo.scm.common.security.ScmAccessContexts;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -61,8 +63,10 @@ public class BmsExternalIntegrationController {
 
     @PostMapping("/external-tasks/{taskNo}/retry")
     @PreAuthorize("hasAnyAuthority('*','bms:*','bms:external-task:retry')")
-    public void retry(@PathVariable String taskNo) {
-        integration.retryFinalFailure(taskNo);
+    public void retry(@PathVariable String taskNo, @RequestBody ManualRetryRequest request,
+                      Authentication authentication) {
+        integration.retryFinalFailure(taskNo, request.reason(),
+            ScmAccessContexts.require(authentication));
     }
 
     @PostMapping("/payment-callbacks/refunds")
@@ -87,5 +91,8 @@ public class BmsExternalIntegrationController {
 
     public record PaymentCallbackRequest(String refundNo, String receiptNo,
                                          boolean success, String failureReason) {
+    }
+
+    public record ManualRetryRequest(String reason) {
     }
 }

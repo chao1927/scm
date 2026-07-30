@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * IamApplicationServiceTest。
@@ -31,7 +32,11 @@ class IamApplicationServiceTest {
      *
      * <p>保存当前对象所需的应用或外部协作依赖；其具体生命周期由所属对象统一管理。
      */
-    private final IamApplicationService service = new IamApplicationService(mapper);
+    private final IamJwtService jwt = new IamJwtService("01234567890123456789012345678901");
+    private final TestTokenCache tokenCache = new TestTokenCache();
+    private final TestIamSessionMapper sessionMapper = new TestIamSessionMapper();
+    private final IamApplicationService service = new IamApplicationService(mapper, jwt,
+            userId -> new IamTokenClaimsProvider.PermissionClaims(Set.of(), Map.of()), sessionMapper, tokenCache);
 
     /**
      * 处理当前类型职责中的操作 {@code userCanLoginRefreshLogoutAndReadMe}。
@@ -43,11 +48,12 @@ class IamApplicationServiceTest {
         service.createUser("admin", "123456");
         var login = service.login("admin", "123456");
         var refreshed = service.refresh(login.refreshToken());
-        var me = service.me(login.accessToken());
+        var me = service.me(refreshed.accessToken());
+        service.logout(refreshed.refreshToken());
         service.logout(refreshed.refreshToken());
         assertThat(login.accessToken().split("\\.")).hasSize(3);
         assertThat(me.username()).isEqualTo("admin");
-        assertThat(mapper.sessions).hasSize(2);
+        assertThat(sessionMapper.sessions).hasSize(1);
         assertThat(mapper.logs).extracting(IamMapper.OperationLogRow::operation).contains("LOGIN");
     }
 
@@ -81,7 +87,9 @@ class IamApplicationServiceTest {
     @Test
     void loginAccessTokenContainsCurrentPermissionsAndDataScopes() {
         IamJwtService jwt = new IamJwtService("01234567890123456789012345678901");
-        IamApplicationService securedService = new IamApplicationService(mapper, jwt, userId -> new IamTokenClaimsProvider.PermissionClaims(Set.of("purchase:po:read"), Map.of("PURCHASE_ORG", Set.of("ORG-1"))));
+        IamApplicationService securedService = new IamApplicationService(mapper, jwt,
+                userId -> new IamTokenClaimsProvider.PermissionClaims(Set.of("purchase:po:read"),
+                        Map.of("PURCHASE_ORG", Set.of("ORG-1"))), sessionMapper, tokenCache);
         securedService.createUser("buyer", "123456");
         var login = securedService.login("buyer", "123456");
         var accessClaims = jwt.verify(login.accessToken());
@@ -90,6 +98,27 @@ class IamApplicationServiceTest {
         assertThat(accessClaims.dataScopes().get("PURCHASE_ORG")).containsExactly("ORG-1");
         assertThat(refreshClaims.permissions()).isEmpty();
         assertThat(refreshClaims.dataScopes()).isEmpty();
+    }
+
+    @Test
+    void failsClosedWhenRedisCannotStoreOrValidateSession() {
+        service.createUser("closed", "123456");
+        tokenCache.unavailable = true;
+        assertThatThrownBy(() -> service.login("closed", "123456"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("redis unavailable");
+    }
+
+    @Test
+    void rejectsOldRefreshReplayAndRevokesSessionFamily() {
+        service.createUser("replay", "123456");
+        IamApplicationService.LoginResult first = service.login("replay", "123456");
+        service.refresh(first.refreshToken());
+
+        assertThatThrownBy(() -> service.refresh(first.refreshToken()))
+                .isInstanceOf(com.chaobo.scm.common.error.BusinessException.class)
+                .hasMessageContaining("重放");
+        assertThat(tokenCache.sessions.values()).allMatch(session -> !session.active());
     }
 
     /**

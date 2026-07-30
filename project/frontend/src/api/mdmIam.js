@@ -8,6 +8,8 @@ export const queryMdmImportTasks = (params) => client.get('/mdm/v1/import-tasks'
 export const queryMdmQualityIssues = (params) => client.get('/mdm/v1/data-quality-issues', { params })
 export const queryMdmSubscriptions = () => client.get('/mdm/v1/publication-subscriptions')
 export const queryMdmPublications = () => client.get('/mdm/v1/publications')
+export const queryMdmApprovals = (params) => client.get('/mdm/v1/approvals', { params })
+export const queryMdmChangeLogs = (params) => client.get('/mdm/v1/change-logs', { params })
 
 export const queryIamUsers = (params) => client.get('/iam/v1/users', { params })
 export const queryIamRoles = (params) => client.get('/iam/v1/roles', { params })

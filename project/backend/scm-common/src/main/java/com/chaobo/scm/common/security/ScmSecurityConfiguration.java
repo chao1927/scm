@@ -9,6 +9,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
+import java.util.Map;
 
 /**
  * ScmSecurityConfiguration。
@@ -32,7 +33,15 @@ public class ScmSecurityConfiguration {
      */
     @Bean
     JwtDecoder scmJwtDecoder(ScmSecurityProperties properties) {
-        return NimbusJwtDecoder.withSecretKey(properties.secretKey()).build();
+        JwtDecoder active = NimbusJwtDecoder.withSecretKey(properties.activeSecretKey()).build();
+        var previousKey = properties.previousSecretKey();
+        if (previousKey.isEmpty()) {
+            return new ScmKidAwareJwtDecoder(properties.getActiveKid(), active, Map.of());
+        }
+        JwtDecoder previous = NimbusJwtDecoder.withSecretKey(previousKey.orElseThrow()).build();
+        return new ScmKidAwareJwtDecoder(properties.getActiveKid(), active,
+                Map.of(properties.getPreviousKid(), new ScmKidAwareJwtDecoder.PreviousDecoder(
+                        previous, properties.getPreviousValidUntilEpochSecond())));
     }
 
     /**

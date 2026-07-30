@@ -105,7 +105,7 @@ class InventoryMySqlIntegrationTest {
     @Test
     void runsAllMigrationsAndEnforcesMyBatisSqlIdempotencyAndOptimisticLock() {
         long applied = java.util.Arrays.stream(flyway.info().applied()).count();
-        assertThat(applied).isGreaterThanOrEqualTo(7);
+        assertThat(applied).isGreaterThanOrEqualTo(8);
         inventory.insertAccount(1, 88, 10, "SKU-1", null, new BigDecimal("10"), new BigDecimal("10"), BigDecimal.ZERO, BigDecimal.ZERO, 0);
         assertThat(inventory.updateAccount(1, new BigDecimal("10"), new BigDecimal("9"), BigDecimal.ONE, BigDecimal.ZERO, 1, 0)).isEqualTo(1);
         assertThat(inventory.updateAccount(1, new BigDecimal("10"), new BigDecimal("8"), new BigDecimal("2"), BigDecimal.ZERO, 1, 0)).isZero();

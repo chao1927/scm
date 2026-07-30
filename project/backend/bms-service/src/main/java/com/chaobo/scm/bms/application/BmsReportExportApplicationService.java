@@ -4,6 +4,7 @@ import com.chaobo.scm.bms.application.storage.BmsReportObjectStoragePort;
 import com.chaobo.scm.bms.infrastructure.persistence.BmsReadQueryMapper;
 import com.chaobo.scm.bms.infrastructure.persistence.BmsReportExportMapper;
 import com.chaobo.scm.common.security.ScmAccessContext;
+import com.chaobo.scm.common.api.PageResult;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +40,7 @@ public class BmsReportExportApplicationService {
     private final BmsReadQueryMapper reports;
     private final BmsReportObjectStoragePort storage;
     private final int maxAttempts;
+    private final int processingLeaseSeconds;
 
     /**
      * 创建异步报表导出服务。
@@ -46,11 +48,14 @@ public class BmsReportExportApplicationService {
     public BmsReportExportApplicationService(
         BmsReportExportMapper tasks, BmsReadQueryMapper reports,
         BmsReportObjectStoragePort storage,
-        @Value("${scm.bms.report.max-attempts:5}") int maxAttempts) {
+        @Value("${scm.bms.report.max-attempts:5}") int maxAttempts,
+        @Value("${scm.bms.report.processing-lease-seconds:300}")
+        int processingLeaseSeconds) {
         this.tasks = tasks;
         this.reports = reports;
         this.storage = storage;
         this.maxAttempts = Math.max(1, maxAttempts);
+        this.processingLeaseSeconds = Math.max(30, processingLeaseSeconds);
     }
 
     /**
@@ -84,15 +89,22 @@ public class BmsReportExportApplicationService {
     /**
      * 查询当前访问范围内的导出任务。
      */
-    public List<BmsReportExportMapper.ExportTaskRow> list(
-        String objectCode, ScmAccessContext access) {
+    public PageResult<BmsReportExportMapper.ExportTaskRow> list(
+        String objectCode, int requestedPageNo, int requestedPageSize,
+        ScmAccessContext access) {
         String requested = blankToNull(objectCode);
         if (requested != null) {
             access.requireScope(BILLING_OBJECT_SCOPE, requested);
         }
-        return tasks.list(requested).stream()
+        List<BmsReportExportMapper.ExportTaskRow> rows = tasks.list(requested).stream()
             .filter(row -> access.allowsScope(BILLING_OBJECT_SCOPE, row.objectCode()))
             .toList();
+        int pageNo = Math.max(1, requestedPageNo);
+        int pageSize = Math.max(1, Math.min(requestedPageSize, MAX_BATCH_SIZE));
+        int fromIndex = Math.min(rows.size(), (pageNo - 1) * pageSize);
+        int toIndex = Math.min(rows.size(), fromIndex + pageSize);
+        return new PageResult<>(pageNo, pageSize, rows.size(),
+            rows.subList(fromIndex, toIndex));
     }
 
     /**
@@ -101,8 +113,10 @@ public class BmsReportExportApplicationService {
     public int dispatch(int requestedLimit) {
         int completed = 0;
         int limit = Math.max(1, Math.min(requestedLimit, MAX_BATCH_SIZE));
+        tasks.recoverTimedOutProcessing();
         for (BmsReportExportMapper.ExportTaskRow candidate : tasks.claimable(limit)) {
-            if (tasks.claim(candidate.exportNo(), candidate.version()) == 0) {
+            if (tasks.claim(candidate.exportNo(), candidate.version(),
+                processingLeaseSeconds) == 0) {
                 continue;
             }
             BmsReportExportMapper.ExportTaskRow claimed = tasks.find(candidate.exportNo());
@@ -129,12 +143,20 @@ public class BmsReportExportApplicationService {
     /**
      * 人工恢复最终失败任务。
      */
-    public void retry(String exportNo, ScmAccessContext access) {
+    @Transactional(rollbackFor = Exception.class)
+    public void retry(String exportNo, String reason, ScmAccessContext access) {
         BmsReportExportMapper.ExportTaskRow row = require(exportNo);
         access.requireScope(BILLING_OBJECT_SCOPE, row.objectCode());
+        if (blankToNull(reason) == null) {
+            throw new IllegalArgumentException("manual retry reason is required");
+        }
+        if (reason.trim().length() > 128) {
+            throw new IllegalArgumentException("manual retry reason is too long");
+        }
         if (tasks.retryFinalFailure(exportNo) == 0) {
             throw new IllegalStateException("only final failed export can be retried");
         }
+        tasks.insertRetryAudit(exportNo, access.operatorId(), reason.trim());
     }
 
     /**

@@ -2,10 +2,11 @@ package com.chaobo.scm.iam.application;
 
 import com.chaobo.scm.common.error.BusinessException;
 import com.chaobo.scm.common.error.ErrorCode;
-import com.chaobo.scm.iam.domain.SessionTokenAggregate;
 import com.chaobo.scm.iam.domain.UserAggregate;
+import com.chaobo.scm.iam.domain.SessionTokenPolicy;
 import com.chaobo.scm.iam.infrastructure.jwt.IamJwtService;
 import com.chaobo.scm.iam.infrastructure.persistence.IamMapper;
+import com.chaobo.scm.iam.infrastructure.persistence.IamSessionMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,6 +48,10 @@ public class IamApplicationService {
      */
     private final IamTokenClaimsProvider tokenClaimsProvider;
 
+    private final IamSessionMapper sessionMapper;
+
+    private final TokenCachePort tokenCache;
+
     /**
      * ids（类型：{@code AtomicLong}）。
      *
@@ -60,21 +65,6 @@ public class IamApplicationService {
      * <p>构造阶段集中接收必需依赖或恢复对象状态，确保实例创建后即可安全参与所属用例。
      * @param mapper 持久化访问依赖，类型为 {@code IamMapper}
      */
-    public IamApplicationService(IamMapper mapper) {
-        this(mapper, new IamJwtService("01234567890123456789012345678901"));
-    }
-
-    /**
-     * 创建 IamApplicationService。
-     *
-     * <p>构造阶段集中接收必需依赖或恢复对象状态，确保实例创建后即可安全参与所属用例。
-     * @param mapper 持久化访问依赖，类型为 {@code IamMapper}
-     * @param jwtService 应用或外部协作依赖，类型为 {@code IamJwtService}
-     */
-    public IamApplicationService(IamMapper mapper, IamJwtService jwtService) {
-        this(mapper, jwtService, userId -> new IamTokenClaimsProvider.PermissionClaims(Set.of(), Map.of()));
-    }
-
     /**
      * 创建 IamApplicationService。
      *
@@ -84,10 +74,14 @@ public class IamApplicationService {
      * @param tokenClaimsProvider 业务或技术标识，类型为 {@code IamTokenClaimsProvider}
      */
     @Autowired
-    public IamApplicationService(IamMapper mapper, IamJwtService jwtService, IamTokenClaimsProvider tokenClaimsProvider) {
+    public IamApplicationService(IamMapper mapper, IamJwtService jwtService,
+                                 IamTokenClaimsProvider tokenClaimsProvider,
+                                 IamSessionMapper sessionMapper, TokenCachePort tokenCache) {
         this.mapper = mapper;
         this.jwtService = jwtService;
         this.tokenClaimsProvider = tokenClaimsProvider;
+        this.sessionMapper = sessionMapper;
+        this.tokenCache = tokenCache;
     }
 
     /**
@@ -127,11 +121,14 @@ public class IamApplicationService {
         user.authenticate(hash(password));
         mapper.updateUser(user.id(), user.passwordHash(), user.status(), user.failedAttempts(), user.version(), oldVersion);
         long sessionId = ids.incrementAndGet();
-        String access = issueToken(user.id(), username, "IAM", "AT-" + sessionId, "ACCESS", 3600, true);
-        String refresh = issueToken(user.id(), username, "IAM", "RT-" + sessionId, "REFRESH", 86400, false);
-        mapper.insertSession(sessionId, user.id(), access, refresh, 1, 0);
+        IssuedToken access = issueToken(user.id(), username, "IAM", "AT-" + sessionId, "ACCESS", 3600, true);
+        IssuedToken refresh = issueToken(user.id(), username, "IAM", "RT-" + sessionId, "REFRESH", 86400, false);
+        sessionMapper.insert(new IamSessionMapper.SessionWrite(sessionId, user.id(), access.value(), refresh.value(),
+                access.jti(), refresh.jti(), 0, access.expiresAt(), refresh.expiresAt()));
+        tokenCache.store(new TokenCachePort.OnlineSession(sessionId, user.id(), access.jti(), refresh.jti(), 0,
+                access.expiresAt(), refresh.expiresAt(), true));
         mapper.insertOperationLog(ids.incrementAndGet(), "LOGIN", username);
-        return new LoginResult(access, refresh, user.id(), username);
+        return new LoginResult(access.value(), refresh.value(), user.id(), username);
     }
 
     /**
@@ -143,20 +140,39 @@ public class IamApplicationService {
      */
     @Transactional(rollbackFor = Exception.class)
     public LoginResult refresh(String refreshToken) {
-        jwtService.verify(refreshToken);
-        var row = mapper.findSessionByRefresh(refreshToken);
-        if (row == null || row.status() != 1) {
+        IamJwtService.TokenClaims refreshClaims = verifyToken(refreshToken, "REFRESH");
+        TokenCachePort.OnlineSession online = tokenCache.findByRefreshJti(refreshClaims.jti()).orElse(null);
+        if (online == null) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "刷新令牌无效");
         }
-        var user = mapper.findUserById(row.userId());
+        SessionTokenPolicy.RefreshDecision decision = SessionTokenPolicy.decideRefresh(
+                online.active(), online.refreshJti(), refreshClaims.jti());
+        if (decision == SessionTokenPolicy.RefreshDecision.REVOKED) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "刷新令牌已撤销");
+        }
+        if (decision == SessionTokenPolicy.RefreshDecision.REPLAY) {
+            sessionMapper.revoke(online.sessionId(), "REFRESH_TOKEN_REPLAY");
+            tokenCache.revoke(online.sessionId());
+            throw new BusinessException(ErrorCode.FORBIDDEN, "检测到旧刷新令牌重放");
+        }
+        var user = mapper.findUserById(online.userId());
         if (user == null || user.status() != 1) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "用户不可登录");
         }
-        long sessionId = ids.incrementAndGet();
-        String access = issueToken(user.id(), user.username(), "IAM", "AT-" + sessionId, "ACCESS", 3600, true);
-        String refresh = issueToken(user.id(), user.username(), "IAM", "RT-" + sessionId, "REFRESH", 86400, false);
-        mapper.insertSession(sessionId, user.id(), access, refresh, 1, 0);
-        return new LoginResult(access, refresh, user.id(), user.username());
+        long generation = online.generation() + 1;
+        IssuedToken access = issueToken(user.id(), user.username(), "IAM", "AT-" + online.sessionId() + "-" + generation, "ACCESS", 3600, true);
+        IssuedToken refresh = issueToken(user.id(), user.username(), "IAM", "RT-" + online.sessionId() + "-" + generation, "REFRESH", 86400, false);
+        if (sessionMapper.rotate(online.sessionId(), refreshClaims.jti(), access.value(), refresh.value(),
+                access.jti(), refresh.jti(), generation, access.expiresAt(), refresh.expiresAt()) != 1) {
+            throw new BusinessException(ErrorCode.VERSION_CONFLICT, "会话刷新冲突");
+        }
+        TokenCachePort.OnlineSession replacement = new TokenCachePort.OnlineSession(online.sessionId(), user.id(),
+                access.jti(), refresh.jti(), generation, access.expiresAt(), refresh.expiresAt(), true);
+        TokenCachePort.RotationResult rotation = tokenCache.rotate(refreshClaims.jti(), replacement);
+        if (rotation != TokenCachePort.RotationResult.ROTATED) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "刷新令牌无效或已重放");
+        }
+        return new LoginResult(access.value(), refresh.value(), user.id(), user.username());
     }
 
     /**
@@ -167,14 +183,18 @@ public class IamApplicationService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void logout(String refreshToken) {
-        var row = mapper.findSessionByRefresh(refreshToken);
-        if (row == null) {
+        IamJwtService.TokenClaims claims;
+        try {
+            claims = verifyToken(refreshToken, "REFRESH");
+        } catch (BusinessException exception) {
             return;
         }
-        var session = new SessionTokenAggregate(row.id(), row.userId(), row.accessToken(), row.refreshToken(), row.status(), row.version());
-        int oldVersion = session.version();
-        session.logout();
-        mapper.updateSession(session.id(), session.status(), session.version(), oldVersion);
+        TokenCachePort.OnlineSession online = tokenCache.findByRefreshJti(claims.jti()).orElse(null);
+        if (online == null || !online.active()) {
+            return;
+        }
+        sessionMapper.revoke(online.sessionId(), "LOGOUT");
+        tokenCache.revoke(online.sessionId());
     }
 
     /**
@@ -185,9 +205,9 @@ public class IamApplicationService {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code UserView}
      */
     public UserView me(String accessToken) {
-        jwtService.verify(accessToken);
-        var session = mapper.findSessionByAccess(accessToken);
-        if (session == null || session.status() != 1) {
+        IamJwtService.TokenClaims claims = verifyToken(accessToken, "ACCESS");
+        TokenCachePort.OnlineSession session = tokenCache.findByAccessJti(claims.jti()).orElse(null);
+        if (session == null || !session.active() || !claims.jti().equals(session.accessJti())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "访问令牌无效");
         }
         var user = mapper.findUserById(session.userId());
@@ -426,10 +446,28 @@ public class IamApplicationService {
      * @param includeAuthorization 业务处理参数或成员，类型为 {@code boolean}
      * @return 处理当前类型职责中的操作的结果，类型为 {@code String}
      */
-    private String issueToken(long userId, String username, String appCode, String jti, String tokenType, long secondsToLive, boolean includeAuthorization) {
+    private IssuedToken issueToken(long userId, String username, String appCode, String jti, String tokenType, long secondsToLive, boolean includeAuthorization) {
         long now = Instant.now().getEpochSecond();
         IamTokenClaimsProvider.PermissionClaims authorization = includeAuthorization ? tokenClaimsProvider.claimsFor(userId) : new IamTokenClaimsProvider.PermissionClaims(Set.of(), Map.of());
-        return jwtService.issue(new IamJwtService.TokenClaims(String.valueOf(userId), username, appCode, jti, tokenType, now, now + secondsToLive, authorization.permissions(), authorization.dataScopes()));
+        long expiresAt = now + secondsToLive;
+        return new IssuedToken(jwtService.issue(new IamJwtService.TokenClaims(String.valueOf(userId), username,
+                appCode, jti, tokenType, now, expiresAt, authorization.permissions(), authorization.dataScopes())),
+                jti, expiresAt);
+    }
+
+    private IamJwtService.TokenClaims verifyToken(String token, String expectedType) {
+        try {
+            IamJwtService.TokenClaims claims = jwtService.verify(token);
+            if (!expectedType.equals(claims.tokenType())) {
+                throw new BusinessException(ErrorCode.FORBIDDEN, "Token类型无效");
+            }
+            return claims;
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "Token签名或有效期无效");
+        }
+    }
+
+    private record IssuedToken(String value, String jti, long expiresAt) {
     }
 
     /**

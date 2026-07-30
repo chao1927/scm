@@ -1,11 +1,26 @@
 import { ArrowRightOutlined, ReloadOutlined, WarningOutlined } from '@ant-design/icons'
 import { useQueries, useQueryClient } from '@tanstack/react-query'
-import { Button, Card, Col, Empty, Row, Space, Steps, Table, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Col, Empty, Row, Space, Steps, Table, Tag, Typography } from 'antd'
 import { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { BusinessPageHeader, StatusTag } from '../components/business/BusinessPrimitives'
 import { findResourceDefinition, normalizePage, recordIdentity } from '../config/resourceDefinitions'
 import { findSystem } from '../config/systemCatalog'
+
+export function summarizeWorkbenchQueries(summaries) {
+  return summaries.reduce((state, { query, result }) => ({
+    failedCount: state.failedCount + (query.isError ? 1 : 0),
+    loadingCount: state.loadingCount + (query.isLoading ? 1 : 0),
+    successfulCount: state.successfulCount + (query.isError ? 0 : 1),
+    hasSuccessfulData: state.hasSuccessfulData || (!query.isError && result.records.length > 0),
+  }), { failedCount: 0, loadingCount: 0, successfulCount: 0, hasSuccessfulData: false })
+}
+
+export function metricQueryState(query, result) {
+  if (query.isError) return { value: '—', hint: '接口加载失败，点击重试', action: 'retry' }
+  if (query.isLoading) return { value: '…', hint: '正在加载真实业务查询', action: 'none' }
+  return { value: result.total, hint: '来自真实业务查询', action: 'navigate' }
+}
 
 export default function SystemWorkbenchPage() {
   const { systemId } = useParams()
@@ -33,6 +48,7 @@ export default function SystemWorkbenchPage() {
     const result = query.data ? normalizePage(query.data, { pageNo: 1, pageSize: 5 }) : { records: [], total: 0 }
     return { page, definition, query, result }
   })
+  const queryState = summarizeWorkbenchQueries(summaries)
   const recentRows = summaries.flatMap(({ page, definition, result }) => result.records.slice(0, 2).map((record) => ({
     ...record,
     __page: page,
@@ -41,6 +57,7 @@ export default function SystemWorkbenchPage() {
   }))).slice(0, 8)
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['workbench-resource', system.id] })
+  const retryFailed = () => summaries.filter(({ query }) => query.isError).forEach(({ query }) => query.refetch())
 
   return (
     <div className="system-workbench-page">
@@ -52,17 +69,35 @@ export default function SystemWorkbenchPage() {
       />
 
       <Row gutter={[16, 16]} className="workbench-metrics">
-        {summaries.slice(0, 4).map(({ page, query, result }) => (
-          <Col xs={24} sm={12} xl={6} key={page.id}>
-            <button className="workbench-metric" onClick={() => navigate(`/${system.id}/${page.id}`)}>
-              <span>{page.label}</span>
-              <strong>{query.isError ? '—' : query.isLoading ? '…' : result.total}</strong>
-              <small>{query.isError ? '接口暂不可用' : '来自真实业务查询'}</small>
-            </button>
-          </Col>
-        ))}
+        {summaries.slice(0, 4).map(({ page, query, result }) => {
+          const metric = metricQueryState(query, result)
+          return (
+            <Col xs={24} sm={12} xl={6} key={page.id}>
+              <button
+                className="workbench-metric"
+                aria-label={metric.action === 'retry' ? `${page.label}加载失败，重试` : `进入${page.label}`}
+                onClick={() => metric.action === 'retry' ? query.refetch() : metric.action === 'navigate' && navigate(`/${system.id}/${page.id}`)}
+              >
+                <span>{page.label}</span>
+                <strong>{metric.value}</strong>
+                <small>{query.isError && query.error?.message ? `${metric.hint}：${query.error.message}` : metric.hint}</small>
+              </button>
+            </Col>
+          )
+        })}
         {summaries.length === 0 && <Col span={24}><Empty description="当前子系统尚无可查询的工作台指标接口" /></Col>}
       </Row>
+
+      {queryState.failedCount > 0 && (
+        <Alert
+          type="error"
+          showIcon
+          role="alert"
+          title={`${queryState.failedCount} 个工作台查询加载失败`}
+          description="已成功的读模型仍保留展示；失败卡片不会被当作空数据。"
+          action={<Button loading={summaries.some(({ query }) => query.isError && query.isFetching)} onClick={retryFailed}>重试失败查询</Button>}
+        />
+      )}
 
       <Row gutter={[16, 16]} align="top">
         <Col xs={24} xl={18}>
@@ -73,8 +108,9 @@ export default function SystemWorkbenchPage() {
             <Table
               rowKey={(row) => `${row.__page.id}-${row.__identity}`}
               dataSource={recentRows}
+              loading={queryState.loadingCount > 0}
               pagination={false}
-              locale={{ emptyText: '当前接口未返回业务数据' }}
+              locale={{ emptyText: queryState.failedCount > 0 && !queryState.hasSuccessfulData ? '工作台查询加载失败，请重试上方接口' : '当前接口未返回业务数据' }}
               scroll={{ x: 850 }}
               columns={[
                 { title: '所属功能', dataIndex: ['__page', 'label'], width: 140 },

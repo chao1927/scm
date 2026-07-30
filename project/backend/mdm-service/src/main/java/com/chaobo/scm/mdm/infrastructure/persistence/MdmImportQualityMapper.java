@@ -53,6 +53,19 @@ public interface MdmImportQualityMapper {
     @Select("select import_task_no importTaskNo,type_code typeCode,file_name fileName,file_url fileUrl,file_hash fileHash,import_mode importMode,validate_only validateOnly,duplicate_policy duplicatePolicy,task_status status,total_count totalCount,success_count successCount,failed_count failedCount,error_file_url errorFileUrl,reason,version from mdm_import_task where (#{typeCode} is null or type_code=#{typeCode}) and (#{status} is null or task_status=#{status}) order by id desc")
     List<ImportTaskRow> listImportTasks(@Param("typeCode") String typeCode, @Param("status") Integer status);
 
+    @Select("select import_task_no importTaskNo,type_code typeCode,file_name fileName,file_url fileUrl,file_hash fileHash,import_mode importMode,validate_only validateOnly,duplicate_policy duplicatePolicy,task_status status,total_count totalCount,success_count successCount,failed_count failedCount,error_file_url errorFileUrl,reason,version from mdm_import_task where (task_status=1 or (task_status=2 and validate_only=0 and success_count>0)) and attempt_count < #{maxRetries} and (processing_started_at is null or processing_started_at < date_sub(now(), interval 10 minute)) and (next_retry_at is null or next_retry_at <= now()) order by id limit #{limit}")
+    List<ImportTaskRow> listPendingImportTasks(@Param("limit") int limit, @Param("maxRetries") int maxRetries);
+
+    @Update("update mdm_import_task set processing_started_at=now(),attempt_count=attempt_count+1,updated_at=now() where import_task_no=#{importTaskNo} and (task_status=1 or (task_status=2 and validate_only=0 and success_count>0)) and version=#{version} and (processing_started_at is null or processing_started_at < date_sub(now(), interval 10 minute))")
+    int claimImportTask(@Param("importTaskNo") String importTaskNo, @Param("version") long version);
+
+    @Update("update mdm_import_task set processing_started_at=null,next_retry_at=timestampadd(SECOND,#{retryDelaySeconds},now()),reason=#{reason},updated_at=now() where import_task_no=#{importTaskNo}")
+    void failImportProcessing(@Param("importTaskNo") String importTaskNo, @Param("reason") String reason,
+                              @Param("retryDelaySeconds") int retryDelaySeconds);
+
+    @Update("update mdm_import_task set processing_started_at=null,next_retry_at=null,updated_at=now() where import_task_no=#{importTaskNo}")
+    void releaseImportTask(@Param("importTaskNo") String importTaskNo);
+
     /**
      * 处理当前类型职责中的操作 {@code insertImportTask}。
      *
@@ -69,8 +82,8 @@ public interface MdmImportQualityMapper {
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
      * @param row 业务处理参数或成员，类型为 {@code ImportTaskRow}
      */
-    @Update("update mdm_import_task set task_status=#{status},total_count=#{totalCount},success_count=#{successCount},failed_count=#{failedCount},error_file_url=#{errorFileUrl},reason=#{reason},version=#{version},updated_at=now() where import_task_no=#{importTaskNo}")
-    void updateImportTask(ImportTaskRow row);
+    @Update("update mdm_import_task set task_status=#{status},total_count=#{totalCount},success_count=#{successCount},failed_count=#{failedCount},error_file_url=#{errorFileUrl},reason=#{reason},version=#{version},updated_at=now() where import_task_no=#{importTaskNo} and version=#{version}-1")
+    int updateImportTask(ImportTaskRow row);
 
     /**
      * 处理当前类型职责中的操作 {@code insertImportError}。
@@ -92,6 +105,18 @@ public interface MdmImportQualityMapper {
     @Select("select import_task_no importTaskNo,row_no rowNo,field_code fieldCode,error_code errorCode,error_message errorMessage,raw_payload rawPayload from mdm_import_error where import_task_no=#{importTaskNo} order by row_no")
     List<ImportErrorRow> listImportErrors(@Param("importTaskNo") String importTaskNo);
 
+    @Insert("insert into mdm_import_staging(import_task_no,row_no,data_code,data_name,data_payload,created_at) values(#{importTaskNo},#{rowNo},#{dataCode},#{dataName},#{dataPayload},now())")
+    void insertImportStaging(ImportStagingRow row);
+
+    @Select("select import_task_no importTaskNo,row_no rowNo,data_code dataCode,data_name dataName,data_payload dataPayload from mdm_import_staging where import_task_no=#{importTaskNo} order by row_no")
+    List<ImportStagingRow> listImportStaging(@Param("importTaskNo") String importTaskNo);
+
+    @org.apache.ibatis.annotations.Delete("delete from mdm_import_staging where import_task_no=#{importTaskNo}")
+    void deleteImportStaging(@Param("importTaskNo") String importTaskNo);
+
+    @org.apache.ibatis.annotations.Delete("delete from mdm_import_error where import_task_no=#{importTaskNo}")
+    void deleteImportErrors(@Param("importTaskNo") String importTaskNo);
+
     /**
      * 处理当前类型职责中的操作 {@code insertExportTask}。
      *
@@ -110,6 +135,22 @@ public interface MdmImportQualityMapper {
      */
     @Select("select export_task_no exportTaskNo,type_code typeCode,filter_payload filterPayload,field_payload fieldPayload,mask_sensitive_fields maskSensitiveFields,export_status status,file_url fileUrl,version from mdm_export_task order by id desc")
     List<ExportTaskRow> listExportTasks();
+
+    @Select("select export_task_no exportTaskNo,type_code typeCode,filter_payload filterPayload,field_payload fieldPayload,mask_sensitive_fields maskSensitiveFields,export_status status,file_url fileUrl,version from mdm_export_task where (export_status in (1,4) or (export_status=2 and processing_started_at < date_sub(now(), interval 10 minute))) and retry_count < #{maxRetries} and (next_retry_at is null or next_retry_at <= now()) order by id limit #{limit}")
+    List<ExportTaskRow> listPendingExportTasks(@Param("limit") int limit, @Param("maxRetries") int maxRetries);
+
+    @Update("update mdm_export_task set export_status=2,processing_started_at=now(),retry_count=retry_count+1,updated_at=now(),version=version+1 where export_task_no=#{exportTaskNo} and (export_status in (1,4) or (export_status=2 and processing_started_at < date_sub(now(), interval 10 minute))) and version=#{version}")
+    int claimExportTask(@Param("exportTaskNo") String exportTaskNo, @Param("version") long version);
+
+    @Update("update mdm_export_task set export_status=3,file_url=#{fileUrl},failure_reason=null,processing_started_at=null,next_retry_at=null,updated_at=now(),version=version+1 where export_task_no=#{exportTaskNo} and export_status=2")
+    void completeExportTask(@Param("exportTaskNo") String exportTaskNo, @Param("fileUrl") String fileUrl);
+
+    @Update("update mdm_export_task set export_status=4,failure_reason=#{reason},processing_started_at=null,next_retry_at=timestampadd(SECOND,#{retryDelaySeconds},now()),updated_at=now(),version=version+1 where export_task_no=#{exportTaskNo} and export_status=2")
+    void failExportTask(@Param("exportTaskNo") String exportTaskNo, @Param("reason") String reason,
+                        @Param("retryDelaySeconds") int retryDelaySeconds);
+
+    @Select("select export_task_no exportTaskNo,type_code typeCode,filter_payload filterPayload,field_payload fieldPayload,mask_sensitive_fields maskSensitiveFields,export_status status,file_url fileUrl,version from mdm_export_task where export_task_no=#{exportTaskNo}")
+    ExportTaskRow findExportTask(@Param("exportTaskNo") String exportTaskNo);
 
     /**
      * 查询并返回 {@code findQualityIssue}。
@@ -207,6 +248,10 @@ public interface MdmImportQualityMapper {
      * @since 0.1.0
      */
     record ImportErrorRow(Long id, String importTaskNo, int rowNo, String fieldCode, String errorCode, String errorMessage, String rawPayload) {
+    }
+
+    record ImportStagingRow(String importTaskNo, int rowNo, String dataCode, String dataName,
+                            String dataPayload) {
     }
 
     /**

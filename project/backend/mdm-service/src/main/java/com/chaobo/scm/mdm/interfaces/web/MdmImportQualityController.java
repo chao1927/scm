@@ -1,7 +1,10 @@
 package com.chaobo.scm.mdm.interfaces.web;
 
 import com.chaobo.scm.mdm.application.MdmImportQualityApplicationService;
+import com.chaobo.scm.mdm.application.file.MdmFileTaskExecutionService;
 import com.chaobo.scm.mdm.infrastructure.persistence.MdmImportQualityMapper;
+import com.chaobo.scm.common.security.ScmAccessContexts;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,6 +33,7 @@ public class MdmImportQualityController {
      * <p>保存当前对象所需的应用或外部协作依赖；其具体生命周期由所属对象统一管理。
      */
     private final MdmImportQualityApplicationService service;
+    private final MdmFileTaskExecutionService fileTaskExecutionService;
 
     /**
      * 创建 MdmImportQualityController。
@@ -38,7 +42,14 @@ public class MdmImportQualityController {
      * @param service 应用或外部协作依赖，类型为 {@code MdmImportQualityApplicationService}
      */
     public MdmImportQualityController(MdmImportQualityApplicationService service) {
+        this(service, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public MdmImportQualityController(MdmImportQualityApplicationService service,
+                                      MdmFileTaskExecutionService fileTaskExecutionService) {
         this.service = service;
+        this.fileTaskExecutionService = fileTaskExecutionService;
     }
 
     /**
@@ -76,6 +87,10 @@ public class MdmImportQualityController {
      */
     @PostMapping("/import-tasks/{importTaskNo}/execute")
     public MdmImportQualityMapper.ImportTaskRow executeImportTask(@PathVariable String importTaskNo, @RequestBody MdmImportQualityApplicationService.StateCommand command) {
+        if (fileTaskExecutionService != null) {
+            fileTaskExecutionService.claimAndApplyValidatedRows(importTaskNo, command.expectedVersion());
+            return service.getImportTask(importTaskNo);
+        }
         return service.executeImportTask(importTaskNo, command);
     }
 
@@ -149,8 +164,13 @@ public class MdmImportQualityController {
      * @return 执行命令的结果，类型为 {@code MdmImportQualityMapper.ExportTaskRow}
      */
     @PostMapping("/records/export")
-    public MdmImportQualityMapper.ExportTaskRow createExportTask(@RequestBody MdmImportQualityApplicationService.CreateExportTaskCommand command) {
-        return service.createExportTask(command);
+    @org.springframework.security.access.prepost.PreAuthorize(
+        "hasAnyAuthority('*', 'mdm:*', 'master-data:importexport:export')")
+    public MdmImportQualityMapper.ExportTaskRow createExportTask(
+            @RequestBody MdmImportQualityApplicationService.CreateExportTaskCommand command,
+            Authentication authentication) {
+        return service.createExportTask(command,
+            ScmAccessContexts.require(authentication));
     }
 
     /**

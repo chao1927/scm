@@ -5,10 +5,20 @@ import com.chaobo.scm.mdm.domain.ImportTaskAggregate;
 import com.chaobo.scm.mdm.domain.MdmEvent;
 import com.chaobo.scm.mdm.infrastructure.persistence.MdmImportQualityMapper;
 import com.chaobo.scm.mdm.infrastructure.persistence.MdmMapper;
+import com.chaobo.scm.common.security.ScmAccessContext;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -35,6 +45,13 @@ public class MdmImportQualityApplicationService {
      * <p>保存当前对象所需的持久化访问依赖；其具体生命周期由所属对象统一管理。
      */
     private final MdmMapper mdmMapper;
+    private final ObjectMapper objectMapper;
+    private static final List<String> BASE_EXPORT_FIELD_LIST = List.of(
+        "dataCode", "dataName", "status");
+    private static final Set<String> BASE_EXPORT_FIELDS = Set.copyOf(
+        BASE_EXPORT_FIELD_LIST);
+    private static final Set<String> SUPPORTED_EXPORT_FILTERS = Set.of(
+        "status", "dataCodePrefix");
 
     /**
      * importSequence（类型：{@code AtomicLong}）。
@@ -65,8 +82,15 @@ public class MdmImportQualityApplicationService {
      * @param mdmMapper 持久化访问依赖，类型为 {@code MdmMapper}
      */
     public MdmImportQualityApplicationService(MdmImportQualityMapper mapper, MdmMapper mdmMapper) {
+        this(mapper, mdmMapper, new ObjectMapper());
+    }
+
+    @Autowired
+    public MdmImportQualityApplicationService(MdmImportQualityMapper mapper, MdmMapper mdmMapper,
+                                              ObjectMapper objectMapper) {
         this.mapper = mapper;
         this.mdmMapper = mdmMapper;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -103,7 +127,7 @@ public class MdmImportQualityApplicationService {
     public MdmImportQualityMapper.ImportTaskRow validateImportTask(String importTaskNo, ValidateImportTaskCommand command) {
         ImportTaskAggregate aggregate = loadImportTask(importTaskNo);
         aggregate.validateFile(command.totalCount(), command.errors().size(), command.errorFileUrl(), command.expectedVersion());
-        mapper.updateImportTask(toRow(aggregate));
+        updateImportTask(aggregate);
         for (MdmImportQualityMapper.ImportErrorRow error : command.errors()) {
             mapper.insertImportError(new MdmImportQualityMapper.ImportErrorRow(null, importTaskNo, error.rowNo(), error.fieldCode(), error.errorCode(), error.errorMessage(), error.rawPayload()));
         }
@@ -124,11 +148,11 @@ public class MdmImportQualityApplicationService {
     public MdmImportQualityMapper.ImportTaskRow executeImportTask(String importTaskNo, StateCommand command) {
         ImportTaskAggregate aggregate = loadImportTask(importTaskNo);
         aggregate.execute(command.expectedVersion());
-        mapper.updateImportTask(toRow(aggregate));
+        updateImportTask(aggregate);
         saveEvents(aggregate.pullEvents());
         aggregate = loadImportTask(importTaskNo);
         aggregate.complete(aggregate.version());
-        mapper.updateImportTask(toRow(aggregate));
+        updateImportTask(aggregate);
         saveEvents(aggregate.pullEvents());
         log("EXECUTE_IMPORT_TASK", importTaskNo, command.operatorId(), command.idempotencyKey());
         return mapper.findImportTask(importTaskNo);
@@ -146,7 +170,7 @@ public class MdmImportQualityApplicationService {
     public MdmImportQualityMapper.ImportTaskRow cancelImportTask(String importTaskNo, CancelCommand command) {
         ImportTaskAggregate aggregate = loadImportTask(importTaskNo);
         aggregate.cancel(command.reason(), command.expectedVersion());
-        mapper.updateImportTask(toRow(aggregate));
+        updateImportTask(aggregate);
         saveEvents(aggregate.pullEvents());
         log("CANCEL_IMPORT_TASK", importTaskNo, command.operatorId(), command.idempotencyKey());
         return mapper.findImportTask(importTaskNo);
@@ -208,12 +232,138 @@ public class MdmImportQualityApplicationService {
      */
     @Transactional(rollbackFor = Exception.class)
     public MdmImportQualityMapper.ExportTaskRow createExportTask(CreateExportTaskCommand command) {
+        return createExportTask(command, ExportAuthorization.restricted(command.operatorId()));
+    }
+
+    /**
+     * 在创建时固化服务端授权字段、过滤条件和强制脱敏策略。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public MdmImportQualityMapper.ExportTaskRow createExportTask(
+            CreateExportTaskCommand command, ScmAccessContext access) {
+        return createExportTask(command, ExportAuthorization.from(access));
+    }
+
+    private MdmImportQualityMapper.ExportTaskRow createExportTask(
+            CreateExportTaskCommand command, ExportAuthorization authorization) {
         ensureType(command.typeCode());
-        MdmImportQualityMapper.ExportTaskRow row = new MdmImportQualityMapper.ExportTaskRow(null, "EXP" + exportSequence.incrementAndGet(), command.typeCode(), command.filterPayload(), command.fieldPayload(), command.maskSensitiveFields(), 1, null, 1);
+        String filterSnapshot = canonicalFilter(command.filterPayload());
+        List<String> requestedFields = requestedFields(command.fieldPayload());
+        Set<String> supportedFields = supportedFields(command.typeCode());
+        List<String> authorizedFields = authorizeFields(
+            requestedFields, supportedFields, authorization);
+        boolean effectiveMask = command.maskSensitiveFields()
+            || !authorization.canUnmaskSensitiveFields();
+        MdmImportQualityMapper.ExportTaskRow row = new MdmImportQualityMapper.ExportTaskRow(
+            null, "EXP" + exportSequence.incrementAndGet(), command.typeCode(),
+            filterSnapshot, writeJson(authorizedFields), effectiveMask, 1, null, 1);
         mapper.insertExportTask(row);
         mapper.insertOutbox(new MdmMapper.OutboxRow("MasterDataExportTaskCreated", row.exportTaskNo(), row.typeCode(), 1, LocalDateTime.now()));
-        log("CREATE_EXPORT_TASK", row.exportTaskNo(), command.operatorId(), command.idempotencyKey());
+        log("CREATE_EXPORT_TASK", row.exportTaskNo(), authorization.operatorId(),
+            command.idempotencyKey());
         return row;
+    }
+
+    private String canonicalFilter(String payload) {
+        Map<String, Object> source = readObject(payload, "export filter payload");
+        Set<String> unknown = new LinkedHashSet<>(source.keySet());
+        unknown.removeAll(SUPPORTED_EXPORT_FILTERS);
+        if (!unknown.isEmpty()) {
+            throw new IllegalArgumentException("unsupported export filter fields: " + unknown);
+        }
+        Map<String, Object> canonical = new LinkedHashMap<>();
+        Object status = source.get("status");
+        if (status != null) {
+            if (!(status instanceof Number number)
+                    || number.doubleValue() != number.intValue()) {
+                throw new IllegalArgumentException("export filter status must be an integer");
+            }
+            canonical.put("status", number.intValue());
+        }
+        Object prefix = source.get("dataCodePrefix");
+        if (prefix != null) {
+            if (!(prefix instanceof String text)) {
+                throw new IllegalArgumentException(
+                    "export filter dataCodePrefix must be a string");
+            }
+            if (!text.isBlank()) {
+                canonical.put("dataCodePrefix", text.trim());
+            }
+        }
+        return writeJson(canonical);
+    }
+
+    private List<String> requestedFields(String payload) {
+        if (payload == null || payload.isBlank()) {
+            return BASE_EXPORT_FIELD_LIST;
+        }
+        try {
+            List<String> fields = objectMapper.readValue(payload, new TypeReference<>() { });
+            if (fields == null || fields.isEmpty()) {
+                return BASE_EXPORT_FIELD_LIST;
+            }
+            LinkedHashSet<String> distinct = new LinkedHashSet<>();
+            for (String field : fields) {
+                if (field == null || !field.matches("[A-Za-z][A-Za-z0-9_.-]{0,127}")) {
+                    throw new IllegalArgumentException("export field name is invalid");
+                }
+                distinct.add(field);
+            }
+            return List.copyOf(distinct);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalArgumentException("export field payload must be a JSON array", exception);
+        }
+    }
+
+    private Set<String> supportedFields(String typeCode) {
+        LinkedHashSet<String> fields = new LinkedHashSet<>(BASE_EXPORT_FIELDS);
+        fields.add("dataPayload");
+        mdmMapper.listTemplates().stream()
+            .filter(template -> typeCode.equals(template.typeCode()))
+            .map(MdmMapper.TemplateRow::fieldPayload)
+            .filter(payload -> payload != null && !payload.isBlank())
+            .forEach(payload -> {
+                for (String definition : payload.split(";")) {
+                    String[] parts = definition.split(":", 2);
+                    if (parts.length > 0 && !parts[0].isBlank()) {
+                        fields.add(parts[0].trim());
+                    }
+                }
+            });
+        return Set.copyOf(fields);
+    }
+
+    private List<String> authorizeFields(List<String> requested, Set<String> supported,
+                                         ExportAuthorization authorization) {
+        for (String field : requested) {
+            if (!supported.contains(field)) {
+                throw new IllegalArgumentException("unsupported export field: " + field);
+            }
+            if (!BASE_EXPORT_FIELDS.contains(field) && !authorization.allows(field)) {
+                throw new AccessDeniedException("export field is not authorized: " + field);
+            }
+        }
+        return List.copyOf(requested);
+    }
+
+    private Map<String, Object> readObject(String payload, String description) {
+        if (payload == null || payload.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(payload, new TypeReference<>() { });
+        } catch (JsonProcessingException exception) {
+            throw new IllegalArgumentException(description + " must be a JSON object", exception);
+        }
+    }
+
+    private String writeJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("export authorization snapshot cannot be serialized",
+                exception);
+        }
     }
 
     /**
@@ -380,6 +530,12 @@ public class MdmImportQualityApplicationService {
         return new MdmImportQualityMapper.ImportTaskRow(null, aggregate.importTaskNo(), aggregate.typeCode(), aggregate.fileName(), aggregate.fileUrl(), aggregate.fileHash(), aggregate.importMode(), aggregate.validateOnly(), aggregate.duplicatePolicy(), aggregate.status(), aggregate.totalCount(), aggregate.successCount(), aggregate.failedCount(), aggregate.errorFileUrl(), aggregate.reason(), aggregate.version());
     }
 
+    private void updateImportTask(ImportTaskAggregate aggregate) {
+        if (mapper.updateImportTask(toRow(aggregate)) != 1) {
+            throw new IllegalStateException("import task version conflict");
+        }
+    }
+
     /**
      * 转换数据模型 {@code toRow}。
      *
@@ -495,6 +651,37 @@ public class MdmImportQualityApplicationService {
      * @since 0.1.0
      */
     public record CreateExportTaskCommand(String typeCode, String filterPayload, String fieldPayload, boolean maskSensitiveFields, Long operatorId, String idempotencyKey) {
+    }
+
+    private record ExportAuthorization(Set<String> allowedFields,
+                                       boolean allowAllFields,
+                                       boolean canUnmaskSensitiveFields,
+                                       Long operatorId) {
+
+        static ExportAuthorization restricted(Long operatorId) {
+            return new ExportAuthorization(Set.of(), false, false, operatorId);
+        }
+
+        static ExportAuthorization from(ScmAccessContext access) {
+            Set<String> permissions = access.permissions();
+            boolean administrator = permissions.contains("*")
+                || permissions.contains("mdm:*");
+            boolean allowAll = administrator
+                || permissions.contains("mdm:export:field:*");
+            Set<String> fields = permissions.stream()
+                .filter(permission -> permission.startsWith("mdm:export:field:"))
+                .map(permission -> permission.substring("mdm:export:field:".length()))
+                .filter(field -> !field.isBlank() && !"*".equals(field))
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+            boolean canUnmask = administrator
+                || permissions.contains("mdm:export:sensitive:unmask");
+            return new ExportAuthorization(fields, allowAll, canUnmask,
+                access.operatorId());
+        }
+
+        boolean allows(String field) {
+            return allowAllFields || allowedFields.contains(field);
+        }
     }
 
     /**

@@ -2,8 +2,12 @@ package com.chaobo.scm.mdm.interfaces.web;
 
 import com.chaobo.scm.mdm.application.MdmImportQualityApplicationService;
 import com.chaobo.scm.mdm.infrastructure.persistence.MdmImportQualityMapper;
+import com.chaobo.scm.common.security.ScmAccessContext;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.junit.jupiter.api.Test;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -32,6 +36,26 @@ class MdmImportQualityControllerTest {
         assertThat(controller.issues(null, null)).isEmpty();
     }
 
+    @Test
+    void exportEndpointUsesAuthenticatedServerAuthorizationInsteadOfRequestOperator() {
+        StubImportQualityService service = new StubImportQualityService();
+        MdmImportQualityController controller = new MdmImportQualityController(service);
+        UsernamePasswordAuthenticationToken authentication =
+            UsernamePasswordAuthenticationToken.authenticated(
+                "finance", "N/A", List.of());
+        authentication.setDetails(new ScmAccessContext(
+            1001L, "finance", "MDM",
+            Set.of("master-data:importexport:export"), Map.of()));
+        MdmImportQualityApplicationService.CreateExportTaskCommand command =
+            new MdmImportQualityApplicationService.CreateExportTaskCommand(
+                "SKU", "{}", null, false, 9999L, "export-api-1");
+
+        controller.createExportTask(command, authentication);
+
+        assertThat(service.lastExportAccess.operatorId()).isEqualTo(1001L);
+        assertThat(service.lastCreateExportTaskCommand).isEqualTo(command);
+    }
+
     /**
      * StubImportQualityService。
      *
@@ -48,6 +72,8 @@ class MdmImportQualityControllerTest {
          * <p>保存当前对象所需的应用或外部协作依赖；其具体生命周期由所属对象统一管理。
          */
         MdmImportQualityApplicationService.CreateImportTaskCommand lastCreateImportTaskCommand;
+        MdmImportQualityApplicationService.CreateExportTaskCommand lastCreateExportTaskCommand;
+        ScmAccessContext lastExportAccess;
 
         /**
          * 创建 StubImportQualityService。
@@ -69,6 +95,18 @@ class MdmImportQualityControllerTest {
         public MdmImportQualityMapper.ImportTaskRow createImportTask(MdmImportQualityApplicationService.CreateImportTaskCommand command) {
             lastCreateImportTaskCommand = command;
             return new MdmImportQualityMapper.ImportTaskRow(null, "IMP500001", "SKU", "sku.csv", "oss://sku.csv", "hash-1", "CREATE", false, "REJECT", 1, 0, 0, 0, null, null, 1);
+        }
+
+        @Override
+        public MdmImportQualityMapper.ExportTaskRow createExportTask(
+                MdmImportQualityApplicationService.CreateExportTaskCommand command,
+                ScmAccessContext access) {
+            lastCreateExportTaskCommand = command;
+            lastExportAccess = access;
+            return new MdmImportQualityMapper.ExportTaskRow(
+                null, "EXP600001", "SKU", "{}",
+                "[\"dataCode\",\"dataName\",\"status\"]", true,
+                1, null, 1);
         }
 
         /**

@@ -25,13 +25,12 @@ class BmsReadQueryApplicationServiceTest {
         BmsReadQueryApplicationService service =
             new BmsReadQueryApplicationService(new QueryMapper());
 
-        List<BmsReadQueryMapper.ChargeView> result =
-            service.charges(null, "2026-07", access("BO-A"));
+        var result = service.charges(null, "2026-07", 1, 20, access("BO-A"));
 
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).totalAmount()).isEqualByComparingTo("10.23");
+        assertThat(result.total()).isEqualTo(1);
+        assertThat(result.records().get(0).totalAmount()).isEqualByComparingTo("10.23");
         assertThatThrownBy(() ->
-            service.charges("BO-B", "2026-07", access("BO-A")))
+            service.charges("BO-B", "2026-07", 1, 20, access("BO-A")))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("BILLING_OBJECT/BO-B");
     }

@@ -3,12 +3,16 @@ package com.chaobo.scm.mdm.application;
 import com.chaobo.scm.mdm.domain.ImportTaskAggregate;
 import com.chaobo.scm.mdm.infrastructure.persistence.MdmImportQualityMapper;
 import com.chaobo.scm.mdm.infrastructure.persistence.MdmMapper;
+import com.chaobo.scm.common.security.ScmAccessContext;
+import org.springframework.security.access.AccessDeniedException;
 import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * MdmImportQualityApplicationServiceTest。
@@ -58,6 +62,84 @@ class MdmImportQualityApplicationServiceTest {
         issue = service.closeQualityIssue(issue.issueNo(), new MdmImportQualityApplicationService.StateCommand(issue.version(), 1003L, "idem-5"));
         assertThat(issue.status()).isEqualTo(5);
         assertThat(mapper.logs).extracting(MdmMapper.OperationLogRow::operationType).contains("RAISE_QUALITY_ISSUE", "CLOSE_QUALITY_ISSUE");
+    }
+
+    @Test
+    void exportTaskPersistsServerAuthorizedFieldsAndForcedMaskSnapshot() {
+        MasterDataRecordApplicationServiceTest.MemoryMdmMapper mdmMapper =
+            mdmMapperWithTemplate();
+        MemoryImportQualityMapper mapper = new MemoryImportQualityMapper();
+        MdmImportQualityApplicationService service =
+            new MdmImportQualityApplicationService(mapper, mdmMapper);
+
+        MdmImportQualityMapper.ExportTaskRow safeDefault = service.createExportTask(
+            new MdmImportQualityApplicationService.CreateExportTaskCommand(
+                "SKU", "{\"status\":2}", null, false, 9999L, "export-1"),
+            access(Set.of("master-data:importexport:export")));
+
+        assertThat(safeDefault.fieldPayload())
+            .isEqualTo("[\"dataCode\",\"dataName\",\"status\"]");
+        assertThat(safeDefault.maskSensitiveFields()).isTrue();
+        assertThat(safeDefault.filterPayload()).isEqualTo("{\"status\":2}");
+
+        MdmImportQualityMapper.ExportTaskRow privileged = service.createExportTask(
+            new MdmImportQualityApplicationService.CreateExportTaskCommand(
+                "SKU", "{\"dataCodePrefix\":\"SKU-\"}",
+                "[\"dataCode\",\"mobile\"]", false, 9999L, "export-2"),
+            access(Set.of("master-data:importexport:export",
+                "mdm:export:field:mobile", "mdm:export:sensitive:unmask")));
+
+        assertThat(privileged.fieldPayload())
+            .isEqualTo("[\"dataCode\",\"mobile\"]");
+        assertThat(privileged.maskSensitiveFields()).isFalse();
+        assertThat(mapper.logs.get(mapper.logs.size() - 1).operatorId()).isEqualTo(1001L);
+    }
+
+    @Test
+    void exportTaskRejectsUnknownFiltersAndUnauthorizedOrUnsupportedFields() {
+        MdmImportQualityApplicationService service =
+            new MdmImportQualityApplicationService(
+                new MemoryImportQualityMapper(), mdmMapperWithTemplate());
+        ScmAccessContext ordinary = access(Set.of("master-data:importexport:export"));
+
+        assertThatThrownBy(() -> service.createExportTask(
+            new MdmImportQualityApplicationService.CreateExportTaskCommand(
+                "SKU", "{\"unknown\":1}", null, true, 1L, "bad-filter"), ordinary))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("unsupported export filter");
+        assertThatThrownBy(() -> service.createExportTask(
+            new MdmImportQualityApplicationService.CreateExportTaskCommand(
+                "SKU", "{}", "[\"mobile\"]", true, 1L, "no-field"), ordinary))
+            .isInstanceOf(AccessDeniedException.class)
+            .hasMessageContaining("mobile");
+        assertThatThrownBy(() -> service.createExportTask(
+            new MdmImportQualityApplicationService.CreateExportTaskCommand(
+                "SKU", "{}", "[\"notInTemplate\"]", true, 1L, "bad-field"),
+            access(Set.of("mdm:*"))))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("unsupported export field");
+    }
+
+    private static MasterDataRecordApplicationServiceTest.MemoryMdmMapper
+            mdmMapperWithTemplate() {
+        MasterDataRecordApplicationServiceTest.MemoryMdmMapper mapper =
+            new MasterDataRecordApplicationServiceTest.MemoryMdmMapper() {
+                @Override
+                public List<MdmMapper.TemplateRow> listTemplates() {
+                    return List.of(new MdmMapper.TemplateRow(
+                        1L, "SKU-TEMPLATE", "SKU",
+                        "mobile:手机号:STRING:false:false:false;brand:品牌:STRING:false:false:false",
+                        2, 1));
+                }
+            };
+        mapper.types.put("SKU", new MdmMapper.TypeRow(
+            null, "SKU", "商品SKU", "PRODUCT", 2, 2));
+        return mapper;
+    }
+
+    private static ScmAccessContext access(Set<String> permissions) {
+        return new ScmAccessContext(1001L, "mdm-operator", "MDM", permissions,
+            Map.of());
     }
 
     /**
@@ -151,6 +233,25 @@ class MdmImportQualityApplicationServiceTest {
             return importTasks.values().stream().filter(row -> typeCode == null || row.typeCode().equals(typeCode)).filter(row -> status == null || row.status() == status).toList();
         }
 
+        @Override
+        public List<ImportTaskRow> listPendingImportTasks(int limit, int maxRetries) {
+            return importTasks.values().stream().filter(row -> row.status() == ImportTaskAggregate.PENDING)
+                    .limit(limit).toList();
+        }
+
+        @Override
+        public int claimImportTask(String importTaskNo, long version) {
+            return importTasks.containsKey(importTaskNo) ? 1 : 0;
+        }
+
+        @Override
+        public void failImportProcessing(String importTaskNo, String reason, int retryDelaySeconds) {
+        }
+
+        @Override
+        public void releaseImportTask(String importTaskNo) {
+        }
+
         /**
          * 处理当前类型职责中的操作 {@code insertImportTask}。
          *
@@ -169,8 +270,9 @@ class MdmImportQualityApplicationServiceTest {
          * @param row 业务处理参数或成员，类型为 {@code ImportTaskRow}
          */
         @Override
-        public void updateImportTask(ImportTaskRow row) {
+        public int updateImportTask(ImportTaskRow row) {
             importTasks.put(row.importTaskNo(), row);
+            return 1;
         }
 
         /**
@@ -196,6 +298,24 @@ class MdmImportQualityApplicationServiceTest {
             return errors.stream().filter(row -> row.importTaskNo().equals(importTaskNo)).toList();
         }
 
+        @Override
+        public void insertImportStaging(ImportStagingRow row) {
+        }
+
+        @Override
+        public List<ImportStagingRow> listImportStaging(String importTaskNo) {
+            return List.of();
+        }
+
+        @Override
+        public void deleteImportStaging(String importTaskNo) {
+        }
+
+        @Override
+        public void deleteImportErrors(String importTaskNo) {
+            errors.removeIf(row -> row.importTaskNo().equals(importTaskNo));
+        }
+
         /**
          * 处理当前类型职责中的操作 {@code insertExportTask}。
          *
@@ -216,6 +336,29 @@ class MdmImportQualityApplicationServiceTest {
         @Override
         public List<ExportTaskRow> listExportTasks() {
             return exports;
+        }
+
+        @Override
+        public List<ExportTaskRow> listPendingExportTasks(int limit, int maxRetries) {
+            return exports.stream().filter(row -> row.status() == 1).limit(limit).toList();
+        }
+
+        @Override
+        public int claimExportTask(String exportTaskNo, long version) {
+            return 1;
+        }
+
+        @Override
+        public void completeExportTask(String exportTaskNo, String fileUrl) {
+        }
+
+        @Override
+        public void failExportTask(String exportTaskNo, String reason, int retryDelaySeconds) {
+        }
+
+        @Override
+        public ExportTaskRow findExportTask(String exportTaskNo) {
+            return exports.stream().filter(row -> row.exportTaskNo().equals(exportTaskNo)).findFirst().orElse(null);
         }
 
         /**

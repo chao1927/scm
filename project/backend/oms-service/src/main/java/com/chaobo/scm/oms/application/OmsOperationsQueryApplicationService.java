@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -42,7 +43,10 @@ public class OmsOperationsQueryApplicationService {
                 row.organizationId(), row.ownerId(), null, false),
                 row -> matches(query, row.resultId(), row.salesOrderNo(),
                         row.auditType(), row.auditResult(), row.exceptionReason()),
-                this::auditView, OmsOperationsQueryMapper.AuditRow::processedStatus);
+                this::auditView, OmsOperationsQueryMapper.AuditRow::processedStatus,
+                OmsOperationsQueryMapper.AuditRow::resultId,
+                OmsOperationsQueryMapper.AuditRow::createdAt,
+                OmsOperationsQueryMapper.AuditRow::updatedAt);
     }
 
     public AuditView audit(String id, ScmAccessContext access) {
@@ -61,7 +65,10 @@ public class OmsOperationsQueryApplicationService {
                 row -> matches(query, row.reservationRefNo(), row.reservationNo(),
                         row.salesOrderNo(), row.fulfillmentNo(), row.warehouseCode(),
                         row.failReason()),
-                this::reservationView, OmsOperationsQueryMapper.ReservationRow::status);
+                this::reservationView, OmsOperationsQueryMapper.ReservationRow::status,
+                OmsOperationsQueryMapper.ReservationRow::reservationRefNo,
+                OmsOperationsQueryMapper.ReservationRow::createdAt,
+                OmsOperationsQueryMapper.ReservationRow::updatedAt);
     }
 
     public ReservationView reservation(String no, ScmAccessContext access) {
@@ -80,7 +87,10 @@ public class OmsOperationsQueryApplicationService {
                 row.organizationId(), row.ownerId(), row.warehouseId(), true),
                 row -> matches(query, row.cancellationNo(), row.salesOrderNo(),
                         row.fulfillmentNo(), row.reason(), row.warehouseCode()),
-                this::cancellationView, OmsOperationsQueryMapper.CancellationRow::status);
+                this::cancellationView, OmsOperationsQueryMapper.CancellationRow::status,
+                OmsOperationsQueryMapper.CancellationRow::cancellationNo,
+                OmsOperationsQueryMapper.CancellationRow::createdAt,
+                OmsOperationsQueryMapper.CancellationRow::updatedAt);
     }
 
     public CancellationView cancellation(String no, ScmAccessContext access) {
@@ -99,7 +109,10 @@ public class OmsOperationsQueryApplicationService {
                 row.organizationId(), row.ownerId(), row.warehouseId(), true),
                 row -> matches(query, row.afterSaleNo(), row.afterSaleType(),
                         row.salesOrderNo(), row.reason(), row.warehouseCode()),
-                this::afterSaleView, OmsOperationsQueryMapper.AfterSaleRow::status);
+                this::afterSaleView, OmsOperationsQueryMapper.AfterSaleRow::status,
+                OmsOperationsQueryMapper.AfterSaleRow::afterSaleNo,
+                OmsOperationsQueryMapper.AfterSaleRow::createdAt,
+                OmsOperationsQueryMapper.AfterSaleRow::updatedAt);
     }
 
     public AfterSaleView afterSale(String no, ScmAccessContext access) {
@@ -120,7 +133,10 @@ public class OmsOperationsQueryApplicationService {
                 row -> matches(query, row.exceptionNo(), row.salesOrderNo(),
                         row.fulfillmentNo(), row.outboundNo(), row.exceptionType(),
                         row.responsibleParty(), row.reason()),
-                this::exceptionView, OmsOperationsQueryMapper.ExceptionRow::status);
+                this::exceptionView, OmsOperationsQueryMapper.ExceptionRow::status,
+                OmsOperationsQueryMapper.ExceptionRow::exceptionNo,
+                OmsOperationsQueryMapper.ExceptionRow::createdAt,
+                OmsOperationsQueryMapper.ExceptionRow::updatedAt);
     }
 
     public ExceptionView exception(String no, ScmAccessContext access) {
@@ -135,14 +151,21 @@ public class OmsOperationsQueryApplicationService {
 
     public PageResult<OperationLogView> operationLogs(PageQuery query, ScmAccessContext access) {
         access.requirePermission("oms:operation_log:read");
+        PageQuery normalized = validate(query);
+        if ("status".equals(normalized.sortBy())) {
+            throw validation("操作日志不支持按状态排序");
+        }
         Scope scope = scope(access);
-        return page(query, mapper.listOperationLogs(), row -> scope.allows(
+        return page(normalized, mapper.listOperationLogs(), row -> scope.allows(
                 row.organizationId(), row.ownerId(), row.warehouseId(),
                 row.warehouseId() != null),
                 row -> matches(query, String.valueOf(row.logId()), row.operationType(),
                         row.businessNo(), row.salesOrderNo(), row.warehouseCode(),
                         row.idempotencyKey()),
-                this::operationLogView, row -> null);
+                this::operationLogView, null,
+                row -> String.valueOf(row.logId()),
+                OmsOperationsQueryMapper.OperationLogRow::createdAt,
+                OmsOperationsQueryMapper.OperationLogRow::createdAt);
     }
 
     public OperationLogView operationLog(long id, ScmAccessContext access) {
@@ -164,13 +187,20 @@ public class OmsOperationsQueryApplicationService {
             Predicate<R> visible,
             Predicate<R> matched,
             Function<R, V> converter,
-            Function<R, Integer> status) {
+            Function<R, Integer> status,
+            Function<R, String> businessNo,
+            Function<R, LocalDateTime> createdAt,
+            Function<R, LocalDateTime> updatedAt) {
         PageQuery normalized = validate(query);
+        if (normalized.status() != null && status == null) {
+            throw validation("该读模型不支持状态筛选");
+        }
         List<R> filtered = rows.stream()
                 .filter(visible)
                 .filter(matched)
                 .filter(row -> normalized.status() == null
                         || normalized.status().equals(status.apply(row)))
+                .sorted(comparator(normalized, status, businessNo, createdAt, updatedAt))
                 .toList();
         int from = Math.min((normalized.pageNo() - 1) * normalized.pageSize(),
                 filtered.size());
@@ -187,12 +217,69 @@ public class OmsOperationsQueryApplicationService {
         if (query.status() != null && query.status() <= 0) {
             throw validation("状态必须为正数");
         }
+        String sortBy = query.sortBy() == null || query.sortBy().isBlank()
+                ? "updatedAt" : query.sortBy().trim();
+        if (!Set.of("updatedAt", "createdAt", "status", "businessNo")
+                .contains(sortBy)) {
+            throw validation("排序字段仅允许 updatedAt、createdAt、status、businessNo");
+        }
+        String sortDirection = query.sortDirection() == null
+                || query.sortDirection().isBlank()
+                ? "desc" : query.sortDirection().trim().toLowerCase(Locale.ROOT);
+        if (!Set.of("asc", "desc").contains(sortDirection)) {
+            throw validation("排序方向仅允许 asc 或 desc");
+        }
         String keyword = query.keyword() == null || query.keyword().isBlank()
                 ? null : query.keyword().trim().toLowerCase(Locale.ROOT);
         if (keyword != null && keyword.length() > 128) {
             throw validation("查询关键字不能超过 128 个字符");
         }
-        return new PageQuery(keyword, query.status(), query.pageNo(), query.pageSize());
+        return new PageQuery(keyword, query.status(), query.pageNo(), query.pageSize(),
+                sortBy, sortDirection);
+    }
+
+    private static <R> Comparator<R> comparator(
+            PageQuery query,
+            Function<R, Integer> status,
+            Function<R, String> businessNo,
+            Function<R, LocalDateTime> createdAt,
+            Function<R, LocalDateTime> updatedAt) {
+        Comparator<R> comparator = (left, right) -> compareNullable(
+                sortValue(query.sortBy(), left, status, businessNo, createdAt, updatedAt),
+                sortValue(query.sortBy(), right, status, businessNo, createdAt, updatedAt),
+                query.sortDirection());
+        return comparator.thenComparing(businessNo, Comparator.nullsLast(String::compareTo));
+    }
+
+    private static <R> Comparable<?> sortValue(
+            String sortBy,
+            R row,
+            Function<R, Integer> status,
+            Function<R, String> businessNo,
+            Function<R, LocalDateTime> createdAt,
+            Function<R, LocalDateTime> updatedAt) {
+        return switch (sortBy) {
+            case "createdAt" -> createdAt.apply(row);
+            case "status" -> status == null ? null : status.apply(row);
+            case "businessNo" -> businessNo.apply(row);
+            default -> updatedAt.apply(row);
+        };
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static int compareNullable(
+            Comparable left, Comparable right, String direction) {
+        if (left == right) {
+            return 0;
+        }
+        if (left == null) {
+            return 1;
+        }
+        if (right == null) {
+            return -1;
+        }
+        int compared = left.compareTo(right);
+        return "asc".equals(direction) ? compared : -compared;
     }
 
     private static boolean matches(PageQuery query, Object... values) {
@@ -370,7 +457,11 @@ public class OmsOperationsQueryApplicationService {
         }
     }
 
-    public record PageQuery(String keyword, Integer status, int pageNo, int pageSize) {
+    public record PageQuery(String keyword, Integer status, int pageNo, int pageSize,
+                            String sortBy, String sortDirection) {
+        public PageQuery(String keyword, Integer status, int pageNo, int pageSize) {
+            this(keyword, status, pageNo, pageSize, "updatedAt", "desc");
+        }
     }
 
     public record AuditView(String resultId, String salesOrderNo,

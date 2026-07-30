@@ -40,6 +40,22 @@ textarea {
   font: inherit;
 }
 
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid #0f5eb8;
+  outline-offset: 3px;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+}
+
 .auth-loading {
   display: grid;
   min-height: 100vh;
@@ -114,6 +130,11 @@ textarea {
   display: grid;
   gap: 3px;
   padding: 0 7px;
+}
+
+.system-rail-navigation,
+.module-navigation {
+  height: 100%;
 }
 
 .system-rail-item,
@@ -297,6 +318,28 @@ textarea {
   color: var(--color-text-muted);
 }
 
+.scm-breadcrumb ol {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scm-breadcrumb li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.scm-breadcrumb li + li::before {
+  margin-right: 9px;
+  color: var(--color-text-muted);
+  content: "/";
+}
+
 .scm-breadcrumb button {
   overflow: hidden;
   padding: 0;
@@ -474,6 +517,16 @@ textarea {
   display: grid;
   margin-bottom: 16px;
   border: 1px solid var(--color-border);
+}
+
+.command-danger-description,
+.command-submit-error {
+  margin-bottom: 16px;
+}
+
+.command-submit-error:focus-visible,
+.login-error:focus-visible {
+  border-radius: 6px;
 }
 
 .command-impact > div {
@@ -680,7 +733,21 @@ textarea {
   }
 }
 
-@media (max-width: 900px) {
+@media (min-width: 1440px) {
+  .scm-content {
+    padding-right: 32px;
+    padding-left: 32px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .scm-content {
+    padding-right: 20px;
+    padding-left: 20px;
+  }
+}
+
+@media (max-width: 768px) {
   .system-rail {
     position: fixed !important;
     inset: auto 0 0 0;
@@ -808,6 +875,29 @@ textarea {
 
   .login-panel {
     padding: 24px;
+  }
+}
+
+@media (max-width: 360px) {
+  .login-page {
+    padding: 12px;
+  }
+
+  .login-panel {
+    padding: 20px 16px;
+  }
+
+  .scm-header {
+    gap: 8px;
+    padding-inline: 10px !important;
+  }
+
+  .scm-content {
+    padding: 16px 12px 32px;
+  }
+
+  .mobile-system-nav button {
+    min-width: 60px;
   }
 }
 

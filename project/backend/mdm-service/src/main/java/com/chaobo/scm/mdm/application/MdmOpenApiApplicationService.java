@@ -7,8 +7,19 @@ import com.chaobo.scm.mdm.infrastructure.persistence.MdmOpenApiMapper;
 import com.chaobo.scm.mdm.infrastructure.persistence.MdmPublicationMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * MdmOpenApiApplicationService。
@@ -48,6 +59,8 @@ public class MdmOpenApiApplicationService {
      * <p>保存当前对象所需的应用或外部协作依赖；其具体生命周期由所属对象统一管理。
      */
     private final MdmImportQualityApplicationService qualityService;
+    private final ObjectMapper objectMapper;
+    private final Map<String, Snapshot> snapshotCache = new ConcurrentHashMap<>();
 
     /**
      * 创建 MdmOpenApiApplicationService。
@@ -58,11 +71,48 @@ public class MdmOpenApiApplicationService {
      * @param publicationService 应用或外部协作依赖，类型为 {@code MdmPublicationApplicationService}
      * @param qualityService 应用或外部协作依赖，类型为 {@code MdmImportQualityApplicationService}
      */
-    public MdmOpenApiApplicationService(MasterDataRecordMapper recordMapper, MdmOpenApiMapper mapper, MdmPublicationApplicationService publicationService, MdmImportQualityApplicationService qualityService) {
+    public MdmOpenApiApplicationService(MasterDataRecordMapper recordMapper, MdmOpenApiMapper mapper,
+                                        MdmPublicationApplicationService publicationService,
+                                        MdmImportQualityApplicationService qualityService) {
+        this(recordMapper, mapper, publicationService, qualityService, new ObjectMapper());
+    }
+
+    @Autowired
+    public MdmOpenApiApplicationService(MasterDataRecordMapper recordMapper, MdmOpenApiMapper mapper,
+                                        MdmPublicationApplicationService publicationService,
+                                        MdmImportQualityApplicationService qualityService,
+                                        ObjectMapper objectMapper) {
         this.recordMapper = recordMapper;
         this.mapper = mapper;
         this.publicationService = publicationService;
         this.qualityService = qualityService;
+        this.objectMapper = objectMapper;
+    }
+
+    public OpenApiAccess authenticate(String appCode, long timestamp, String signature) {
+        return authenticate(appCode, timestamp, signature, "legacy", "");
+    }
+
+    public OpenApiAccess authenticate(String appCode, long timestamp, String signature,
+                                      String operation, Object payload) {
+        if (appCode == null || appCode.isBlank() || signature == null || signature.isBlank()) {
+            throw new IllegalArgumentException("openapi identity headers are required");
+        }
+        if (Math.abs(Instant.now().getEpochSecond() - timestamp) > 300) {
+            throw new IllegalArgumentException("openapi signature timestamp expired");
+        }
+        MdmOpenApiMapper.OpenApiClientRow client = mapper.findClient(appCode);
+        if (client == null || !client.enabled()) {
+            throw new IllegalStateException("openapi client is disabled or unknown");
+        }
+        String expected = hmac(client.secretValue(), appCode + "\n" + timestamp + "\n" + operation
+                + "\n" + sha256(payload));
+        if (!java.security.MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8),
+                signature.getBytes(StandardCharsets.UTF_8))) {
+            throw new IllegalArgumentException("openapi signature is invalid");
+        }
+        return new OpenApiAccess(appCode, csvSet(client.typeScope()), csvSet(client.dataCodePrefixes()),
+                fieldRules(client.fieldAllowlist()));
     }
 
     /**
@@ -73,7 +123,12 @@ public class MdmOpenApiApplicationService {
      * @return 查询并返回的结果，类型为 {@code QueryResponse}
      */
     public QueryResponse query(QueryRequest request) {
-        List<Snapshot> snapshots = request.items().stream().map(item -> snapshot(item.typeCode(), item.dataCode(), true)).toList();
+        return query(OpenApiAccess.internal(), request);
+    }
+
+    public QueryResponse query(OpenApiAccess access, QueryRequest request) {
+        List<Snapshot> snapshots = request.items().stream()
+                .map(item -> snapshot(access, item.typeCode(), item.dataCode(), false)).toList();
         return new QueryResponse(snapshots);
     }
 
@@ -85,7 +140,12 @@ public class MdmOpenApiApplicationService {
      * @return 校验业务约束的结果，类型为 {@code ValidateResponse}
      */
     public ValidateResponse validate(ValidateRequest request) {
-        List<ValidateItemResult> results = request.items().stream().map(this::validateOne).toList();
+        return validate(OpenApiAccess.internal(), request);
+    }
+
+    public ValidateResponse validate(OpenApiAccess access, ValidateRequest request) {
+        List<ValidateItemResult> results = request.items().stream()
+                .map(item -> validateOne(access, item)).toList();
         boolean valid = results.stream().allMatch(ValidateItemResult::valid);
         return new ValidateResponse(valid, results);
     }
@@ -100,6 +160,11 @@ public class MdmOpenApiApplicationService {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code Snapshot}
      */
     public Snapshot snapshot(String typeCode, String dataCode, boolean includeDisabled) {
+        return snapshot(OpenApiAccess.internal(), typeCode, dataCode, includeDisabled);
+    }
+
+    public Snapshot snapshot(OpenApiAccess access, String typeCode, String dataCode, boolean includeDisabled) {
+        ensureScope(access, typeCode, dataCode);
         MasterDataRecordMapper.RecordRow row = recordMapper.findRecordByCode(typeCode, dataCode);
         if (row == null) {
             throw new IllegalArgumentException("master data snapshot not found");
@@ -107,7 +172,25 @@ public class MdmOpenApiApplicationService {
         if (!includeDisabled && row.status() != MasterDataRecordAggregate.ENABLED) {
             throw new IllegalStateException("master data is not enabled");
         }
-        return new Snapshot(row.recordNo(), row.typeCode(), row.dataCode(), row.dataName(), row.dataPayload(), row.status(), row.currentVersionNo(), row.version());
+        MdmOpenApiMapper.OpenApiSnapshotRow projection = mapper.findSnapshot(typeCode, dataCode);
+        Snapshot source;
+        if (projection != null && projection.version() == row.version()) {
+            source = new Snapshot(projection.recordNo(), projection.typeCode(), projection.dataCode(),
+                    projection.dataName(), projection.dataPayload(), projection.status(),
+                    projection.currentVersionNo(), projection.version());
+        } else {
+            mapper.upsertSnapshot(new MdmOpenApiMapper.OpenApiSnapshotRow(row.recordNo(), row.typeCode(),
+                    row.dataCode(), row.dataName(), row.dataPayload(), row.status(), row.currentVersionNo(),
+                    row.version()));
+            source = toSnapshot(row);
+        }
+        String policyHash = Integer.toHexString(java.util.Objects.hash(access.allowedTypes(),
+                access.dataCodePrefixes(), access.fieldsByType()));
+        String cacheKey = access.appCode() + ':' + policyHash + ':' + typeCode + ':' + dataCode + ':' + row.version();
+        String cachePrefix = access.appCode() + ':';
+        snapshotCache.keySet().removeIf(key -> key.startsWith(cachePrefix) && !key.equals(cacheKey));
+        Snapshot finalSource = source;
+        return snapshotCache.computeIfAbsent(cacheKey, ignored -> filterSnapshot(access, finalSource));
     }
 
     /**
@@ -160,19 +243,106 @@ public class MdmOpenApiApplicationService {
      * @param item 业务处理参数或成员，类型为 {@code ValidateItem}
      * @return 校验业务约束的结果，类型为 {@code ValidateItemResult}
      */
-    private ValidateItemResult validateOne(ValidateItem item) {
+    private ValidateItemResult validateOne(OpenApiAccess access, ValidateItem item) {
+        try {
+            ensureScope(access, item.typeCode(), item.dataCode());
+        } catch (RuntimeException exception) {
+            return ValidateItemResult.failed(item, "OUT_OF_SCOPE", exception.getMessage(), null);
+        }
         MasterDataRecordMapper.RecordRow row = recordMapper.findRecordByCode(item.typeCode(), item.dataCode());
         if (row == null) {
             return ValidateItemResult.failed(item, "NOT_FOUND", "master data does not exist", null);
         }
         if (item.expectedVersionNo() != null && row.currentVersionNo() != item.expectedVersionNo()) {
-            return ValidateItemResult.failed(item, "VERSION_MISMATCH", "master data version mismatch", toSnapshot(row));
+            return ValidateItemResult.failed(item, "VERSION_MISMATCH", "master data version mismatch",
+                    filterSnapshot(access, toSnapshot(row)));
         }
         int requiredStatus = item.requiredStatus() == null ? MasterDataRecordAggregate.ENABLED : item.requiredStatus();
         if (row.status() != requiredStatus) {
-            return ValidateItemResult.failed(item, "STATUS_MISMATCH", "master data status mismatch", toSnapshot(row));
+            return ValidateItemResult.failed(item, "STATUS_MISMATCH", "master data status mismatch",
+                    filterSnapshot(access, toSnapshot(row)));
         }
-        return new ValidateItemResult(item.businessKey(), item.typeCode(), item.dataCode(), true, null, null, toSnapshot(row));
+        return new ValidateItemResult(item.businessKey(), item.typeCode(), item.dataCode(), true, null, null,
+                filterSnapshot(access, toSnapshot(row)));
+    }
+
+    private void ensureScope(OpenApiAccess access, String typeCode, String dataCode) {
+        if (!access.allowedTypes().contains("*") && !access.allowedTypes().contains(typeCode)) {
+            throw new IllegalStateException("master data type is outside application scope");
+        }
+        if (!access.dataCodePrefixes().isEmpty()
+                && access.dataCodePrefixes().stream().noneMatch(dataCode::startsWith)) {
+            throw new IllegalStateException("master data code is outside application scope");
+        }
+    }
+
+    private Snapshot filterSnapshot(OpenApiAccess access, Snapshot snapshot) {
+        Set<String> allowedFields = access.fieldsByType().getOrDefault(snapshot.typeCode(),
+                access.fieldsByType().getOrDefault("*", Set.of()));
+        if (allowedFields.contains("*")) {
+            return snapshot;
+        }
+        if (allowedFields.isEmpty()) {
+            return new Snapshot(snapshot.recordNo(), snapshot.typeCode(), snapshot.dataCode(), snapshot.dataName(),
+                    "{}", snapshot.status(), snapshot.currentVersionNo(), snapshot.version());
+        }
+        try {
+            Map<String, Object> payload = objectMapper.readValue(snapshot.dataPayload(), new TypeReference<>() { });
+            Map<String, Object> filtered = new LinkedHashMap<>();
+            for (String field : allowedFields) {
+                if (payload.containsKey(field)) {
+                    filtered.put(field, payload.get(field));
+                }
+            }
+            return new Snapshot(snapshot.recordNo(), snapshot.typeCode(), snapshot.dataCode(), snapshot.dataName(),
+                    objectMapper.writeValueAsString(filtered), snapshot.status(), snapshot.currentVersionNo(),
+                    snapshot.version());
+        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+            throw new IllegalStateException("master data payload cannot be filtered", exception);
+        }
+    }
+
+    private String hmac(String secret, String content) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            return java.util.HexFormat.of().formatHex(mac.doFinal(content.getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.GeneralSecurityException exception) {
+            throw new IllegalStateException("HMAC-SHA256 unavailable", exception);
+        }
+    }
+
+    private String sha256(Object payload) {
+        try {
+            byte[] bytes = payload instanceof String text ? text.getBytes(StandardCharsets.UTF_8)
+                    : objectMapper.writeValueAsBytes(payload);
+            return java.util.HexFormat.of().formatHex(
+                    java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+        } catch (java.security.GeneralSecurityException | com.fasterxml.jackson.core.JsonProcessingException exception) {
+            throw new IllegalStateException("openapi request cannot be signed", exception);
+        }
+    }
+
+    private Set<String> csvSet(String value) {
+        if (value == null || value.isBlank()) {
+            return Set.of();
+        }
+        return java.util.Arrays.stream(value.split(",")).map(String::trim).filter(item -> !item.isBlank())
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
+    private Map<String, Set<String>> fieldRules(String value) {
+        if (value == null || value.isBlank()) {
+            return Map.of();
+        }
+        Map<String, Set<String>> rules = new LinkedHashMap<>();
+        for (String rule : value.split(";")) {
+            String[] parts = rule.split(":", 2);
+            if (parts.length == 2) {
+                rules.put(parts[0].trim(), csvSet(parts[1]));
+            }
+        }
+        return Map.copyOf(rules);
     }
 
     /**
@@ -305,6 +475,13 @@ public class MdmOpenApiApplicationService {
      * @since 0.1.0
      */
     public record Snapshot(String recordNo, String typeCode, String dataCode, String dataName, String dataPayload, int status, int currentVersionNo, long version) {
+    }
+
+    public record OpenApiAccess(String appCode, Set<String> allowedTypes, Set<String> dataCodePrefixes,
+                                Map<String, Set<String>> fieldsByType) {
+        static OpenApiAccess internal() {
+            return new OpenApiAccess("internal", Set.of("*"), Set.of(), Map.of("*", Set.of("*")));
+        }
     }
 
     /**

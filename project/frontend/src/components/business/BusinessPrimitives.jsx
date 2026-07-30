@@ -54,6 +54,20 @@ export function QueryError({ error, onRetry }) {
   )
 }
 
+export function InlineQueryError({ error, onRetry, retrying = false }) {
+  const detail = error?.message || error?.detail || '接口请求失败'
+  return (
+    <Alert
+      type="error"
+      showIcon
+      role="alert"
+      title="数据加载失败"
+      description={detail}
+      action={<Button icon={<ReloadOutlined />} loading={retrying} onClick={onRetry}>重新加载</Button>}
+    />
+  )
+}
+
 export function EmptyBusinessData({ description = '暂无业务数据' }) {
   return <div className="content-state"><Empty description={description} /></div>
 }

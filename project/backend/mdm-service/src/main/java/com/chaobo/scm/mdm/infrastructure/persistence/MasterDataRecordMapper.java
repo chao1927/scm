@@ -54,6 +54,12 @@ public interface MasterDataRecordMapper {
     @Select("select record_no recordNo,type_code typeCode,data_code dataCode,data_name dataName,data_payload dataPayload,record_status status,current_version_no currentVersionNo,reason,version from mdm_master_data_record where (#{typeCode} is null or type_code=#{typeCode}) and (#{status} is null or record_status=#{status}) order by id desc limit #{limit} offset #{offset}")
     List<RecordRow> listRecords(@Param("typeCode") String typeCode, @Param("status") Integer status, @Param("limit") int limit, @Param("offset") int offset);
 
+    @Select("select record_no recordNo,type_code typeCode,data_code dataCode,data_name dataName,data_payload dataPayload,record_status status,current_version_no currentVersionNo,reason,version from mdm_master_data_record where type_code=#{typeCode} and (#{status} is null or record_status=#{status}) and (#{dataCodePrefix} is null or data_code like concat(#{dataCodePrefix},'%')) order by id desc limit #{limit}")
+    List<RecordRow> listRecordsForExport(@Param("typeCode") String typeCode,
+                                         @Param("status") Integer status,
+                                         @Param("dataCodePrefix") String dataCodePrefix,
+                                         @Param("limit") int limit);
+
     /**
      * 处理当前类型职责中的操作 {@code insertRecord}。
      *

@@ -328,6 +328,15 @@ class MasterDataRecordApplicationServiceTest {
             return records.values().stream().filter(row -> typeCode == null || row.typeCode().equals(typeCode)).filter(row -> status == null || row.status() == status).skip(offset).limit(limit).toList();
         }
 
+        @Override
+        public List<RecordRow> listRecordsForExport(String typeCode, Integer status, String dataCodePrefix, int limit) {
+            return records.values().stream()
+                    .filter(row -> row.typeCode().equals(typeCode))
+                    .filter(row -> status == null || row.status() == status)
+                    .filter(row -> dataCodePrefix == null || row.dataCode().startsWith(dataCodePrefix))
+                    .limit(limit).toList();
+        }
+
         /**
          * 处理当前类型职责中的操作 {@code insertRecord}。
          *

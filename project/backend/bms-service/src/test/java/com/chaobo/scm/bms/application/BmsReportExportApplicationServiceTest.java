@@ -30,7 +30,7 @@ class BmsReportExportApplicationServiceTest {
         RecordingStorage storage = new RecordingStorage();
         BmsReportExportApplicationService service =
             new BmsReportExportApplicationService(tasks,
-                new BmsReadQueryApplicationServiceTest.QueryMapper(), storage, 3);
+                new BmsReadQueryApplicationServiceTest.QueryMapper(), storage, 3, 300);
         ScmAccessContext access = access("BO-A");
 
         BmsReportExportMapper.ExportTaskRow created = service.enqueue(
@@ -55,17 +55,19 @@ class BmsReportExportApplicationServiceTest {
         storage.fail = true;
         BmsReportExportApplicationService service =
             new BmsReportExportApplicationService(tasks,
-                new BmsReadQueryApplicationServiceTest.QueryMapper(), storage, 1);
+                new BmsReadQueryApplicationServiceTest.QueryMapper(), storage, 1, 300);
         BmsReportExportMapper.ExportTaskRow task = service.enqueue(
             new BmsReportExportApplicationService.CreateCommand(
                 "BO-A", "2026-07", "export-fail"), access("BO-A"));
 
         assertThat(service.dispatch(1)).isZero();
         assertThat(tasks.find(task.exportNo()).status()).isEqualTo(5);
-        assertThatThrownBy(() -> service.retry(task.exportNo(), access("BO-B")))
+        assertThatThrownBy(() -> service.retry(
+            task.exportNo(), "财务人工恢复", access("BO-B")))
             .isInstanceOf(BusinessException.class);
-        service.retry(task.exportNo(), access("BO-A"));
+        service.retry(task.exportNo(), "财务人工恢复", access("BO-A"));
         assertThat(tasks.find(task.exportNo()).status()).isEqualTo(1);
+        assertThat(tasks.lastAuditReason).isEqualTo("财务人工恢复");
     }
 
     private static ScmAccessContext access(String objectCode) {
@@ -101,6 +103,7 @@ class BmsReportExportApplicationServiceTest {
     private static final class MemoryExportMapper implements BmsReportExportMapper {
 
         private final Map<String, ExportTaskRow> rows = new LinkedHashMap<>();
+        private String lastAuditReason;
 
         @Override
         public ExportTaskRow findByIdempotencyKey(String idempotencyKey) {
@@ -135,7 +138,7 @@ class BmsReportExportApplicationServiceTest {
         }
 
         @Override
-        public int claim(String exportNo, long version) {
+        public int claim(String exportNo, long version, int leaseSeconds) {
             ExportTaskRow row = rows.get(exportNo);
             if (row == null || row.version() != version
                 || row.status() != 1 && row.status() != 3) {
@@ -145,6 +148,11 @@ class BmsReportExportApplicationServiceTest {
                 row.objectReference(), row.recordCount(), row.lastError(),
                 row.version() + 1));
             return 1;
+        }
+
+        @Override
+        public int recoverTimedOutProcessing() {
+            return 0;
         }
 
         @Override
@@ -173,6 +181,12 @@ class BmsReportExportApplicationServiceTest {
             }
             rows.put(exportNo, copy(row, 1, 0, row.objectReference(),
                 row.recordCount(), null, row.version() + 1));
+            return 1;
+        }
+
+        @Override
+        public int insertRetryAudit(String exportNo, long operatorId, String reason) {
+            lastAuditReason = reason;
             return 1;
         }
 

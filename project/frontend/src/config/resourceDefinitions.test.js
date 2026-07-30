@@ -48,11 +48,11 @@ describe('resource definitions', () => {
       supplier: 6,
       purchase: 11,
       wms: 14,
-      inventory: 5,
-      oms: 10,
+      inventory: 10,
+      oms: 11,
       tms: 9,
-      bms: 3,
-      mdm: 9,
+      bms: 10,
+      mdm: 11,
       iam: 8,
     })
   })

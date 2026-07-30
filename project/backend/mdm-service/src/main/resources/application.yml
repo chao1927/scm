@@ -21,6 +21,18 @@ mybatis:
 server:
   port: 8098
 scm:
+  mdm:
+    file-storage:
+      type: ${MDM_FILE_STORAGE_TYPE:local}
+      local:
+        root: ${MDM_FILE_STORAGE_LOCAL_ROOT:./data/mdm-files}
+    file-task:
+      batch-size: ${MDM_FILE_TASK_BATCH_SIZE:10}
+      fixed-delay: ${MDM_FILE_TASK_FIXED_DELAY_MS:2000}
+      retry-delay-seconds: ${MDM_FILE_TASK_RETRY_DELAY_SECONDS:60}
+      max-retries: ${MDM_FILE_TASK_MAX_RETRIES:8}
+      export-max-rows: ${MDM_EXPORT_MAX_ROWS:10000}
+      max-upload-bytes: ${MDM_MAX_UPLOAD_BYTES:10485760}
   security:
     hmac-secret: ${IAM_JWT_SECRET:}
     permission-namespace: mdm

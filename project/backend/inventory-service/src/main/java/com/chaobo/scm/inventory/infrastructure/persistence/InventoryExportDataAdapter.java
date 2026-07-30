@@ -47,12 +47,12 @@ public class InventoryExportDataAdapter implements InventoryExportDataPort {
         InventoryOperationReadModelPort.OperationFilter operations =
                 new InventoryOperationReadModelPort.OperationFilter(
                         sku, batchNo, status, 0, maxRows, "updated_at desc");
-        List<?> rows = switch (task.exportType()) {
-            case "RESERVATION" -> readModel.reservations(scope, operations).records();
-            case "FREEZE" -> readModel.freezes(scope, operations).records();
-            case "ADJUSTMENT" -> readModel.adjustments(scope, operations).records();
-            case "EVENT_LOG" -> readModel.eventLogs(scope, operations).records();
-            case "OPERATION_LOG" -> readModel.operationLogs(scope, operations).records();
+        InventoryOperationReadModelPort.Page<?> page = switch (task.exportType()) {
+            case "RESERVATION" -> readModel.reservations(scope, operations);
+            case "FREEZE" -> readModel.freezes(scope, operations);
+            case "ADJUSTMENT" -> readModel.adjustments(scope, operations);
+            case "EVENT_LOG" -> readModel.eventLogs(scope, operations);
+            case "OPERATION_LOG" -> readModel.operationLogs(scope, operations);
             case "BOOK_PHYSICAL", "STOCK_AGE", "SLOW_MOVING", "EXPIRY" ->
                     readModel.metrics(
                             InventoryOperationReadModelPort.MetricType.valueOf(task.exportType()),
@@ -63,11 +63,14 @@ public class InventoryExportDataAdapter implements InventoryExportDataPort {
                                     positive(query.get("slowMovingDays"), 90),
                                     positive(query.get("expiryWarningDays"), 30),
                                     0,
-                                    maxRows))
-                            .records();
+                                    maxRows));
             default -> throw new IllegalArgumentException("不支持的库存导出类型");
         };
-        return rows.stream()
+        if (page.total() > maxRows) {
+            throw new IllegalStateException(
+                    "导出数据量超过上限 " + maxRows + "，请缩小查询范围");
+        }
+        return page.records().stream()
                 .map(row -> json.convertValue(row, OBJECT_MAP))
                 .toList();
     }

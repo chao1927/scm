@@ -98,11 +98,28 @@ public interface BmsReportExportMapper {
     @Update("""
         update bms_report_export
            set export_status=2,attempt_count=attempt_count+1,version=version+1,
+               next_retry_at=date_add(now(3),interval #{leaseSeconds} second),
                updated_at=now(3)
          where export_no=#{exportNo} and version=#{version}
            and export_status in (1,3)
         """)
-    int claim(@Param("exportNo") String exportNo, @Param("version") long version);
+    int claim(@Param("exportNo") String exportNo, @Param("version") long version,
+              @Param("leaseSeconds") int leaseSeconds);
+
+    /**
+     * 将执行器崩溃留下的超时处理任务恢复到重试或最终失败。
+     *
+     * @return 恢复任务数
+     */
+    @Update("""
+        update bms_report_export
+           set export_status=case when attempt_count>=max_attempts then 5 else 3 end,
+               last_error='report export worker lease expired',
+               next_retry_at=case when attempt_count>=max_attempts then null else now(3) end,
+               version=version+1,updated_at=now(3)
+         where export_status=2 and next_retry_at<=now(3)
+        """)
+    int recoverTimedOutProcessing();
 
     /**
      * 标记导出成功。
@@ -143,6 +160,18 @@ public interface BmsReportExportMapper {
          where export_no=#{exportNo} and export_status=5
         """)
     int retryFinalFailure(@Param("exportNo") String exportNo);
+
+    /**
+     * 记录人工恢复导出任务的审计事实。
+     */
+    @Insert("""
+        insert into bms_operation_audit_log(
+            operation_type,business_no,operator_id,idempotency_key,created_at)
+        values('REPORT_EXPORT_MANUAL_RETRY',#{exportNo},#{operatorId},#{reason},now(3))
+        """)
+    int insertRetryAudit(@Param("exportNo") String exportNo,
+                         @Param("operatorId") long operatorId,
+                         @Param("reason") String reason);
 
     /**
      * 报表导出任务。

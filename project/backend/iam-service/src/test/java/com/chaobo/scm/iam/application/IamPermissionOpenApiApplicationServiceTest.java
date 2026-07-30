@@ -39,7 +39,10 @@ class IamPermissionOpenApiApplicationServiceTest {
         mapper.roles.add(new IamPermissionOpenApiMapper.RoleGrantRow("ADMIN", "管理员"));
         mapper.permissions.add(new IamPermissionOpenApiMapper.PermissionGrantRow("purchase:po:read", "PURCHASE", "采购读取"));
         mapper.scopes.add(new IamPermissionOpenApiMapper.DataScopeGrantRow("WAREHOUSE", "WH-1"));
-        IamPermissionOpenApiApplicationService service = new IamPermissionOpenApiApplicationService(iamMapper, mapper, jwt);
+        TestTokenCache tokenCache = new TestTokenCache();
+        tokenCache.store(new TokenCachePort.OnlineSession(1, 1001, "AT-1", "RT-1", 0,
+                now + 3600, now + 86400, true));
+        IamPermissionOpenApiApplicationService service = new IamPermissionOpenApiApplicationService(iamMapper, mapper, jwt, tokenCache);
         IamPermissionOpenApiApplicationService.TokenValidationResult token = service.validateToken(new IamPermissionOpenApiApplicationService.TokenValidationCommand(accessToken));
         IamPermissionOpenApiApplicationService.PermissionCheckResult check = service.checkPermission(new IamPermissionOpenApiApplicationService.PermissionCheckCommand(accessToken, "PURCHASE", "purchase:po:read"));
         IamPermissionOpenApiApplicationService.DataScopeResolveResult scope = service.resolveDataScope(new IamPermissionOpenApiApplicationService.DataScopeResolveCommand(accessToken, "PURCHASE", "WAREHOUSE"));
@@ -63,7 +66,10 @@ class IamPermissionOpenApiApplicationServiceTest {
         String accessToken = jwt.issue(new IamJwtService.TokenClaims("1001", "admin", "IAM", "AT-1", "ACCESS", now, now + 3600));
         iamMapper.users.add(new IamMapper.UserRow(1001, "admin", "HASH:ok", 1, 0, 1));
         iamMapper.sessions.add(new IamMapper.SessionRow(1, 1001, accessToken, "refresh", 2, 0));
-        IamPermissionOpenApiApplicationService service = new IamPermissionOpenApiApplicationService(iamMapper, mapper, jwt);
+        TestTokenCache tokenCache = new TestTokenCache();
+        tokenCache.store(new TokenCachePort.OnlineSession(1, 1001, "AT-2", "RT-2", 0,
+                now + 3600, now + 86400, false));
+        IamPermissionOpenApiApplicationService service = new IamPermissionOpenApiApplicationService(iamMapper, mapper, jwt, tokenCache);
         assertThatThrownBy(() -> service.validateToken(new IamPermissionOpenApiApplicationService.TokenValidationCommand(accessToken))).isInstanceOf(BusinessException.class);
     }
 

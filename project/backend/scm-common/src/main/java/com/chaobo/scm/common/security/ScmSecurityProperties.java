@@ -4,6 +4,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 
 /**
  * ScmSecurityProperties。
@@ -34,6 +35,14 @@ public class ScmSecurityProperties {
      * <p>保存当前对象所需的业务处理参数或成员；其具体生命周期由所属对象统一管理。
      */
     private String hmacSecret = "";
+
+    private String activeKid = "active";
+
+    private String previousKid = "";
+
+    private String previousHmacSecret = "";
+
+    private long previousValidUntilEpochSecond;
 
     /**
      * permissionNamespace（类型：{@code String}）。
@@ -72,6 +81,34 @@ public class ScmSecurityProperties {
         this.hmacSecret = hmacSecret == null ? "" : hmacSecret;
     }
 
+    public String getActiveKid() {
+        return activeKid;
+    }
+
+    public void setActiveKid(String activeKid) {
+        this.activeKid = activeKid == null ? "" : activeKid.trim();
+    }
+
+    public String getPreviousKid() {
+        return previousKid;
+    }
+
+    public void setPreviousKid(String previousKid) {
+        this.previousKid = previousKid == null ? "" : previousKid.trim();
+    }
+
+    public void setPreviousHmacSecret(String previousHmacSecret) {
+        this.previousHmacSecret = previousHmacSecret == null ? "" : previousHmacSecret;
+    }
+
+    public long getPreviousValidUntilEpochSecond() {
+        return previousValidUntilEpochSecond;
+    }
+
+    public void setPreviousValidUntilEpochSecond(long previousValidUntilEpochSecond) {
+        this.previousValidUntilEpochSecond = previousValidUntilEpochSecond;
+    }
+
     /**
      * 查询并返回 {@code getPermissionNamespace}。
      *
@@ -99,9 +136,27 @@ public class ScmSecurityProperties {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code SecretKey}
      */
     public SecretKey secretKey() {
-        byte[] bytes = hmacSecret.getBytes(StandardCharsets.UTF_8);
+        return activeSecretKey();
+    }
+
+    public SecretKey activeSecretKey() {
+        return secretKey(hmacSecret, "scm.security.hmac-secret");
+    }
+
+    public Optional<SecretKey> previousSecretKey() {
+        if (previousKid.isBlank() && previousHmacSecret.isBlank()) {
+            return Optional.empty();
+        }
+        if (previousKid.isBlank() || previousHmacSecret.isBlank()) {
+            throw new IllegalStateException("previous JWT kid and secret must be configured together");
+        }
+        return Optional.of(secretKey(previousHmacSecret, "scm.security.previous-hmac-secret"));
+    }
+
+    private static SecretKey secretKey(String secret, String propertyName) {
+        byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
         if (bytes.length < MINIMUM_HMAC_SECRET_BYTES) {
-            throw new IllegalStateException("scm.security.hmac-secret must contain at least 32 bytes");
+            throw new IllegalStateException(propertyName + " must contain at least 32 bytes");
         }
         return new SecretKeySpec(bytes, "HmacSHA256");
     }

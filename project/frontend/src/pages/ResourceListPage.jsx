@@ -1,16 +1,42 @@
 import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Input, message, Space, Table, Tabs } from 'antd'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom'
 import { hasPermission } from '../auth/menuAccess'
-import { BusinessPageHeader, CapabilityPending, formatCellValue, StatusTag } from '../components/business/BusinessPrimitives'
+import { BusinessPageHeader, CapabilityPending, formatCellValue, InlineQueryError, StatusTag } from '../components/business/BusinessPrimitives'
 import CommandDialog from '../components/business/CommandDialog'
 import AsnCreateDrawer from '../components/business/AsnCreateDrawer'
 import { findResourceDefinition, normalizePage, recordIdentity } from '../config/resourceDefinitions'
 import { findSystem, findSystemPage } from '../config/systemCatalog'
 
 const defaultPageSize = 20
+
+export function readListFilters(searchParams) {
+  return {
+    pageNo: Math.max(1, Number(searchParams.get('pageNo')) || 1),
+    pageSize: Math.max(1, Number(searchParams.get('pageSize')) || defaultPageSize),
+    keyword: searchParams.get('keyword') || undefined,
+    status: searchParams.get('status') || undefined,
+  }
+}
+
+export function mergeListSearchParams(searchParams, patch) {
+  const next = new URLSearchParams(searchParams)
+  Object.entries(patch).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') next.delete(key)
+    else next.set(key, String(value))
+  })
+  return next
+}
+
+export function listEmptyText(query) {
+  return query.isError ? '数据加载失败，请重试' : '暂无业务数据'
+}
+
+export function listPaginationPatch(filters, pageNo, pageSize) {
+  return { pageNo: pageSize === filters.pageSize ? pageNo : 1, pageSize }
+}
 
 export default function ResourceListPage() {
   const { systemId, pageId } = useParams()
@@ -23,12 +49,12 @@ export default function ResourceListPage() {
   const [commandState, setCommandState] = useState({ action: null, record: null })
   const [createOpen, setCreateOpen] = useState(false)
   const { session } = useOutletContext()
-  const filters = {
-    pageNo: Math.max(1, Number(searchParams.get('pageNo')) || 1),
-    pageSize: Math.max(1, Number(searchParams.get('pageSize')) || defaultPageSize),
-    keyword: searchParams.get('keyword') || undefined,
-    status: searchParams.get('status') || undefined,
-  }
+  const filters = readListFilters(searchParams)
+  const [keywordDraft, setKeywordDraft] = useState(filters.keyword || '')
+
+  useEffect(() => {
+    setKeywordDraft(filters.keyword || '')
+  }, [filters.keyword])
 
   const query = useQuery({
     queryKey: ['business-resource', systemId, pageId, filters],
@@ -52,12 +78,7 @@ export default function ResourceListPage() {
   }, [pageResult.total, records])
 
   const updateSearch = (patch) => {
-    const next = new URLSearchParams(searchParams)
-    Object.entries(patch).forEach(([key, value]) => {
-      if (value === undefined || value === null || value === '') next.delete(key)
-      else next.set(key, String(value))
-    })
-    setSearchParams(next)
+    setSearchParams(mergeListSearchParams(searchParams, patch))
   }
 
   const actionMutation = useMutation({
@@ -136,18 +157,20 @@ export default function ResourceListPage() {
           <Input.Search
             allowClear
             prefix={<SearchOutlined />}
-            defaultValue={filters.keyword}
+            value={keywordDraft}
             placeholder="输入编号、对象或负责人"
+            onChange={(event) => setKeywordDraft(event.target.value)}
             onSearch={(keyword) => updateSearch({ keyword, pageNo: 1 })}
           />
-          <Button onClick={() => setSearchParams({})}>重置</Button>
+          <Button onClick={() => setSearchParams(new URLSearchParams())}>重置</Button>
         </div>
+        {query.isError && <InlineQueryError error={query.error} retrying={query.isFetching} onRetry={() => query.refetch()} />}
         <Table
           rowKey={(record) => recordIdentity(definition, record)}
           columns={columns}
           dataSource={records}
           loading={query.isLoading}
-          locale={{ emptyText: query.isError ? (query.error?.message || '接口请求失败') : '暂无业务数据' }}
+          locale={{ emptyText: listEmptyText(query) }}
           scroll={{ x: Math.max(900, columns.reduce((total, item) => total + Number(item.width || 140), 0)) }}
           pagination={{
             current: pageResult.pageNo,
@@ -155,7 +178,7 @@ export default function ResourceListPage() {
             total: pageResult.total,
             showSizeChanger: true,
             showTotal: (total) => `共 ${total} 条`,
-            onChange: (pageNo, pageSize) => updateSearch({ pageNo, pageSize }),
+            onChange: (pageNo, pageSize) => updateSearch(listPaginationPatch(filters, pageNo, pageSize)),
           }}
         />
       </section>
