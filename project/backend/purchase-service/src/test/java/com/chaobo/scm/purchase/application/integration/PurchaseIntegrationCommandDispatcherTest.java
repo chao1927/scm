@@ -2,12 +2,15 @@ package com.chaobo.scm.purchase.application.integration;
 
 import com.chaobo.scm.purchase.infrastructure.persistence.integration.IntegrationCommandMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -39,16 +42,43 @@ class PurchaseIntegrationCommandDispatcherTest {
      *
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
      */
-    @Test
-    void gatewayFailureSchedulesRetryAndEventuallyMarksFinalFailure() {
+    @ParameterizedTest
+    @ValueSource(strings = {"目标返回 4xx", "目标返回 5xx", "Read timed out"})
+    void everyTransportFailureSchedulesRetryAndEventuallyMarksFinalFailure(
+            String failureReason
+    ) {
         MemoryMapper mapper = new MemoryMapper(row(2));
         PurchaseIntegrationCommandDispatcher dispatcher = dispatcher(mapper, command -> {
-            throw new IllegalStateException("timeout");
+            throw new IllegalStateException(failureReason);
         }, 3);
         dispatcher.dispatch();
-        assertThat(mapper.retryReason).isEqualTo("timeout");
+        assertThat(mapper.retryReason).isEqualTo(failureReason);
         assertThat(mapper.finalFailure).isTrue();
         assertThat(mapper.nextRetryAt).isAfter(OffsetDateTime.now());
+    }
+
+    /**
+     * 同一命令被并发扫描时，只有成功完成状态比较更新的实例允许发送。
+     */
+    @Test
+    void duplicateClaimThatLosesCompareAndSetIsNotSent() {
+        MemoryMapper mapper = new MemoryMapper(row(0));
+        mapper.markExecutingResult = 0;
+        var gatewayCalls = new AtomicInteger();
+        PurchaseIntegrationCommandDispatcher dispatcher = dispatcher(
+                mapper,
+                command -> {
+                    gatewayCalls.incrementAndGet();
+                    return new IntegrationCommandGateway.DispatchReceipt("unexpected");
+                },
+                3
+        );
+
+        dispatcher.dispatch();
+
+        assertThat(gatewayCalls).hasValue(0);
+        assertThat(mapper.successReference).isNull();
+        assertThat(mapper.retryReason).isNull();
     }
 
     /**
@@ -155,6 +185,11 @@ class PurchaseIntegrationCommandDispatcherTest {
         boolean finalFailure;
 
         /**
+         * 模拟数据库状态比较更新结果；0 表示命令已被其他实例领取。
+         */
+        int markExecutingResult = 1;
+
+        /**
          * 创建 MemoryMapper。
          *
          * <p>构造阶段集中接收必需依赖或恢复对象状态，确保实例创建后即可安全参与所属用例。
@@ -201,7 +236,7 @@ class PurchaseIntegrationCommandDispatcherTest {
          */
         @Override
         public int markExecuting(long id) {
-            return 1;
+            return markExecutingResult;
         }
 
         /**

@@ -232,9 +232,15 @@ public interface SupplierOperationsMapper {
      * @param supplierId 业务或技术标识，类型为 {@code Long}
      * @param queryJson 业务处理参数或成员，类型为 {@code String}
      * @param operatorId 业务或技术标识，类型为 {@code long}
+     * @param idempotencyKey 持久化命令幂等键
+     * @return 新增或命中幂等记录时的数据库影响行数
      */
-    @Insert("INSERT INTO sup_export_task(export_task_id,export_type,supplier_id,query_json,status,created_by) VALUES(#{id},#{type},#{supplierId},#{queryJson},1,#{operatorId})")
-    void insertExport(@Param("id") long id, @Param("type") String type, @Param("supplierId") Long supplierId, @Param("queryJson") String queryJson, @Param("operatorId") long operatorId);
+    @Insert("INSERT INTO sup_export_task(export_task_id,export_type,supplier_id,query_json,status,created_by,idempotency_key) "
+            + "VALUES(#{id},#{type},#{supplierId},#{queryJson},1,#{operatorId},#{idempotencyKey}) "
+            + "ON DUPLICATE KEY UPDATE export_task_id=export_task_id")
+    int insertExport(@Param("id") long id, @Param("type") String type, @Param("supplierId") Long supplierId,
+                     @Param("queryJson") String queryJson, @Param("operatorId") long operatorId,
+                     @Param("idempotencyKey") String idempotencyKey);
 
     /**
      * 处理当前类型职责中的操作 {@code exportTasks}。
@@ -246,7 +252,14 @@ public interface SupplierOperationsMapper {
      * @param size 业务处理参数或成员，类型为 {@code int}
      * @return 处理当前类型职责中的操作的结果，类型为 {@code List<OperationViews.ExportTask>}
      */
-    @Select("<script>SELECT export_task_id id,export_type exportType,supplier_id supplierId,query_json queryJson,status,file_url fileUrl,fail_reason failReason,created_at createdAt,updated_at updatedAt,version FROM sup_export_task WHERE 1=1 <if test='supplierId!=null'>AND supplier_id=#{supplierId}</if><if test='status!=null'>AND status=#{status}</if> ORDER BY created_at DESC LIMIT #{offset},#{size}</script>")
+    @Select("<script>SELECT export_task_id id,export_type exportType,supplier_id supplierId,query_json queryJson,"
+            + "status,file_url fileUrl,fail_reason failReason,object_key objectKey,file_name fileName,"
+            + "content_type contentType,file_size fileSize,retry_count retryCount,next_retry_at nextRetryAt,"
+            + "started_at startedAt,completed_at completedAt,created_at createdAt,updated_at updatedAt,version "
+            + "FROM sup_export_task WHERE 1=1 "
+            + "<if test='supplierId!=null'>AND supplier_id=#{supplierId}</if>"
+            + "<if test='status!=null'>AND status=#{status}</if> "
+            + "ORDER BY created_at DESC LIMIT #{offset},#{size}</script>")
     List<OperationViews.ExportTask> exportTasks(@Param("supplierId") Long supplierId, @Param("status") Integer status, @Param("offset") int offset, @Param("size") int size);
 
     /**
@@ -256,30 +269,105 @@ public interface SupplierOperationsMapper {
      * @param id 业务或技术标识，类型为 {@code long}
      * @return 处理当前类型职责中的操作的结果，类型为 {@code OperationViews.ExportTask}
      */
-    @Select("SELECT export_task_id id,export_type exportType,supplier_id supplierId,query_json queryJson,status,file_url fileUrl,fail_reason failReason,created_at createdAt,updated_at updatedAt,version FROM sup_export_task WHERE export_task_id=#{id}")
+    @Select("SELECT export_task_id id,export_type exportType,supplier_id supplierId,query_json queryJson,"
+            + "status,file_url fileUrl,fail_reason failReason,object_key objectKey,file_name fileName,"
+            + "content_type contentType,file_size fileSize,retry_count retryCount,next_retry_at nextRetryAt,"
+            + "started_at startedAt,completed_at completedAt,created_at createdAt,updated_at updatedAt,version "
+            + "FROM sup_export_task WHERE export_task_id=#{id}")
     OperationViews.ExportTask exportTask(long id);
 
     /**
-     * 执行命令 {@code completeExport}。
+     * 按操作者和幂等键读取已创建导出任务。
      *
-     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
-     * @param id 业务或技术标识，类型为 {@code long}
-     * @param version 乐观锁或契约版本，类型为 {@code int}
-     * @param fileUrl 业务处理参数或成员，类型为 {@code String}
-     * @return 执行命令的结果，类型为 {@code int}
+     * @param operatorId 操作者标识
+     * @param idempotencyKey 命令幂等键
+     * @return 已持久化导出任务，不存在时为 {@code null}
      */
-    @Update("UPDATE sup_export_task SET status=2,file_url=#{fileUrl},version=version+1 WHERE export_task_id=#{id} AND version=#{version} AND status=1")
-    int completeExport(@Param("id") long id, @Param("version") int version, @Param("fileUrl") String fileUrl);
+    @Select("SELECT export_task_id id,export_type exportType,supplier_id supplierId,query_json queryJson,"
+            + "status,file_url fileUrl,fail_reason failReason,object_key objectKey,file_name fileName,"
+            + "content_type contentType,file_size fileSize,retry_count retryCount,next_retry_at nextRetryAt,"
+            + "started_at startedAt,completed_at completedAt,created_at createdAt,updated_at updatedAt,version "
+            + "FROM sup_export_task WHERE created_by=#{operatorId} AND idempotency_key=#{idempotencyKey}")
+    OperationViews.ExportTask exportTaskByIdempotency(@Param("operatorId") long operatorId,
+                                                      @Param("idempotencyKey") String idempotencyKey);
 
     /**
-     * 处理当前类型职责中的操作 {@code failExport}。
+     * 以乐观锁把失败任务重新置为待处理。
      *
-     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
-     * @param id 业务或技术标识，类型为 {@code long}
-     * @param version 乐观锁或契约版本，类型为 {@code int}
-     * @param reason 业务处理参数或成员，类型为 {@code String}
-     * @return 处理当前类型职责中的操作的结果，类型为 {@code int}
+     * @param id 导出任务标识
+     * @param version 当前版本
+     * @param supplierScopeId 供应商数据范围
+     * @return 更新行数
      */
-    @Update("UPDATE sup_export_task SET status=3,fail_reason=#{reason},version=version+1 WHERE export_task_id=#{id} AND version=#{version} AND status=1")
-    int failExport(@Param("id") long id, @Param("version") int version, @Param("reason") String reason);
+    @Update("<script>UPDATE sup_export_task SET status=1,next_retry_at=NULL,version=version+1 "
+            + "WHERE export_task_id=#{id} AND version=#{version} AND status=4 "
+            + "<if test='supplierScopeId!=null'>AND supplier_id=#{supplierScopeId}</if></script>")
+    int retryExport(@Param("id") long id, @Param("version") int version,
+                    @Param("supplierScopeId") Long supplierScopeId);
+
+    /**
+     * 查询待处理、到期失败或超时处理中的可领取任务。
+     *
+     * @param maxRetries 最大失败次数
+     * @param staleBefore 处理超时边界
+     * @param limit 批量上限
+     * @return 可领取任务
+     */
+    @Select("<script>SELECT export_task_id id,export_type exportType,supplier_id supplierId,query_json queryJson,"
+            + "status,file_url fileUrl,fail_reason failReason,object_key objectKey,file_name fileName,"
+            + "content_type contentType,file_size fileSize,retry_count retryCount,next_retry_at nextRetryAt,"
+            + "started_at startedAt,completed_at completedAt,created_at createdAt,updated_at updatedAt,version "
+            + "FROM sup_export_task WHERE retry_count &lt; #{maxRetries} AND "
+            + "((status=1) OR (status=4 AND next_retry_at&lt;=NOW(3)) OR (status=2 AND started_at&lt;#{staleBefore})) "
+            + "ORDER BY created_at LIMIT #{limit}</script>")
+    List<OperationViews.ExportTask> claimableExports(@Param("maxRetries") int maxRetries,
+                                                     @Param("staleBefore") OffsetDateTime staleBefore,
+                                                     @Param("limit") int limit);
+
+    /**
+     * 以乐观锁领取任务。
+     *
+     * @param id 导出任务标识
+     * @param version 领取前版本
+     * @return 更新行数
+     */
+    @Update("UPDATE sup_export_task SET status=2,started_at=NOW(3),version=version+1 "
+            + "WHERE export_task_id=#{id} AND version=#{version} AND status IN (1,2,4)")
+    int claimExport(@Param("id") long id, @Param("version") int version);
+
+    /**
+     * 写入真实文件元数据并完成任务。
+     *
+     * @param id 导出任务标识
+     * @param version 处理中版本
+     * @param fileUrl 本系统下载地址
+     * @param objectKey 对象存储键
+     * @param fileName 下载文件名
+     * @param contentType 文件类型
+     * @param fileSize 文件字节数
+     * @return 更新行数
+     */
+    @Update("UPDATE sup_export_task SET status=3,file_url=#{fileUrl},object_key=#{objectKey},"
+            + "file_name=#{fileName},content_type=#{contentType},file_size=#{fileSize},fail_reason=NULL,"
+            + "completed_at=NOW(3),version=version+1 WHERE export_task_id=#{id} "
+            + "AND version=#{version} AND status=2")
+    int completeExport(@Param("id") long id, @Param("version") int version,
+                       @Param("fileUrl") String fileUrl, @Param("objectKey") String objectKey,
+                       @Param("fileName") String fileName, @Param("contentType") String contentType,
+                       @Param("fileSize") long fileSize);
+
+    /**
+     * 记录一次处理失败并安排下一次重试。
+     *
+     * @param id 导出任务标识
+     * @param version 处理中版本
+     * @param reason 失败原因
+     * @param retryAt 下一次重试时间
+     * @return 更新行数
+     */
+    @Update("UPDATE sup_export_task SET status=4,fail_reason=#{reason},retry_count=retry_count+1,"
+            + "next_retry_at=#{retryAt},version=version+1 WHERE export_task_id=#{id} "
+            + "AND version=#{version} AND status=2")
+    int failExport(@Param("id") long id, @Param("version") int version,
+                   @Param("reason") String reason, @Param("retryAt") OffsetDateTime retryAt);
 }

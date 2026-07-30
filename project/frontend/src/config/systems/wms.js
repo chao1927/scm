@@ -1,0 +1,30 @@
+const page = (id, label, options = {}) => ({ id, label, ...options })
+
+export const wmsSystem = {
+  id: 'wms',
+  code: 'WMS',
+  shortName: '仓储',
+  name: '仓储执行',
+  domain: '仓储作业上下文',
+  permission: 'wms:*',
+  goal: '以任务驱动入库、质检、上架、拣选、复核、发货、退货和盘点。',
+  workflow: ['入库单已接收', '收货已完成', '质检已判定', '上架已完成', '库存事实已上报'],
+  pages: [
+    page('workbench', 'WMS 工作台'),
+    page('inbounds', '入库单'),
+    page('receipts', '收货作业'),
+    page('qc-orders', '质检作业'),
+    page('putaway-tasks', '上架任务'),
+    page('stocks', '库内库存'),
+    page('outbounds', '出库单'),
+    page('waves', '波次管理'),
+    page('picking-orders', '拣货单'),
+    page('pack-orders', '复核包装'),
+    page('shipments', '发货交接'),
+    page('return-receipts', '退货入库'),
+    page('count-plans', '盘点管理'),
+    page('exceptions', '异常处理'),
+    page('failed-events', '事件运维', { legacy: 'wms' }),
+    page('operation-logs', '操作日志'),
+  ],
+}

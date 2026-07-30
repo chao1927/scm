@@ -3,11 +3,15 @@ package com.chaobo.scm.purchase.interfaces.web;
 import com.chaobo.scm.common.api.ApiResponse;
 import com.chaobo.scm.common.error.BusinessException;
 import com.chaobo.scm.common.error.ErrorCode;
+import com.chaobo.scm.common.security.ScmAccessContext;
 import com.chaobo.scm.purchase.application.integration.PurchaseExternalEvent;
-import com.chaobo.scm.purchase.application.integration.PurchaseExternalEventConsumerApplicationService;
+import com.chaobo.scm.purchase.application.integration.PurchaseExternalEventHandler;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,9 +21,11 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 
 /**
- * PurchaseExternalEventController。
+ * 采购外部事件人工补偿兼容入口。
  *
- * <p>位于接口层，负责协议转换、输入校验、身份上下文提取和响应封装，不承载领域规则。暴露当前上下文的 HTTP 入口，并把外部协议转换为应用层命令或查询。该类型只在所属限界上下文内表达该语义，跨上下文协作应通过已声明的接口或事件完成。
+ * <p>该 HTTP 接口只供具有专用权限的运维人员补偿历史失败消息，不参与自动业务
+ * 事件链路。系统间业务事件必须通过 RocketMQ PushConsumer 进入同一个 Inbox 应用
+ * 服务，禁止调用方把该接口作为消息传输或生产运行时降级通道。
  *
  * @author SCM Team
  * @since 0.1.0
@@ -28,25 +34,28 @@ import java.util.Map;
 @RequestMapping("/internal/purchase/v1/events")
 public class PurchaseExternalEventController {
 
+    private static final Logger LOG =
+            LoggerFactory.getLogger(PurchaseExternalEventController.class);
+
     /**
      * service（类型：{@code PurchaseExternalEventConsumerApplicationService}）。
      *
      * <p>保存当前对象所需的应用或外部协作依赖；其具体生命周期由所属对象统一管理。
      */
-    private final PurchaseExternalEventConsumerApplicationService service;
+    private final PurchaseExternalEventHandler service;
 
     /**
      * 创建 PurchaseExternalEventController。
      *
      * <p>构造阶段集中接收必需依赖或恢复对象状态，确保实例创建后即可安全参与所属用例。
-     * @param service 应用或外部协作依赖，类型为 {@code PurchaseExternalEventConsumerApplicationService}
+     * @param service 统一经过 Inbox 的外部事件处理端口
      */
-    public PurchaseExternalEventController(PurchaseExternalEventConsumerApplicationService service) {
+    public PurchaseExternalEventController(PurchaseExternalEventHandler service) {
         this.service = service;
     }
 
     /**
-     * 执行命令 {@code consume}。
+     * 人工补偿一个外部业务事件。
      *
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
      * @param body 业务处理参数或成员，类型为 {@code Request}
@@ -54,14 +63,41 @@ public class PurchaseExternalEventController {
      * @return 执行命令的结果，类型为 {@code ApiResponse<Void>}
      */
     @PostMapping
-    public ApiResponse<Void> consume(@Valid @RequestBody Request body, HttpServletRequest request) {
+    public ApiResponse<Void> manualConsume(
+            @Valid @RequestBody Request body,
+            HttpServletRequest request,
+            Authentication authentication) {
+        ScmAccessContext access = access(authentication);
+        access.requirePermission("purchase:event:manual-consume");
+        String operationReason = request.getHeader("X-Manual-Operation-Reason");
+        if (operationReason == null || operationReason.isBlank()) {
+            throw new BusinessException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "人工事件补偿必须填写 X-Manual-Operation-Reason"
+            );
+        }
         var sourceSystem = request.getHeader("X-Source-System");
         var eventCode = request.getHeader("X-Event-Code");
         if (sourceSystem == null || sourceSystem.isBlank() || eventCode == null || eventCode.isBlank()) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED, "缺少外部事件请求头");
         }
+        LOG.info(
+                "采购外部事件人工补偿，operatorId={}, sourceSystem={}, eventCode={}, reason={}",
+                access.operatorId(),
+                sourceSystem,
+                eventCode,
+                operationReason.trim().replace('\r', ' ').replace('\n', ' ')
+        );
         service.consume(body.toEvent(sourceSystem, eventCode));
         return ApiResponse.success(null, request.getHeader("X-Request-Id"), request.getHeader("X-Trace-Id"));
+    }
+
+    private static ScmAccessContext access(Authentication authentication) {
+        if (authentication == null
+                || !(authentication.getDetails() instanceof ScmAccessContext access)) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "当前请求没有有效访问令牌");
+        }
+        return access;
     }
 
     /**

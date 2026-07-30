@@ -65,6 +65,15 @@ flowchart TD
 
 同一 Agent lane 内的子任务顺序执行；不同 lane 可并行。
 
+### 3.1 RocketMQ 生产约束（2026-07-30 新增）
+
+- 九个子系统的业务事件必须使用“本地事务 Outbox → 真实 RocketMQ Producer → 真实 RocketMQ Consumer → Inbox/幂等应用服务”链路。
+- HTTP/Dubbo 只承载同步命令或查询；内部 HTTP 事件接口不得作为业务事件主消费路径。
+- 内存、Noop、Logging Broker 仅允许位于 `src/test`，禁止注册为生产 Bean，也禁止 RocketMQ 不可用时自动降级。
+- 统一事件信封至少包含 `schemaVersion`、`sourceSystem`、`eventCode`、`eventType`、`data`；未知版本失败关闭。
+- 消费解析或业务处理失败必须返回 RocketMQ `FAILURE` 触发 Broker 重试，同时由 Inbox 保证重复、乱序和人工重放不重复记账。
+- 后续每个子系统任务在验收前必须列出真实 Producer、Consumer、Topic、Consumer Group 和生产配置证据；缺任一项不得标记生产完成。
+
 ## 4. P0 并行基础
 
 ### PAR-NEXT-001 前端九子系统配置拆分
@@ -86,7 +95,7 @@ flowchart TD
 | 目标 | 自动检查正式需求是否在状态矩阵有归属、九服务边界和任务文件所有权是否被破坏 |
 | 依赖 | 无 |
 | 建议 Agent | plan-governance |
-| 文件范围 | `docs/09-开发计划/**`、`tasks/**`、新增只读校验脚本及其测试 |
+| 文件范围 | `docs/09-开发计划/**`、`tasks/**`、`tools/plan_guard/**` |
 | 验收 | 64 张历史需求无遗漏；不存在第十个业务服务；重复进行中任务和文件范围冲突会失败 |
 | 验证 | 运行校验脚本、`git diff --check` |
 | 规模 | S |
@@ -337,7 +346,7 @@ flowchart TD
 | --- | --- |
 | 目标 | 在各子系统资源完成后统一查询条件、空态、错误态、命令确认和可访问性 |
 | 依赖 | 九个子系统页面任务 |
-| 文件范围 | 前端公共页面、公共组件、测试；不修改子系统资源文件 |
+| 文件范围 | `project/frontend/src/pages/**`、`project/frontend/src/components/**`、`project/frontend/src/layout/**`、`project/frontend/src/styles/**`、`project/frontend/tests/**`；不修改子系统资源文件 |
 | 验收 | 无演示数据；错误不伪装空列表；键盘、名称、320/768/1024/1440 布局通过 |
 | 验证 | `npm run test && npm run build && npm run test:e2e` |
 | 规模 | M |
@@ -348,7 +357,7 @@ flowchart TD
 | --- | --- |
 | 目标 | 使用本地九服务、MySQL/Flyway、Nacos 和浏览器完成真实 API 基线，不替代外部沙箱验收 |
 | 依赖 | 每批次完成后可增量执行，最终依赖全部 `NEXT` 任务 |
-| 文件范围 | 各服务集成测试、前端 E2E、测试配置；生产代码由对应系统 Agent 修复 |
+| 文件范围 | `project/backend/**`、`project/frontend/tests/**`、`project/frontend/src/**/*.test.js`、`project/frontend/playwright.config.js`；生产代码由对应系统 Agent 修复 |
 | 验收 | 九服务启动；核心查询/命令返回真实数据库结果；401/403、幂等和乐观锁有证据 |
 | 验证 | 后端全量测试、前端 E2E、一键启动健康检查 |
 | 规模 | M |

@@ -80,7 +80,8 @@ public class ReturnOperationApplicationService {
         }
         var a = new ReturnOperationAggregate(ids.incrementAndGet(), c.afterSaleNo(), c.rmaNo(), c.ownerId(), c.warehouseId(), c.sku(), c.batchNo(), c.qty(), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, ReturnOperationAggregate.RECEIVING, 0);
         mapper.insert(row(a));
-        inbound.create(new InboundOrderApplicationService.Create("AFTERSALE_RETURN", c.afterSaleNo(), c.warehouseId(), null, "return-inbound-" + c.afterSaleNo()), operator);
+        inbound.create(new InboundOrderApplicationService.Create("AFTERSALE_RETURN", c.afterSaleNo(),
+            c.warehouseId(), c.ownerId(), null, "return-inbound-" + c.afterSaleNo()), operator);
         return view(row(a), false);
     }
 

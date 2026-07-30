@@ -38,4 +38,21 @@ class WaybillAggregateTest {
         WaybillAggregate waybill = WaybillAggregate.create("WB1", "TMS1", "SF", "顺丰", "SF123", "SF-EXPRESS", "ok");
         assertThatThrownBy(() -> waybill.voidWaybill("客户取消", "APR1", 9)).isInstanceOf(IllegalStateException.class).hasMessageContaining("version conflict");
     }
+
+    @Test
+    void carrierFactsAdvanceWithoutAllowingTerminalRegression() {
+        WaybillAggregate waybill = WaybillAggregate.create(
+            "WB1", "TMS1", "SF", "顺丰", "SF123", "SF-EXPRESS", "ok");
+        waybill.advanceFromTrack("ARRIVED");
+        waybill.advanceFromTrack("PICKED_UP");
+        assertThat(waybill.status()).isEqualTo(WaybillAggregate.ARRIVED);
+
+        waybill.advanceFromReceipt(DeliveryReceiptAggregate.SIGNED);
+        waybill.advanceFromTrack("IN_TRANSIT");
+        assertThat(waybill.status()).isEqualTo(WaybillAggregate.SIGNED);
+        assertThatThrownBy(() ->
+            waybill.advanceFromReceipt(DeliveryReceiptAggregate.REJECTED))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("conflicts");
+    }
 }

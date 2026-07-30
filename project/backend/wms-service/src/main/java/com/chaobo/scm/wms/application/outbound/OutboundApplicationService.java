@@ -64,14 +64,15 @@ public class OutboundApplicationService {
      * @return 执行命令的结果，类型为 {@code Result}
      */
     @Transactional(rollbackFor = Exception.class)
-    public Result create(String sourceType, String sourceNo, long warehouseId, long operator) {
+    public Result create(String sourceType, String sourceNo, long warehouseId,
+                         long ownerId, long operator) {
         var existed = mapper.source(sourceType, sourceNo, warehouseId);
         if (existed != null) {
             return view(toAggregate(existed), true);
         }
         long id = ids.incrementAndGet();
         var outboundNo = "WOB" + id;
-        mapper.insert(id, outboundNo, sourceType, sourceNo, warehouseId, operator);
+        mapper.insert(id, outboundNo, sourceType, sourceNo, warehouseId, ownerId, operator);
         events.publish("WmsOutboundOrderCreated", "OUTBOUND", outboundNo, 0, payload(outboundNo));
         return new Result(id, outboundNo, 1, 0, false);
     }
@@ -88,8 +89,10 @@ public class OutboundApplicationService {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code Result}
      */
     @Transactional(rollbackFor = Exception.class)
-    public Result allocate(String sourceType, String sourceNo, long warehouseId, int version, long operator) {
+    public Result allocate(String sourceType, String sourceNo, long warehouseId,
+                           long ownerId, int version, long operator) {
         var outbound = toAggregate(required(sourceType, sourceNo, warehouseId));
+        requireOwner(outbound, ownerId);
         if (outbound.version() != version) {
             throw new BusinessException(ErrorCode.VERSION_CONFLICT, "出库单版本冲突");
         }
@@ -112,8 +115,10 @@ public class OutboundApplicationService {
      * @return 执行命令的结果，类型为 {@code Result}
      */
     @Transactional(rollbackFor = Exception.class)
-    public Result cancel(String sourceType, String sourceNo, long warehouseId, int version, String reason, long operator) {
+    public Result cancel(String sourceType, String sourceNo, long warehouseId, long ownerId,
+                         int version, String reason, long operator) {
         var outbound = toAggregate(required(sourceType, sourceNo, warehouseId));
+        requireOwner(outbound, ownerId);
         if (outbound.version() != version) {
             throw new BusinessException(ErrorCode.VERSION_CONFLICT, "出库单版本冲突");
         }
@@ -148,7 +153,14 @@ public class OutboundApplicationService {
      * @return 转换数据模型的结果，类型为 {@code OutboundOrderAggregate}
      */
     private OutboundOrderAggregate toAggregate(OutboundMapper.Row row) {
-        return new OutboundOrderAggregate(row.id(), row.no(), row.sourceType(), row.sourceNo(), row.warehouseId(), row.status(), row.version());
+        return new OutboundOrderAggregate(row.id(), row.no(), row.sourceType(), row.sourceNo(),
+            row.warehouseId(), row.ownerId(), row.status(), row.version());
+    }
+
+    private static void requireOwner(OutboundOrderAggregate outbound, long ownerId) {
+        if (outbound.ownerId() != ownerId) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "出库单不属于当前货主");
+        }
     }
 
     /**

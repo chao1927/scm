@@ -1,0 +1,22 @@
+create table bms_report_export (
+    id bigint primary key auto_increment,
+    export_no varchar(64) not null,
+    billing_object_code varchar(64) not null,
+    billing_period varchar(16) not null,
+    idempotency_key varchar(128) not null,
+    export_status tinyint not null,
+    attempt_count int not null default 0,
+    max_attempts int not null,
+    next_retry_at datetime(3) null,
+    object_reference varchar(500) null,
+    record_count bigint not null default 0,
+    last_error varchar(500) null,
+    operator_id bigint not null,
+    version bigint not null,
+    created_at datetime(3) not null,
+    updated_at datetime(3) not null,
+    unique key uk_bms_report_export_no (export_no),
+    unique key uk_bms_report_export_idem (idempotency_key),
+    key idx_bms_report_export_dispatch (export_status,next_retry_at,id),
+    key idx_bms_report_export_scope (billing_object_code,billing_period,created_at)
+);

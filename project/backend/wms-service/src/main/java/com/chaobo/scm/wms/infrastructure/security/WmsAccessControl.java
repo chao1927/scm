@@ -46,6 +46,28 @@ public final class WmsAccessControl {
     }
 
     /**
+     * 校验当前用户是否允许访问指定货主。
+     *
+     * @param authentication 已验证的 Spring Security 身份
+     * @param ownerId 货主 ID
+     */
+    public static void requireOwner(Authentication authentication, long ownerId) {
+        context(authentication).requireScope("OWNER", String.valueOf(ownerId));
+    }
+
+    /**
+     * 返回过滤器写入的已验证访问上下文。
+     *
+     * <p>查询应用服务需要读取完整仓库/货主集合构造 SQL 数据范围；接口层不得自行解析未验证请求头。
+     *
+     * @param authentication 已验证的 Spring Security 身份
+     * @return 统一访问上下文
+     */
+    public static ScmAccessContext verifiedContext(Authentication authentication) {
+        return context(authentication);
+    }
+
+    /**
      * 处理当前类型职责中的操作 {@code context}。
      *
      * <p>该内部步骤用于收敛重复逻辑或保护局部规则，调用方应通过当前类型公开的业务入口使用该能力。

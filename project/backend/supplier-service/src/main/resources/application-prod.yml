@@ -36,3 +36,8 @@ scm:
       enabled: ${ROCKETMQ_CONTRACT_APPROVAL_CONSUMER_ENABLED:true}
       topic: ${ROCKETMQ_CONTRACT_APPROVAL_TOPIC:iam-approval-domain-event}
       group: ${ROCKETMQ_CONTRACT_APPROVAL_CONSUMER_GROUP:supplier-contract-approval}
+    business-consumer:
+      enabled: ${ROCKETMQ_BUSINESS_CONSUMER_ENABLED:true}
+      topics: ${ROCKETMQ_BUSINESS_TOPICS:purchase-domain-event,wms-domain-event,tms-domain-event,bms-domain-event,inventory-domain-event,supplier-operations-event}
+      group: ${ROCKETMQ_BUSINESS_CONSUMER_GROUP:supplier-business-event-v1}
+      threads: ${ROCKETMQ_BUSINESS_CONSUMER_THREADS:4}

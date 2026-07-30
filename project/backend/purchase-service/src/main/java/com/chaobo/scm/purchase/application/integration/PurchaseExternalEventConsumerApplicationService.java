@@ -25,7 +25,8 @@ import java.util.Set;
  * @since 0.1.0
  */
 @Service
-public class PurchaseExternalEventConsumerApplicationService implements InboundEventReplayHandler {
+public class PurchaseExternalEventConsumerApplicationService
+        implements InboundEventReplayHandler, PurchaseExternalEventHandler {
 
     /**
      * CONSUMER（类型：{@code String}）。
@@ -103,6 +104,7 @@ public class PurchaseExternalEventConsumerApplicationService implements InboundE
      * @param event 业务处理参数或成员，类型为 {@code PurchaseExternalEvent}
      */
     @Transactional(rollbackFor = Exception.class)
+    @Override
     public void consume(PurchaseExternalEvent event) {
         if (event.sourceSystem() == null || event.eventCode() == null || event.eventType() == null) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED, "外部事件来源、编码和类型不能为空");

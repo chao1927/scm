@@ -66,7 +66,8 @@ public class InboundOrderController {
             throw new BusinessException(ErrorCode.FORBIDDEN, "来源系统与入库来源不一致");
         }
         WmsAccessControl.requireWarehouse(authentication, body.warehouseId());
-        return ok(service.create(new InboundOrderApplicationService.Create(body.sourceType(), body.sourceNo(), body.warehouseId(), body.expectedArrivalAt(), idempotencyKey), WmsAccessControl.operatorId(authentication)), request);
+        WmsAccessControl.requireOwner(authentication, body.ownerId());
+        return ok(service.create(new InboundOrderApplicationService.Create(body.sourceType(), body.sourceNo(), body.warehouseId(), body.ownerId(), body.expectedArrivalAt(), idempotencyKey), WmsAccessControl.operatorId(authentication)), request);
     }
 
     /**
@@ -121,7 +122,7 @@ public class InboundOrderController {
      * @author SCM Team
      * @since 0.1.0
      */
-    public record CreateRequest(@NotBlank String sourceType, @NotBlank String sourceNo, @Positive long warehouseId, OffsetDateTime expectedArrivalAt) {
+    public record CreateRequest(@NotBlank String sourceType, @NotBlank String sourceNo, @Positive long warehouseId, @Positive long ownerId, OffsetDateTime expectedArrivalAt) {
     }
 
     /**

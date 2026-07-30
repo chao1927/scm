@@ -7,6 +7,11 @@ export const queryOmsOutbounds = () => client.get('/oms/v1/outbounds')
 
 export const queryTmsTransportTasks = (params) => client.get('/tms/v1/transport-tasks', { params })
 export const queryTmsWaybills = () => client.get('/tms/v1/waybills')
+export const queryTmsLabels = (params) => client.get('/tms/v1/shipping-labels', { params })
+export const queryTmsTracks = (params) => client.get('/tms/v1/tracking-nodes', { params })
+export const queryTmsSignatures = (params) => client.get('/tms/v1/delivery-receipts', { params })
+export const queryTmsCarriers = () => client.get('/tms/v1/carriers')
+export const queryTmsOperationLogs = () => client.get('/tms/v1/operation-logs')
 export const queryTmsExceptions = () => client.get('/tms/v1/transport-exceptions')
 export const queryTmsFeeSources = () => client.get('/tms/v1/fee-sources')
 

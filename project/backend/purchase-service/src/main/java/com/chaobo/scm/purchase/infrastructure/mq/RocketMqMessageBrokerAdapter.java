@@ -9,7 +9,7 @@ import org.apache.rocketmq.client.apis.producer.Producer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
-import java.nio.charset.StandardCharsets;
+import jakarta.annotation.PreDestroy;
 
 /**
  * RocketMqMessageBrokerAdapter。
@@ -45,13 +45,24 @@ public class RocketMqMessageBrokerAdapter implements MessageBrokerPort {
     private final String topic;
 
     /**
+     * 标准事件信封编解码器。
+     */
+    private final PurchaseEventEnvelopeCodec codec;
+
+    /**
      * 创建 RocketMqMessageBrokerAdapter。
      *
      * <p>构造阶段集中接收必需依赖或恢复对象状态，确保实例创建后即可安全参与所属用例。
+     * @param codec 标准事件信封编解码器
      * @param endpoints 业务处理参数或成员，类型为 {@code String}
      * @param topic 业务处理参数或成员，类型为 {@code String}
      */
-    public RocketMqMessageBrokerAdapter(@Value("${scm.rocketmq.endpoints}") String endpoints, @Value("${scm.rocketmq.purchase-topic:purchase-domain-event}") String topic) throws ClientException {
+    public RocketMqMessageBrokerAdapter(
+            PurchaseEventEnvelopeCodec codec,
+            @Value("${scm.rocketmq.endpoints}") String endpoints,
+            @Value("${scm.rocketmq.purchase-topic:purchase-domain-event}") String topic)
+            throws ClientException {
+        this.codec = codec;
         this.topic = topic;
         var configuration = ClientConfiguration.newBuilder().setEndpoints(endpoints).build();
         this.producer = provider.newProducerBuilder().setClientConfiguration(configuration).setTopics(topic).build();
@@ -66,10 +77,22 @@ public class RocketMqMessageBrokerAdapter implements MessageBrokerPort {
     @Override
     public void publish(OutboxMessage message) {
         try {
-            var mqMessage = provider.newMessageBuilder().setTopic(topic).setKeys(message.eventCode()).setTag(message.eventType()).setBody(message.payloadJson().getBytes(StandardCharsets.UTF_8)).build();
+            var mqMessage = provider.newMessageBuilder().setTopic(topic)
+                    .setKeys(message.eventCode())
+                    .setTag(message.eventType())
+                    .setBody(codec.encode(message))
+                    .build();
             producer.send(mqMessage);
-        } catch (ClientException exception) {
+        } catch (Exception exception) {
             throw new IllegalStateException("采购事件投递失败: " + exception.getMessage(), exception);
         }
+    }
+
+    /**
+     * 关闭 RocketMQ 生产者并释放网络资源。
+     */
+    @PreDestroy
+    public void close() throws Exception {
+        producer.close();
     }
 }

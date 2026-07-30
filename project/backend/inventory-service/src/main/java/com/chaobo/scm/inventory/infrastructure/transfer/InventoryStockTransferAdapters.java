@@ -1,7 +1,7 @@
 package com.chaobo.scm.inventory.infrastructure.transfer;
 
 import com.chaobo.scm.inventory.application.InventoryApplicationService;
-import com.chaobo.scm.inventory.application.InventoryEventApplicationService;
+import com.chaobo.scm.inventory.application.InventoryEventPublisher;
 import com.chaobo.scm.inventory.application.StockTransferPorts;
 import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
@@ -121,19 +121,19 @@ public final class InventoryStockTransferAdapters {
     public static class EventAdapter implements StockTransferPorts.EventPublisher {
 
         /**
-         * events（类型：{@code InventoryEventApplicationService}）。
+         * events（类型：{@code InventoryEventPublisher}）。
          *
          * <p>保存当前对象所需的业务处理参数或成员；其具体生命周期由所属对象统一管理。
          */
-        private final InventoryEventApplicationService events;
+        private final InventoryEventPublisher events;
 
         /**
          * 创建 EventAdapter。
          *
          * <p>构造阶段集中接收必需依赖或恢复对象状态，确保实例创建后即可安全参与所属用例。
-         * @param events 业务处理参数或成员，类型为 {@code InventoryEventApplicationService}
+         * @param events 业务处理参数或成员，类型为 {@code InventoryEventPublisher}
          */
-        public EventAdapter(InventoryEventApplicationService events) {
+        public EventAdapter(InventoryEventPublisher events) {
             this.events = events;
         }
 

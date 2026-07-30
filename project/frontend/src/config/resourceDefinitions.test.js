@@ -1,7 +1,62 @@
 import { describe, expect, it } from 'vitest'
-import { findResourceDefinition, normalizePage, recordIdentity } from './resourceDefinitions'
+import {
+  findResourceDefinition,
+  normalizePage,
+  recordIdentity,
+  resourceDefinitions,
+} from './resourceDefinitions'
+import { bmsResources } from './resources/bms'
+import { iamResources } from './resources/iam'
+import { inventoryResources } from './resources/inventory'
+import { mdmResources } from './resources/mdm'
+import { omsResources } from './resources/oms'
+import { purchaseResources } from './resources/purchase'
+import { supplierResources } from './resources/supplier'
+import { tmsResources } from './resources/tms'
+import { wmsResources } from './resources/wms'
 
 describe('resource definitions', () => {
+  const resourcesBySystem = {
+    supplier: supplierResources,
+    purchase: purchaseResources,
+    wms: wmsResources,
+    inventory: inventoryResources,
+    oms: omsResources,
+    tms: tmsResources,
+    bms: bmsResources,
+    mdm: mdmResources,
+    iam: iamResources,
+  }
+
+  it('keeps every resource definition in its owning system module', () => {
+    Object.entries(resourcesBySystem).forEach(([systemId, definitions]) => {
+      Object.entries(definitions).forEach(([key, definition]) => {
+        expect(key.startsWith(`${systemId}.`)).toBe(true)
+        expect(resourceDefinitions[key]).toBe(definition)
+      })
+    })
+  })
+
+  it('aggregates exactly the resources exported by the nine systems', () => {
+    expect(resourceDefinitions).toEqual(Object.assign({}, ...Object.values(resourcesBySystem)))
+    expect(Object.fromEntries(
+      Object.entries(resourcesBySystem).map(([systemId, definitions]) => [
+        systemId,
+        Object.keys(definitions).length,
+      ]),
+    )).toEqual({
+      supplier: 6,
+      purchase: 11,
+      wms: 14,
+      inventory: 5,
+      oms: 10,
+      tms: 9,
+      bms: 3,
+      mdm: 9,
+      iam: 8,
+    })
+  })
+
   it('normalizes the supported backend page shapes', () => {
     expect(normalizePage({ data: { records: [{ id: 1 }], total: 7, pageNo: 2, pageSize: 10 } })).toEqual({
       records: [{ id: 1 }],

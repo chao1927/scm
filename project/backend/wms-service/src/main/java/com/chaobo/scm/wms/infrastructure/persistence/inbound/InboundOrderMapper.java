@@ -26,7 +26,8 @@ public interface InboundOrderMapper {
      * @author SCM Team
      * @since 0.1.0
      */
-    record Row(long id, String inboundNo, String sourceType, String sourceNo, long warehouseId, int status, OffsetDateTime expectedArrivalAt, String cancelReason, int version) {
+    record Row(long id, String inboundNo, String sourceType, String sourceNo, long warehouseId, long ownerId,
+               int status, OffsetDateTime expectedArrivalAt, String cancelReason, int version) {
     }
 
     /**
@@ -36,7 +37,14 @@ public interface InboundOrderMapper {
      * @param id 业务或技术标识，类型为 {@code long}
      * @return 查询并返回的结果，类型为 {@code Row}
      */
-    @Select("select * from wms_inbound where inbound_id = #{id} and deleted = 0")
+    @Select("""
+        select inbound_id as id, inbound_order_no as inboundNo, source_type as sourceType,
+          source_order_no as sourceNo, warehouse_id as warehouseId, owner_id as ownerId,
+          inbound_status as status, expected_arrival_at as expectedArrivalAt,
+          cancel_reason as cancelReason, version
+        from wms_inbound
+        where inbound_id = #{id} and deleted = 0
+        """)
     Row findById(long id);
 
     /**
@@ -49,8 +57,13 @@ public interface InboundOrderMapper {
      * @return 查询并返回的结果，类型为 {@code Row}
      */
     @Select("""
-        select * from wms_inbound where source_type = #{sourceType} and source_order_no = #{sourceNo}
-        and warehouse_id = #{warehouseId} and deleted = 0
+        select inbound_id as id, inbound_order_no as inboundNo, source_type as sourceType,
+          source_order_no as sourceNo, warehouse_id as warehouseId, owner_id as ownerId,
+          inbound_status as status, expected_arrival_at as expectedArrivalAt,
+          cancel_reason as cancelReason, version
+        from wms_inbound
+        where source_type = #{sourceType} and source_order_no = #{sourceNo}
+          and warehouse_id = #{warehouseId} and deleted = 0
         """)
     Row findBySource(@Param("sourceType") String sourceType, @Param("sourceNo") String sourceNo, @Param("warehouseId") long warehouseId);
 
@@ -63,6 +76,7 @@ public interface InboundOrderMapper {
      * @param sourceType 业务处理参数或成员，类型为 {@code String}
      * @param sourceNo 可追踪业务编码，类型为 {@code String}
      * @param warehouseId 业务或技术标识，类型为 {@code long}
+     * @param ownerId 货主标识，类型为 {@code long}
      * @param status 生命周期状态，类型为 {@code int}
      * @param expectedArrivalAt 业务时间，类型为 {@code OffsetDateTime}
      * @param cancelReason 业务处理参数或成员，类型为 {@code String}
@@ -70,12 +84,17 @@ public interface InboundOrderMapper {
      * @param operatorId 业务或技术标识，类型为 {@code long}
      */
     @Insert("""
-        insert into wms_inbound(inbound_id, inbound_order_no, source_type, source_order_no, warehouse_id,
+        insert into wms_inbound(inbound_id, inbound_order_no, source_type, source_order_no, warehouse_id, owner_id,
           inbound_status, expected_arrival_at, cancel_reason, version, deleted, created_by, updated_by, created_at, updated_at)
-        values(#{id}, #{inboundNo}, #{sourceType}, #{sourceNo}, #{warehouseId}, #{status}, #{expectedArrivalAt},
+        values(#{id}, #{inboundNo}, #{sourceType}, #{sourceNo}, #{warehouseId}, #{ownerId}, #{status}, #{expectedArrivalAt},
           #{cancelReason}, #{version}, 0, #{operatorId}, #{operatorId}, now(3), now(3))
         """)
-    void insert(@Param("id") long id, @Param("inboundNo") String inboundNo, @Param("sourceType") String sourceType, @Param("sourceNo") String sourceNo, @Param("warehouseId") long warehouseId, @Param("status") int status, @Param("expectedArrivalAt") OffsetDateTime expectedArrivalAt, @Param("cancelReason") String cancelReason, @Param("version") int version, @Param("operatorId") long operatorId);
+    void insert(@Param("id") long id, @Param("inboundNo") String inboundNo,
+                @Param("sourceType") String sourceType, @Param("sourceNo") String sourceNo,
+                @Param("warehouseId") long warehouseId, @Param("ownerId") long ownerId,
+                @Param("status") int status, @Param("expectedArrivalAt") OffsetDateTime expectedArrivalAt,
+                @Param("cancelReason") String cancelReason, @Param("version") int version,
+                @Param("operatorId") long operatorId);
 
     /**
      * 执行命令 {@code update}。

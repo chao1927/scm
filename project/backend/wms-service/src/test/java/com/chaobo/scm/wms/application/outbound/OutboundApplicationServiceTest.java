@@ -47,13 +47,13 @@ class OutboundApplicationServiceTest {
      */
     @Test
     void createAllocateAndCancelOutboundOrderPublishesEvents() {
-        var created = service.create("OMS", "SO-001", 1L, 99L);
+        var created = service.create("OMS", "SO-001", 1L, 2L, 99L);
         assertThat(created.duplicated()).isFalse();
         assertThat(created.status()).isEqualTo(1);
-        var allocated = service.allocate("OMS", "SO-001", 1L, 0, 99L);
+        var allocated = service.allocate("OMS", "SO-001", 1L, 2L, 0, 99L);
         assertThat(allocated.status()).isEqualTo(2);
         assertThat(allocated.version()).isEqualTo(1);
-        var cancelled = service.cancel("OMS", "SO-001", 1L, 1, "客户取消", 99L);
+        var cancelled = service.cancel("OMS", "SO-001", 1L, 2L, 1, "客户取消", 99L);
         assertThat(cancelled.status()).isEqualTo(9);
         assertThat(events.types()).containsExactly("WmsOutboundOrderCreated", "WmsOutboundAllocated", "WmsOutboundCancelled");
     }
@@ -65,8 +65,8 @@ class OutboundApplicationServiceTest {
      */
     @Test
     void repeatedCreateReturnsExistingOutboundWithoutDuplicateEvent() {
-        service.create("OMS", "SO-002", 1L, 99L);
-        var duplicated = service.create("OMS", "SO-002", 1L, 99L);
+        service.create("OMS", "SO-002", 1L, 2L, 99L);
+        var duplicated = service.create("OMS", "SO-002", 1L, 2L, 99L);
         assertThat(duplicated.duplicated()).isTrue();
         assertThat(events.types()).containsExactly("WmsOutboundOrderCreated");
     }
@@ -78,8 +78,8 @@ class OutboundApplicationServiceTest {
      */
     @Test
     void allocateRequiresExpectedVersion() {
-        service.create("OMS", "SO-003", 1L, 99L);
-        assertThatThrownBy(() -> service.allocate("OMS", "SO-003", 1L, 7, 99L)).isInstanceOf(BusinessException.class).hasMessageContaining("版本冲突");
+        service.create("OMS", "SO-003", 1L, 2L, 99L);
+        assertThatThrownBy(() -> service.allocate("OMS", "SO-003", 1L, 2L, 7, 99L)).isInstanceOf(BusinessException.class).hasMessageContaining("版本冲突");
     }
 
     /**
@@ -125,8 +125,9 @@ class OutboundApplicationServiceTest {
          * @param operator 业务处理参数或成员，类型为 {@code long}
          */
         @Override
-        public void insert(long id, String no, String type, String sourceNo, long warehouseId, long operator) {
-            rows.add(new Row(id, no, type, sourceNo, warehouseId, 1, 0));
+        public void insert(long id, String no, String type, String sourceNo, long warehouseId,
+                           long ownerId, long operator) {
+            rows.add(new Row(id, no, type, sourceNo, warehouseId, ownerId, 1, 0));
         }
 
         /**
@@ -146,7 +147,8 @@ class OutboundApplicationServiceTest {
             if (row == null) {
                 return 0;
             }
-            rows.set(rows.indexOf(row), new Row(row.id(), row.no(), row.sourceType(), row.sourceNo(), row.warehouseId(), status, version));
+            rows.set(rows.indexOf(row), new Row(row.id(), row.no(), row.sourceType(), row.sourceNo(),
+                row.warehouseId(), row.ownerId(), status, version));
             return 1;
         }
     }

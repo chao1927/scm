@@ -82,7 +82,7 @@ public interface ReverseAfterSaleMapper {
      * @param payload 业务处理参数或成员，类型为 {@code String}
      * @param occurredAt 业务时间，类型为 {@code LocalDateTime}
      */
-    @Insert("insert into oms_outbox_event(event_type,business_no,payload,event_status,occurred_at,created_at) values(#{type},#{businessNo},#{payload},1,#{occurredAt},now())")
+    @Insert("insert into oms_outbox_event(event_code,event_type,business_no,payload,event_status,occurred_at,created_at) values(concat('OMS-',replace(uuid(),'-','')),#{type},#{businessNo},#{payload},1,#{occurredAt},now())")
     void insertOutbox(@Param("type") String type, @Param("businessNo") String businessNo, @Param("payload") String payload, @Param("occurredAt") LocalDateTime occurredAt);
 
     /**

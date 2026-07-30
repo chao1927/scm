@@ -13,4 +13,26 @@ import java.util.Map;
  * @since 0.1.0
  */
 public record PurchaseExternalEvent(String sourceSystem, String eventCode, String eventType, String businessNo, String orderNo, String rfqNo, String quoteNo, String inboundNo, String asnNo, Long supplierId, Long purchaseOrgId, String warehouseCode, String skuCode, BigDecimal quantity, BigDecimal receivedQty, BigDecimal qualifiedQty, BigDecimal unqualifiedQty, BigDecimal putawayQty, BigDecimal amount, String currency, String shipmentId, String waybillNo, String carrierCode, String transportNode, String status, String reason, Integer sourceVersion, OffsetDateTime occurredAt, Map<String, Object> payload) {
+
+    /**
+     * 使用可信事件信封中的来源、编码和类型覆盖 data 内可能携带的同名字段。
+     *
+     * @param envelopeSourceSystem 信封声明的来源系统
+     * @param envelopeEventCode 信封声明的全局事件编码
+     * @param envelopeEventType 信封声明的事件类型
+     * @return 身份字段可信的外部事件
+     */
+    public PurchaseExternalEvent withEnvelopeIdentity(
+            String envelopeSourceSystem,
+            String envelopeEventCode,
+            String envelopeEventType) {
+        return new PurchaseExternalEvent(
+                envelopeSourceSystem, envelopeEventCode, envelopeEventType,
+                businessNo, orderNo, rfqNo, quoteNo, inboundNo, asnNo,
+                supplierId, purchaseOrgId, warehouseCode, skuCode, quantity,
+                receivedQty, qualifiedQty, unqualifiedQty, putawayQty, amount,
+                currency, shipmentId, waybillNo, carrierCode, transportNode,
+                status, reason, sourceVersion, occurredAt, payload
+        );
+    }
 }

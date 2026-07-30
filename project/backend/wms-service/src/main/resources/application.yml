@@ -21,3 +21,10 @@ scm:
   security:
     hmac-secret: ${IAM_JWT_SECRET:}
     permission-namespace: wms
+  rocketmq:
+    enabled: ${SCM_ROCKETMQ_ENABLED:true}
+    endpoints: ${ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
+    wms-topic: ${ROCKETMQ_WMS_TOPIC:wms-domain-event}
+    wms-consumer:
+      topics: ${ROCKETMQ_WMS_CONSUMER_TOPICS:purchase-domain-event,oms-domain-event,inventory-domain-event,supplier-domain-event}
+      group: ${ROCKETMQ_WMS_CONSUMER_GROUP:wms-business-event-consumer}

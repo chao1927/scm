@@ -11,6 +11,8 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
+import org.springframework.security.core.Authentication;
+import com.chaobo.scm.wms.infrastructure.security.WmsAccessControl;
 
 /**
  * WmsOperationController。
@@ -59,7 +61,7 @@ public class WmsOperationController {
      * 执行命令 {@code confirmHandover}。
      *
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
-     * @param body 业务处理参数或成员，类型为 {@code Confirm}
+     * @param body 业务处理参数或成员，类型为 {@code ScopedConfirm}
      * @param request 接口请求参数，类型为 {@code HttpServletRequest}
      * @return 执行命令的结果，类型为 {@code ApiResponse<WmsOperationApplicationService.StatusResult>}
      */
@@ -77,8 +79,10 @@ public class WmsOperationController {
      * @return 执行命令的结果，类型为 {@code ApiResponse<WmsOperationApplicationService.StatusResult>}
      */
     @PostMapping("/stocktakes")
-    public ApiResponse<WmsOperationApplicationService.StatusResult> createStocktake(@Valid @RequestBody CreateStocktake body, HttpServletRequest request) {
-        return ok(service.createStocktake(body.stocktakeNo(), body.warehouseId(), body.sku(), body.differenceQty()), request);
+    public ApiResponse<WmsOperationApplicationService.StatusResult> createStocktake(@Valid @RequestBody CreateStocktake body, HttpServletRequest request, Authentication authentication) {
+        requireScope(authentication, body.warehouseId(), body.ownerId());
+        return ok(service.createStocktake(body.stocktakeNo(), body.warehouseId(), body.ownerId(),
+            body.sku(), body.differenceQty()), request);
     }
 
     /**
@@ -90,8 +94,10 @@ public class WmsOperationController {
      * @return 执行命令的结果，类型为 {@code ApiResponse<WmsOperationApplicationService.StatusResult>}
      */
     @PostMapping("/stocktakes/confirm-difference")
-    public ApiResponse<WmsOperationApplicationService.StatusResult> confirmStocktake(@Valid @RequestBody Confirm body, HttpServletRequest request) {
-        return ok(service.confirmStocktake(body.no(), body.version()), request);
+    public ApiResponse<WmsOperationApplicationService.StatusResult> confirmStocktake(@Valid @RequestBody ScopedConfirm body, HttpServletRequest request, Authentication authentication) {
+        requireScope(authentication, body.warehouseId(), body.ownerId());
+        return ok(service.confirmStocktake(body.no(), body.warehouseId(), body.ownerId(),
+            body.version()), request);
     }
 
     /**
@@ -103,21 +109,25 @@ public class WmsOperationController {
      * @return 执行命令的结果，类型为 {@code ApiResponse<WmsOperationApplicationService.StatusResult>}
      */
     @PostMapping("/warehouse-exceptions")
-    public ApiResponse<WmsOperationApplicationService.StatusResult> createException(@Valid @RequestBody CreateException body, HttpServletRequest request) {
-        return ok(service.createException(body.exceptionNo(), body.reason()), request);
+    public ApiResponse<WmsOperationApplicationService.StatusResult> createException(@Valid @RequestBody CreateException body, HttpServletRequest request, Authentication authentication) {
+        requireScope(authentication, body.warehouseId(), body.ownerId());
+        return ok(service.createException(body.exceptionNo(), body.warehouseId(), body.ownerId(),
+            body.reason()), request);
     }
 
     /**
      * 执行命令 {@code closeException}。
      *
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
-     * @param body 业务处理参数或成员，类型为 {@code Confirm}
+     * @param body 业务处理参数或成员，类型为 {@code ScopedConfirm}
      * @param request 接口请求参数，类型为 {@code HttpServletRequest}
      * @return 执行命令的结果，类型为 {@code ApiResponse<WmsOperationApplicationService.StatusResult>}
      */
     @PostMapping("/warehouse-exceptions/close")
-    public ApiResponse<WmsOperationApplicationService.StatusResult> closeException(@Valid @RequestBody Confirm body, HttpServletRequest request) {
-        return ok(service.closeException(body.no(), body.version()), request);
+    public ApiResponse<WmsOperationApplicationService.StatusResult> closeException(@Valid @RequestBody ScopedConfirm body, HttpServletRequest request, Authentication authentication) {
+        requireScope(authentication, body.warehouseId(), body.ownerId());
+        return ok(service.closeException(body.no(), body.warehouseId(), body.ownerId(),
+            body.version()), request);
     }
 
     /**
@@ -151,7 +161,9 @@ public class WmsOperationController {
      * @author SCM Team
      * @since 0.1.0
      */
-    public record CreateStocktake(@NotBlank String stocktakeNo, @Positive long warehouseId, @NotBlank String sku, @NotNull @DecimalMin("0") BigDecimal differenceQty) {
+    public record CreateStocktake(@NotBlank String stocktakeNo, @Positive long warehouseId,
+                                  @Positive long ownerId, @NotBlank String sku,
+                                  @NotNull @DecimalMin("0") BigDecimal differenceQty) {
     }
 
     /**
@@ -162,7 +174,8 @@ public class WmsOperationController {
      * @author SCM Team
      * @since 0.1.0
      */
-    public record CreateException(@NotBlank String exceptionNo, @NotBlank String reason) {
+    public record CreateException(@NotBlank String exceptionNo, @Positive long warehouseId,
+                                  @Positive long ownerId, @NotBlank String reason) {
     }
 
     /**
@@ -174,5 +187,20 @@ public class WmsOperationController {
      * @since 0.1.0
      */
     public record Confirm(@NotBlank String no, @PositiveOrZero int version) {
+    }
+
+    /**
+     * ScopedConfirm。
+     *
+     * <p>用于必须显式携带仓库与货主数据权限维度的确认命令，避免把权限字段错误地扩散到不需要
+     * 这些维度的交接确认接口。
+     */
+    public record ScopedConfirm(@NotBlank String no, @Positive long warehouseId,
+                                @Positive long ownerId, @PositiveOrZero int version) {
+    }
+
+    private static void requireScope(Authentication authentication, long warehouseId, long ownerId) {
+        WmsAccessControl.requireWarehouse(authentication, warehouseId);
+        WmsAccessControl.requireOwner(authentication, ownerId);
     }
 }

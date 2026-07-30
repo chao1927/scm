@@ -61,7 +61,8 @@ public class OmsApplicationService {
         }
         String orderNo = "SO" + orderSequence.incrementAndGet();
         SalesOrderAggregate aggregate = SalesOrderAggregate.create(orderNo, command.channelCode(), command.channelOrderNo(), command.customerId(), command.receiverAddress(), command.lines());
-        OmsMapper.SalesOrderRow row = toRow(aggregate);
+        OmsMapper.SalesOrderRow row = toRow(
+                aggregate, command.organizationId(), command.ownerId());
         mapper.insertOrder(row);
         mapper.insertChannelOrder(new OmsMapper.ChannelOrderRow(command.channelCode(), command.channelOrderNo(), orderNo, command.rawPayload(), LocalDateTime.now()));
         saveEvents(aggregate.pullEvents());
@@ -79,7 +80,8 @@ public class OmsApplicationService {
      */
     @Transactional(rollbackFor = Exception.class)
     public OmsMapper.SalesOrderRow reviewSalesOrder(String orderNo, ReviewCommand command) {
-        SalesOrderAggregate aggregate = loadOrder(orderNo);
+        OmsMapper.SalesOrderRow persisted = requireOrder(orderNo);
+        SalesOrderAggregate aggregate = restoreOrder(persisted);
         if (command.approved()) {
             aggregate.approve(command.remark());
             log("APPROVE_SALES_ORDER", orderNo, command.operatorId(), command.idempotencyKey());
@@ -87,7 +89,8 @@ public class OmsApplicationService {
             aggregate.intercept(command.remark());
             log("INTERCEPT_SALES_ORDER", orderNo, command.operatorId(), command.idempotencyKey());
         }
-        OmsMapper.SalesOrderRow row = toRow(aggregate);
+        OmsMapper.SalesOrderRow row = toRow(
+                aggregate, persisted.organizationId(), persisted.ownerId());
         mapper.updateOrder(row);
         saveEvents(aggregate.pullEvents());
         return row;
@@ -152,10 +155,18 @@ public class OmsApplicationService {
      * @return 查询并返回的结果，类型为 {@code SalesOrderAggregate}
      */
     private SalesOrderAggregate loadOrder(String orderNo) {
+        return restoreOrder(requireOrder(orderNo));
+    }
+
+    private OmsMapper.SalesOrderRow requireOrder(String orderNo) {
         OmsMapper.SalesOrderRow row = mapper.findOrder(orderNo);
         if (row == null) {
             throw new IllegalArgumentException("sales order not found");
         }
+        return row;
+    }
+
+    private SalesOrderAggregate restoreOrder(OmsMapper.SalesOrderRow row) {
         return SalesOrderAggregate.restore(row.orderNo(), row.channelCode(), row.channelOrderNo(), row.customerId(), row.receiverAddress(), parseLines(row.linePayload()), row.totalAmount(), row.status(), row.reviewRemark(), row.version());
     }
 
@@ -166,8 +177,14 @@ public class OmsApplicationService {
      * @param aggregate 业务处理参数或成员，类型为 {@code SalesOrderAggregate}
      * @return 转换数据模型的结果，类型为 {@code OmsMapper.SalesOrderRow}
      */
-    private OmsMapper.SalesOrderRow toRow(SalesOrderAggregate aggregate) {
-        return new OmsMapper.SalesOrderRow(null, aggregate.orderNo(), aggregate.channelCode(), aggregate.channelOrderNo(), aggregate.customerId(), aggregate.receiverAddress(), formatLines(aggregate.lines()), aggregate.totalAmount(), aggregate.status(), aggregate.reviewRemark(), aggregate.version());
+    private OmsMapper.SalesOrderRow toRow(
+            SalesOrderAggregate aggregate, Long organizationId, Long ownerId) {
+        return new OmsMapper.SalesOrderRow(
+                null, organizationId, ownerId, aggregate.orderNo(),
+                aggregate.channelCode(), aggregate.channelOrderNo(),
+                aggregate.customerId(), aggregate.receiverAddress(),
+                formatLines(aggregate.lines()), aggregate.totalAmount(),
+                aggregate.status(), aggregate.reviewRemark(), aggregate.version());
     }
 
     /**
@@ -234,7 +251,30 @@ public class OmsApplicationService {
      * @author SCM Team
      * @since 0.1.0
      */
-    public record ReceiveChannelOrder(String channelCode, String channelOrderNo, Long customerId, String receiverAddress, List<SalesOrderAggregate.OrderLine> lines, String rawPayload, Long operatorId, String idempotencyKey) {
+    public record ReceiveChannelOrder(
+            String channelCode,
+            String channelOrderNo,
+            Long customerId,
+            String receiverAddress,
+            List<SalesOrderAggregate.OrderLine> lines,
+            String rawPayload,
+            Long operatorId,
+            String idempotencyKey,
+            Long organizationId,
+            Long ownerId) {
+
+        public ReceiveChannelOrder(
+                String channelCode,
+                String channelOrderNo,
+                Long customerId,
+                String receiverAddress,
+                List<SalesOrderAggregate.OrderLine> lines,
+                String rawPayload,
+                Long operatorId,
+                String idempotencyKey) {
+            this(channelCode, channelOrderNo, customerId, receiverAddress, lines,
+                    rawPayload, operatorId, idempotencyKey, null, null);
+        }
     }
 
     /**

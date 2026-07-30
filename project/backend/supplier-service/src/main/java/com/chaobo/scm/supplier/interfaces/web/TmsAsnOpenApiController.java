@@ -18,6 +18,8 @@ import java.time.*;
  */
 @RestController
 @RequestMapping("/internal/supplier/v1/tms/asns")
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+        name = "scm.legacy-http-event-ingress.enabled", havingValue = "true")
 public class TmsAsnOpenApiController {
 
     /**

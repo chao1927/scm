@@ -1,7 +1,10 @@
 package com.chaobo.scm.inventory.infrastructure;
 
+import com.chaobo.scm.inventory.application.InventoryEventFailureStore;
 import com.chaobo.scm.inventory.infrastructure.persistence.InventoryEventMapper;
 import com.chaobo.scm.inventory.infrastructure.persistence.InventoryMapper;
+import com.chaobo.scm.inventory.infrastructure.persistence.InventoryReliableEventMapper;
+import com.chaobo.scm.inventory.infrastructure.persistence.InventoryWorkflowMapper;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -77,6 +80,24 @@ class InventoryMySqlIntegrationTest {
     InventoryEventMapper events;
 
     /**
+     * 冻结调整工作流真实 MyBatis 映射。
+     */
+    @Autowired
+    InventoryWorkflowMapper workflows;
+
+    /**
+     * 版本化 Inbox 与顺序游标真实 MyBatis 映射。
+     */
+    @Autowired
+    InventoryReliableEventMapper reliableEvents;
+
+    /**
+     * 失败事件查询与人工重放真实 MyBatis 存储。
+     */
+    @Autowired
+    InventoryEventFailureStore failures;
+
+    /**
      * 处理当前类型职责中的操作 {@code runsAllMigrationsAndEnforcesMyBatisSqlIdempotencyAndOptimisticLock}。
      *
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
@@ -84,11 +105,62 @@ class InventoryMySqlIntegrationTest {
     @Test
     void runsAllMigrationsAndEnforcesMyBatisSqlIdempotencyAndOptimisticLock() {
         long applied = java.util.Arrays.stream(flyway.info().applied()).count();
-        assertThat(applied).isGreaterThanOrEqualTo(5);
+        assertThat(applied).isGreaterThanOrEqualTo(7);
         inventory.insertAccount(1, 88, 10, "SKU-1", null, new BigDecimal("10"), new BigDecimal("10"), BigDecimal.ZERO, BigDecimal.ZERO, 0);
         assertThat(inventory.updateAccount(1, new BigDecimal("10"), new BigDecimal("9"), BigDecimal.ONE, BigDecimal.ZERO, 1, 0)).isEqualTo(1);
         assertThat(inventory.updateAccount(1, new BigDecimal("10"), new BigDecimal("8"), new BigDecimal("2"), BigDecimal.ZERO, 1, 0)).isZero();
         events.insertInbox("WMS", "EVENT-1", "ReturnInspected", "{\"afterSaleNo\":\"AS-1\"}");
         assertThatThrownBy(() -> events.insertInbox("WMS", "EVENT-1", "ReturnInspected", "{\"afterSaleNo\":\"AS-1\"}")).isInstanceOf(DuplicateKeyException.class);
+        workflows.insertReceipt("IDEM-1", "CREATE_FREEZE", "fingerprint", "FRZ-1");
+        assertThat(workflows.findReceipt("IDEM-1").aggregateNo()).isEqualTo("FRZ-1");
+        assertThatThrownBy(() -> workflows.insertReceipt(
+                "IDEM-1", "CREATE_FREEZE", "fingerprint", "FRZ-1"))
+                .isInstanceOf(DuplicateKeyException.class);
+
+        String envelope = """
+                {
+                  "eventId":"EVENT-V7",
+                  "eventType":"WmsPutawayCompleted",
+                  "eventVersion":"1.0",
+                  "sourceContext":"WMS",
+                  "sourceSystem":"WMS",
+                  "aggregateType":"InboundOrder",
+                  "aggregateId":"IN-1",
+                  "aggregateVersion":1,
+                  "businessKey":"IN-1",
+                  "idempotencyKey":"EVENT-V7",
+                  "occurredAt":"2026-07-30T10:00:00+08:00",
+                  "payload":{"inboundOrderNo":"IN-1"}
+                }
+                """;
+        reliableEvents.insertInbox(new InventoryReliableEventMapper.InboxInsert(
+                "WMS", "EVENT-V7", "WmsPutawayCompleted", "1.0",
+                "InboundOrder", "IN-1", 1L, "inventory-domain-event", envelope));
+        InventoryReliableEventMapper.InboxRow inbox = reliableEvents.findInbox(
+                "WMS", "EVENT-V7", "inventory-domain-event");
+        reliableEvents.markFailed(inbox.id(), "downstream unavailable");
+        assertThat(failures.findFailure(
+                InventoryEventFailureStore.Direction.INBOUND,
+                "EVENT-V7").rawJson())
+                .contains("\"eventVersion\"", "\"1.0\"");
+
+        InventoryEventFailureStore.ReplayRegistration replay =
+                failures.registerReplay(
+                        "REPLAY-IDEM-1",
+                        InventoryEventFailureStore.Direction.INBOUND,
+                        "EVENT-V7",
+                        "manual verification",
+                        1001L);
+        InventoryEventFailureStore.ReplayRegistration duplicateReplay =
+                failures.registerReplay(
+                        "REPLAY-IDEM-1",
+                        InventoryEventFailureStore.Direction.INBOUND,
+                        "EVENT-V7",
+                        "manual verification",
+                        1001L);
+        assertThat(replay.newlyRegistered()).isTrue();
+        assertThat(replay.replayId()).isPositive();
+        assertThat(duplicateReplay.newlyRegistered()).isFalse();
+        assertThat(duplicateReplay.replayId()).isEqualTo(replay.replayId());
     }
 }

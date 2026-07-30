@@ -4,7 +4,6 @@ import com.chaobo.scm.oms.application.AfterSaleApplicationService;
 import com.chaobo.scm.oms.infrastructure.persistence.CancellationMapper;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -90,15 +89,4 @@ public class AfterSaleController {
         return service.complete(afterSaleNo, command);
     }
 
-    /**
-     * 查询并返回 {@code get}。
-     *
-     * <p>该方法只读取或转换当前上下文数据，不应绕过数据权限，也不应产生业务状态副作用。
-     * @param afterSaleNo 可追踪业务编码，类型为 {@code String}
-     * @return 查询并返回的结果，类型为 {@code CancellationMapper.AfterSaleRow}
-     */
-    @GetMapping("/{afterSaleNo}")
-    public CancellationMapper.AfterSaleRow get(@PathVariable String afterSaleNo) {
-        return service.get(afterSaleNo);
-    }
 }

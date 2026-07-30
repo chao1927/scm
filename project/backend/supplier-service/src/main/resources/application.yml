@@ -62,3 +62,15 @@ scm:
     expire-cron: ${SUPPLIER_QUOTE_EXPIRE_CRON:0 20 0 * * *}
   quality:
     overdue-cron: ${SUPPLIER_QUALITY_OVERDUE_CRON:0 30 0 * * *}
+  supplier:
+    export:
+      batch-size: ${SUPPLIER_EXPORT_BATCH_SIZE:10}
+      max-retries: ${SUPPLIER_EXPORT_MAX_RETRIES:5}
+      max-rows: ${SUPPLIER_EXPORT_MAX_ROWS:10000}
+      fixed-delay: ${SUPPLIER_EXPORT_FIXED_DELAY:3000}
+      retry-delay-seconds: ${SUPPLIER_EXPORT_RETRY_DELAY_SECONDS:60}
+      processing-timeout-seconds: ${SUPPLIER_EXPORT_PROCESSING_TIMEOUT_SECONDS:600}
+      storage:
+        type: ${SUPPLIER_EXPORT_STORAGE_TYPE:local}
+        local:
+          root: ${SUPPLIER_EXPORT_LOCAL_ROOT:./data/supplier-exports}

@@ -22,7 +22,7 @@ class InboundOrderAggregateTest {
      */
     @Test
     void pendingInboundCanBeCancelledWithReason() {
-        var order = InboundOrderAggregate.create(1, "WIB001", "PURCHASE", "ASN001", 1001, null);
+        var order = InboundOrderAggregate.create(1, "WIB001", "PURCHASE", "ASN001", 1001, 2001, null);
         order.cancel("采购订单取消");
         assertThat(order.status()).isEqualTo(InboundOrderStatus.CANCELLED);
         assertThat(order.version()).isEqualTo(1);
@@ -35,7 +35,7 @@ class InboundOrderAggregateTest {
      */
     @Test
     void cancellationRequiresReason() {
-        var order = InboundOrderAggregate.create(1, "WIB001", "PURCHASE", "ASN001", 1001, null);
+        var order = InboundOrderAggregate.create(1, "WIB001", "PURCHASE", "ASN001", 1001, 2001, null);
         assertThatThrownBy(() -> order.cancel("")).isInstanceOf(BusinessException.class).hasMessageContaining("取消原因不能为空");
     }
 }

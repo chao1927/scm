@@ -152,7 +152,7 @@ public interface CancellationMapper {
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
      * @param row 业务处理参数或成员，类型为 {@code OutboxRow}
      */
-    @Insert("insert into oms_outbox_event(event_type,business_no,payload,event_status,occurred_at,created_at) values(#{eventType},#{businessNo},#{payload},1,#{occurredAt},now())")
+    @Insert("insert into oms_outbox_event(event_code,event_type,business_no,payload,event_status,occurred_at,created_at) values(concat('OMS-',replace(uuid(),'-','')),#{eventType},#{businessNo},#{payload},1,#{occurredAt},now())")
     void insertOutbox(OutboxRow row);
 
     /**

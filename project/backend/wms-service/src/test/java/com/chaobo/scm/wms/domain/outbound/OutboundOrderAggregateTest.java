@@ -22,7 +22,7 @@ class OutboundOrderAggregateTest {
      */
     @Test
     void allocationAndCancellationFollowStateMachine() {
-        var outbound = new OutboundOrderAggregate(1, "OUT1", "OMS", "SO1", 1, 1, 0);
+        var outbound = new OutboundOrderAggregate(1, "OUT1", "OMS", "SO1", 1, 2, 1, 0);
         outbound.allocate();
         assertThat(outbound.status()).isEqualTo(2);
         outbound.cancel("客户取消");
@@ -37,7 +37,7 @@ class OutboundOrderAggregateTest {
      */
     @Test
     void cancelRequiresReasonAndRejectsRepeatedCancel() {
-        var outbound = new OutboundOrderAggregate(1, "OUT1", "OMS", "SO1", 1, 1, 0);
+        var outbound = new OutboundOrderAggregate(1, "OUT1", "OMS", "SO1", 1, 2, 1, 0);
         assertThatThrownBy(() -> outbound.cancel("")).isInstanceOf(BusinessException.class);
         outbound.cancel("客户取消");
         assertThatThrownBy(() -> outbound.cancel("重复取消")).isInstanceOf(BusinessException.class);

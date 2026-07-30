@@ -8,9 +8,14 @@ import jakarta.servlet.http.*;
 import jakarta.validation.*;
 import jakarta.validation.constraints.*;
 import org.springframework.security.core.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.nio.charset.StandardCharsets;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -210,6 +215,7 @@ public class SupplierOperationsController {
      * @return 执行命令的结果，类型为 {@code ApiResponse<Long>}
      */
     @PostMapping("/exports")
+    @PreAuthorize("hasAuthority('supplier:export:create')")
     public ApiResponse<Long> createExport(@Valid @RequestBody ExportCreate body, HttpServletRequest request, Authentication authentication) {
         return ok(service.createExport(body.exportType(), body.supplierId(), body.queryJson(), contexts.create(request, authentication)), request);
     }
@@ -227,6 +233,7 @@ public class SupplierOperationsController {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code ApiResponse<List<OperationViews.ExportTask>>}
      */
     @GetMapping("/exports")
+    @PreAuthorize("hasAuthority('supplier:export:read')")
     public ApiResponse<List<OperationViews.ExportTask>> exports(@RequestParam(required = false) Long supplierId, @RequestParam(required = false) Integer status, @RequestParam(defaultValue = "1") int pageNo, @RequestParam(defaultValue = "20") int pageSize, @AuthenticationPrincipal Jwt jwt, HttpServletRequest request) {
         return ok(service.exportTasks(supplierId, scope(jwt), status, pageNo, pageSize), request);
     }
@@ -240,40 +247,36 @@ public class SupplierOperationsController {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code ApiResponse<OperationViews.ExportTask>}
      */
     @GetMapping("/exports/{id}")
-    public ApiResponse<OperationViews.ExportTask> exportDetail(@PathVariable long id, HttpServletRequest request) {
-        return ok(service.exportTask(id), request);
+    @PreAuthorize("hasAuthority('supplier:export:read')")
+    public ApiResponse<OperationViews.ExportTask> exportDetail(@PathVariable long id,
+                                                               @AuthenticationPrincipal Jwt jwt,
+                                                               HttpServletRequest request) {
+        return ok(service.exportTask(id, scope(jwt)), request);
     }
 
     /**
-     * 执行命令 {@code completeExport}。
-     *
-     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
-     * @param id 业务或技术标识，类型为 {@code long}
-     * @param body 业务处理参数或成员，类型为 {@code ExportComplete}
-     * @param request 接口请求参数，类型为 {@code HttpServletRequest}
-     * @param authentication 业务处理参数或成员，类型为 {@code Authentication}
-     * @return 执行命令的结果，类型为 {@code ApiResponse<Void>}
+     * 人工重试失败导出任务。
      */
-    @PostMapping("/exports/{id}/complete")
-    public ApiResponse<Void> completeExport(@PathVariable long id, @Valid @RequestBody ExportComplete body, HttpServletRequest request, Authentication authentication) {
-        service.completeExport(id, body.version(), body.fileUrl(), contexts.create(request, authentication));
+    @PostMapping("/exports/{id}/retry")
+    @PreAuthorize("hasAuthority('supplier:export:retry')")
+    public ApiResponse<Void> retryExport(@PathVariable long id, @Valid @RequestBody ExportRetry body,
+                                         HttpServletRequest request, Authentication authentication) {
+        service.retryExport(id, body.version(), contexts.create(request, authentication));
         return ok(null, request);
     }
 
     /**
-     * 处理当前类型职责中的操作 {@code failExport}。
-     *
-     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
-     * @param id 业务或技术标识，类型为 {@code long}
-     * @param body 业务处理参数或成员，类型为 {@code ExportFail}
-     * @param request 接口请求参数，类型为 {@code HttpServletRequest}
-     * @param authentication 业务处理参数或成员，类型为 {@code Authentication}
-     * @return 处理当前类型职责中的操作的结果，类型为 {@code ApiResponse<Void>}
+     * 下载已完成的真实导出文件。
      */
-    @PostMapping("/exports/{id}/fail")
-    public ApiResponse<Void> failExport(@PathVariable long id, @Valid @RequestBody ExportFail body, HttpServletRequest request, Authentication authentication) {
-        service.failExport(id, body.version(), body.reason(), contexts.create(request, authentication));
-        return ok(null, request);
+    @GetMapping("/exports/{id}/file")
+    @PreAuthorize("hasAuthority('supplier:export:read')")
+    public ResponseEntity<byte[]> downloadExport(@PathVariable long id, @AuthenticationPrincipal Jwt jwt) {
+        var file = service.downloadExport(id, scope(jwt));
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(file.fileName(), StandardCharsets.UTF_8).build().toString())
+                .header(HttpHeaders.CONTENT_TYPE, file.contentType())
+                .body(file.bytes());
     }
 
     /**
@@ -352,18 +355,7 @@ public class SupplierOperationsController {
      * @author SCM Team
      * @since 0.1.0
      */
-    public record ExportComplete(@PositiveOrZero int version, @NotBlank String fileUrl) {
-    }
-
-    /**
-     * ExportFail。
-     *
-     * <p>位于接口层，负责协议转换、输入校验、身份上下文提取和响应封装，不承载领域规则。作为不可变数据载体集中表达一组相关业务参数或查询结果。该类型只在所属限界上下文内表达该语义，跨上下文协作应通过已声明的接口或事件完成。
-     *
-     * @author SCM Team
-     * @since 0.1.0
-     */
-    public record ExportFail(@PositiveOrZero int version, @NotBlank String reason) {
+    public record ExportRetry(@PositiveOrZero int version) {
     }
 
     /**

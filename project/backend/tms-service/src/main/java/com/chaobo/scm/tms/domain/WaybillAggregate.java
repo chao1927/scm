@@ -27,6 +27,24 @@ public class WaybillAggregate {
      */
     public static final int VOIDED = 2;
 
+    /** 承运商已揽收。 */
+    public static final int PICKED_UP = 3;
+
+    /** 运输途中。 */
+    public static final int IN_TRANSIT = 4;
+
+    /** 已到达目的地。 */
+    public static final int ARRIVED = 5;
+
+    /** 已签收终态。 */
+    public static final int SIGNED = 6;
+
+    /** 已拒收终态。 */
+    public static final int REJECTED = 7;
+
+    /** 部分签收终态。 */
+    public static final int PARTIAL_SIGNED = 8;
+
     /**
      * waybillNo（类型：{@code String}）。
      *
@@ -207,6 +225,58 @@ public class WaybillAggregate {
         this.approvalNo = approvalNo;
         version++;
         events.add(TmsEvent.of("WaybillVoided", waybillNo, reason));
+    }
+
+    /**
+     * 根据标准轨迹节点单向推进运单状态。
+     *
+     * <p>乱序轨迹只保存轨迹事实，不允许状态回退；终态和作废态不能被后续轨迹覆盖。
+     *
+     * @param nodeCode TMS 标准节点
+     */
+    public void advanceFromTrack(String nodeCode) {
+        if (status == VOIDED || isTerminal(status)) {
+            return;
+        }
+        int target = switch (nodeCode) {
+            case "PICKED_UP" -> PICKED_UP;
+            case "IN_TRANSIT" -> IN_TRANSIT;
+            case "ARRIVED" -> ARRIVED;
+            default -> status;
+        };
+        if (target > status) {
+            status = target;
+            version++;
+        }
+    }
+
+    /**
+     * 根据签收结果推进运单终态。
+     *
+     * @param receiptResult 签收聚合稳定结果值
+     */
+    public void advanceFromReceipt(int receiptResult) {
+        if (status == VOIDED) {
+            throw new IllegalStateException("voided waybill cannot receive receipt");
+        }
+        int target = switch (receiptResult) {
+            case 1 -> SIGNED;
+            case 2 -> REJECTED;
+            case 3 -> PARTIAL_SIGNED;
+            default -> throw new IllegalArgumentException("unsupported receipt result");
+        };
+        if (isTerminal(status)) {
+            if (status != target) {
+                throw new IllegalStateException("waybill receipt result conflicts with terminal state");
+            }
+            return;
+        }
+        status = target;
+        version++;
+    }
+
+    private static boolean isTerminal(int current) {
+        return current == SIGNED || current == REJECTED || current == PARTIAL_SIGNED;
     }
 
     /**

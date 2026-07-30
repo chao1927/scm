@@ -161,9 +161,12 @@ public class WmsInboundEventApplicationService {
         var payload = readPayload(row.payload());
         switch(row.eventType()) {
             case "CreateInboundOrderRequested" ->
-                inboundOrders.create(new InboundOrderApplicationService.Create(text(payload, "sourceType"), text(payload, "sourceNo"), longValue(payload, "warehouseId"), offsetDateTime(payload, "expectedArrivalAt"), row.eventCode()), operatorId);
+                inboundOrders.create(new InboundOrderApplicationService.Create(text(payload, "sourceType"),
+                    text(payload, "sourceNo"), longValue(payload, "warehouseId"), longValue(payload, "ownerId"),
+                    offsetDateTime(payload, "expectedArrivalAt"), row.eventCode()), operatorId);
             case "CreateOutboundOrderRequested" ->
-                outboundOrders.create(text(payload, "sourceType"), text(payload, "sourceNo"), longValue(payload, "warehouseId"), operatorId);
+                outboundOrders.create(text(payload, "sourceType"), text(payload, "sourceNo"),
+                    longValue(payload, "warehouseId"), longValue(payload, "ownerId"), operatorId);
             case "TransferStockReserved" ->
                 {
                     requireSource(row, "INVENTORY");

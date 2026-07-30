@@ -65,7 +65,7 @@ public class InboundOrderApplicationService {
         }
         var id = sequence.incrementAndGet();
         var inboundNo = "WIB" + LocalDate.now().toString().replace("-", "") + id;
-        var order = InboundOrderAggregate.create(id, inboundNo, command.sourceType(), command.sourceNo(), command.warehouseId(), command.expectedArrivalAt());
+        var order = InboundOrderAggregate.create(id, inboundNo, command.sourceType(), command.sourceNo(), command.warehouseId(), command.ownerId(), command.expectedArrivalAt());
         repository.save(order, operatorId);
         return result(order, false);
     }
@@ -114,7 +114,7 @@ public class InboundOrderApplicationService {
      * @author SCM Team
      * @since 0.1.0
      */
-    public record Create(String sourceType, String sourceNo, long warehouseId, OffsetDateTime expectedArrivalAt, String idempotencyKey) {
+    public record Create(String sourceType, String sourceNo, long warehouseId, long ownerId, OffsetDateTime expectedArrivalAt, String idempotencyKey) {
     }
 
     /**

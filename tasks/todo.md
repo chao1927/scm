@@ -8,33 +8,35 @@
 
 | 状态 | 编号 | Agent | 依赖 | 任务 |
 | --- | --- | --- | --- | --- |
-| [-] | PAR-NEXT-001 | frontend-foundation | 无 | 前端九子系统配置拆分 |
-| [-] | PAR-NEXT-002 | plan-governance | 无 | 计划与契约一致性校验 |
+| [x] | PAR-NEXT-001 | frontend-foundation | 无 | 前端九子系统配置拆分 |
+| [x] | PAR-NEXT-002 | plan-governance | 无 | 计划与契约一致性校验 |
 
 ## 批次 1：供给、仓储与库存
 
 | 状态 | 编号 | Agent | 依赖 | 任务 |
 | --- | --- | --- | --- | --- |
-| [ ] | SUP-NEXT-001A | 未领取 | PAR-NEXT-001 | 供应商导出文件与对象存储端口 |
-| [ ] | SUP-NEXT-001B | 未领取 | SUP-NEXT-001A | 供应商 Web/MySQL 契约测试 |
-| [ ] | PUR-NEXT-001A | 未领取 | PAR-NEXT-001 | 采购工作台与经营读模型 |
-| [ ] | PUR-NEXT-001B | 未领取 | PUR-NEXT-001A | 采购目标上下文路由契约测试 |
-| [ ] | WMS-NEXT-001A | 未领取 | PAR-NEXT-001 | WMS 入库作业读模型 |
-| [-] | INV-NEXT-001A | inventory-domain | 无 | 库存冻结与调整独立聚合 |
-| [ ] | INV-NEXT-001B | 未领取 | INV-NEXT-001A | 库存事件载荷版本与失败治理 |
-| [ ] | INV-NEXT-001C | 未领取 | PAR-NEXT-001、INV-NEXT-001B | 库存运营读模型与导出 |
+| [x] | SUP-NEXT-001A | frontend-foundation | PAR-NEXT-001 | 供应商导出文件与对象存储端口 |
+| [x] | SUP-NEXT-001B | frontend-foundation | SUP-NEXT-001A | 供应商 Web/MySQL 契约测试 |
+| [x] | SUP-MQ-001 | frontend-foundation | SUP-NEXT-001B | 供应商真实 RocketMQ 统一业务事件消费与 HTTP 主链路下线 |
+| [x] | PUR-NEXT-001A | plan-governance | PAR-NEXT-001 | 采购工作台与经营读模型 |
+| [x] | PUR-NEXT-001B | plan-governance | PUR-NEXT-001A | 采购目标上下文路由契约测试 |
+| [x] | PUR-MQ-001 | plan-governance | PUR-NEXT-001B | 采购真实 RocketMQ 事件消费链路 |
+| [x] | WMS-NEXT-001A | root-coordinator | PAR-NEXT-001 | WMS 入库作业读模型 |
+| [x] | INV-NEXT-001A | inventory-domain | 无 | 库存冻结与调整独立聚合 |
+| [x] | INV-NEXT-001B | inventory-domain | INV-NEXT-001A | 库存事件载荷版本与失败治理 |
+| [-] | INV-NEXT-001C | inventory-domain | PAR-NEXT-001、INV-NEXT-001B | 库存运营读模型与导出 |
 
 ## 批次 2：履约、运输、结算与主数据
 
 | 状态 | 编号 | Agent | 依赖 | 任务 |
 | --- | --- | --- | --- | --- |
-| [ ] | OMS-NEXT-001A | 未领取 | PAR-NEXT-001 | OMS 履约、售后和异常读模型 |
+| [-] | OMS-NEXT-001A | plan-governance | PAR-NEXT-001 | OMS 履约、售后和异常读模型 |
 | [ ] | OMS-NEXT-001B | 未领取 | OMS-NEXT-001A | OMS 履约指标与异步导出 |
-| [ ] | TMS-NEXT-001A | 未领取 | 无 | 承运商回调验签与运单状态推进 |
-| [ ] | TMS-NEXT-001B | 未领取 | PAR-NEXT-001、TMS-NEXT-001A | 面单附件与 TMS 标准页面 |
-| [ ] | BMS-NEXT-001A | 未领取 | 无 | 财税支付防腐层 |
-| [ ] | BMS-NEXT-001B | 未领取 | PAR-NEXT-001、BMS-NEXT-001A | 财务页面与异步报表 |
-| [ ] | MDM-NEXT-001A | 未领取 | 无 | 主数据真实文件导入导出 |
+| [x] | TMS-NEXT-001A | root-coordinator | 无 | 承运商回调验签与运单状态推进 |
+| [x] | TMS-NEXT-001B | frontend-foundation | PAR-NEXT-001、TMS-NEXT-001A | 面单附件与 TMS 标准页面 |
+| [x] | BMS-NEXT-001A | root-coordinator | 无 | 财税支付防腐层 |
+| [-] | BMS-NEXT-001B | frontend-foundation | PAR-NEXT-001、BMS-NEXT-001A | 财务页面与异步报表 |
+| [-] | MDM-NEXT-001A | root-coordinator | 无 | 主数据真实文件导入导出 |
 | [ ] | MDM-NEXT-001B | 未领取 | PAR-NEXT-001、MDM-NEXT-001A | OpenAPI 数据边界与页面 |
 
 ## 批次 3：权限、剩余 WMS、公共前端与 QA
@@ -43,8 +45,8 @@
 | --- | --- | --- | --- | --- |
 | [ ] | IAM-NEXT-001A | 未领取 | 无 | Redis TokenCache 与密钥轮换 |
 | [ ] | IAM-NEXT-001B | 未领取 | PAR-NEXT-001、IAM-NEXT-001A | OAuth/OIDC、MFA 与管理页面 |
-| [ ] | WMS-NEXT-001B | 未领取 | WMS-NEXT-001A | WMS 出库作业读模型 |
-| [ ] | WMS-NEXT-001C | 未领取 | WMS-NEXT-001B | WMS 退货、盘点与异常读模型 |
+| [x] | WMS-NEXT-001B | root-coordinator | WMS-NEXT-001A | WMS 出库作业读模型 |
+| [x] | WMS-NEXT-001C | root-coordinator | WMS-NEXT-001B | WMS 退货、盘点与异常读模型 |
 | [ ] | FE-NEXT-001 | 未领取 | 九子系统页面任务 | 统一交互与可访问性回归 |
 | [ ] | QA-NEXT-001 | 未领取 | 各批次增量、最终依赖全部 NEXT | 九服务真实 API 与数据库回归 |
 

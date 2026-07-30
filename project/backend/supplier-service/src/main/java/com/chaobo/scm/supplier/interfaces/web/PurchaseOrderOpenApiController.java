@@ -22,6 +22,8 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/openapi/supplier/v1/purchase-orders")
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+        name = "scm.legacy-http-event-ingress.enabled", havingValue = "true")
 public class PurchaseOrderOpenApiController {
 
     /**

@@ -25,7 +25,8 @@ public interface OutboundMapper {
      * @author SCM Team
      * @since 0.1.0
      */
-    record Row(long id, String no, String sourceType, String sourceNo, long warehouseId, int status, int version) {
+    record Row(long id, String no, String sourceType, String sourceNo, long warehouseId,
+               long ownerId, int status, int version) {
     }
 
     /**
@@ -39,7 +40,7 @@ public interface OutboundMapper {
      */
     @Select("""
         select outbound_id id, outbound_no no, source_type sourceType, source_no sourceNo,
-               warehouse_id warehouseId, outbound_status status, version
+               warehouse_id warehouseId, owner_id ownerId, outbound_status status, version
         from wms_outbound
         where source_type=#{type} and source_no=#{sourceNo} and warehouse_id=#{warehouseId}
         """)
@@ -54,19 +55,22 @@ public interface OutboundMapper {
      * @param type 业务处理参数或成员，类型为 {@code String}
      * @param sourceNo 可追踪业务编码，类型为 {@code String}
      * @param warehouseId 业务或技术标识，类型为 {@code long}
+     * @param ownerId 货主标识，类型为 {@code long}
      * @param operator 业务处理参数或成员，类型为 {@code long}
      */
     @Insert("""
         insert into wms_outbound(
-            outbound_id, outbound_no, source_type, source_no, warehouse_id,
+            outbound_id, outbound_no, source_type, source_no, warehouse_id, owner_id,
             outbound_status, version, created_by, updated_by, created_at, updated_at
         )
         values(
-            #{id}, #{no}, #{type}, #{sourceNo}, #{warehouseId},
+            #{id}, #{no}, #{type}, #{sourceNo}, #{warehouseId}, #{ownerId},
             1, 0, #{operator}, #{operator}, now(3), now(3)
         )
         """)
-    void insert(@Param("id") long id, @Param("no") String no, @Param("type") String type, @Param("sourceNo") String sourceNo, @Param("warehouseId") long warehouseId, @Param("operator") long operator);
+    void insert(@Param("id") long id, @Param("no") String no, @Param("type") String type,
+                @Param("sourceNo") String sourceNo, @Param("warehouseId") long warehouseId,
+                @Param("ownerId") long ownerId, @Param("operator") long operator);
 
     /**
      * 执行命令 {@code update}。

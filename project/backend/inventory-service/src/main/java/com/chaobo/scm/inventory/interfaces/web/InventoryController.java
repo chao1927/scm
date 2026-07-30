@@ -127,51 +127,6 @@ public class InventoryController {
     }
 
     /**
-     * 执行命令 {@code freeze}。
-     *
-     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
-     * @param body 业务处理参数或成员，类型为 {@code AccountRequest}
-     * @param request 接口请求参数，类型为 {@code HttpServletRequest}
-     * @param authentication 业务处理参数或成员，类型为 {@code Authentication}
-     * @return 执行命令的结果，类型为 {@code ApiResponse<InventoryApplicationService.AccountResult>}
-     */
-    @PostMapping("/api/inventory/v1/freezes")
-    public ApiResponse<InventoryApplicationService.AccountResult> freeze(@Valid @RequestBody AccountRequest body, HttpServletRequest request, Authentication authentication) {
-        InventoryAccessControl.requireAccountScope(authentication, body.ownerId(), body.warehouseId());
-        return ok(service.freeze(command(body, "INVENTORY")), request);
-    }
-
-    /**
-     * 处理当前类型职责中的操作 {@code unfreeze}。
-     *
-     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
-     * @param body 业务处理参数或成员，类型为 {@code AccountRequest}
-     * @param request 接口请求参数，类型为 {@code HttpServletRequest}
-     * @param authentication 业务处理参数或成员，类型为 {@code Authentication}
-     * @return 处理当前类型职责中的操作的结果，类型为 {@code ApiResponse<InventoryApplicationService.AccountResult>}
-     */
-    @PostMapping("/api/inventory/v1/freezes/unfreeze")
-    public ApiResponse<InventoryApplicationService.AccountResult> unfreeze(@Valid @RequestBody AccountRequest body, HttpServletRequest request, Authentication authentication) {
-        InventoryAccessControl.requireAccountScope(authentication, body.ownerId(), body.warehouseId());
-        return ok(service.unfreeze(command(body, "INVENTORY")), request);
-    }
-
-    /**
-     * 执行命令 {@code adjust}。
-     *
-     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
-     * @param body 业务处理参数或成员，类型为 {@code AccountRequest}
-     * @param request 接口请求参数，类型为 {@code HttpServletRequest}
-     * @param authentication 业务处理参数或成员，类型为 {@code Authentication}
-     * @return 执行命令的结果，类型为 {@code ApiResponse<InventoryApplicationService.AccountResult>}
-     */
-    @PostMapping("/api/inventory/v1/adjustments")
-    public ApiResponse<InventoryApplicationService.AccountResult> adjust(@Valid @RequestBody AccountRequest body, HttpServletRequest request, Authentication authentication) {
-        InventoryAccessControl.requireAccountScope(authentication, body.ownerId(), body.warehouseId());
-        return ok(service.adjust(command(body, "INVENTORY")), request);
-    }
-
-    /**
      * 处理当前类型职责中的操作 {@code command}。
      *
      * <p>该内部步骤用于收敛重复逻辑或保护局部规则，调用方应通过当前类型公开的业务入口使用该能力。

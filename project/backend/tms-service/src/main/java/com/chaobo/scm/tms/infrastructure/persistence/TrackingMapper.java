@@ -93,6 +93,26 @@ public interface TrackingMapper {
     int claimEvent(EventInboxRow row);
 
     /**
+     * 查询 Inbox 当前处理状态。
+     *
+     * @param eventId 事件幂等编号
+     * @return Inbox 当前记录，不存在时返回 {@code null}
+     */
+    @Select("select event_id eventId,event_type eventType,business_no businessNo,payload,"
+        + "event_status status,error_message errorMessage from tms_event_inbox where event_id=#{eventId}")
+    EventInboxRow findEvent(@Param("eventId") String eventId);
+
+    /**
+     * 把上次失败的 Inbox 记录重新声明为处理中。
+     *
+     * @param eventId 事件幂等编号
+     * @return 成功重新声明时为 1，否则为 0
+     */
+    @Update("update tms_event_inbox set event_status=1,error_message=null,updated_at=now() "
+        + "where event_id=#{eventId} and event_status=3")
+    int reclaimFailedEvent(@Param("eventId") String eventId);
+
+    /**
      * 执行命令 {@code updateEvent}。
      *
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。

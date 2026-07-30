@@ -24,3 +24,27 @@ scm:
   security:
     hmac-secret: ${IAM_JWT_SECRET:}
     permission-namespace: bms
+  bms:
+    report:
+      object-storage-root: ${BMS_REPORT_OBJECT_STORAGE_ROOT:${java.io.tmpdir}/scm-bms-reports}
+      batch-size: ${BMS_REPORT_EXPORT_BATCH_SIZE:20}
+      max-attempts: ${BMS_REPORT_EXPORT_MAX_ATTEMPTS:5}
+      fixed-delay: ${BMS_REPORT_EXPORT_FIXED_DELAY:2000}
+    external:
+      shared-secret: ${BMS_EXTERNAL_SHARED_SECRET:}
+      erp-post-url: ${BMS_ERP_POST_URL:http://127.0.0.1:19001/api/finance/post}
+      tax-issue-url: ${BMS_TAX_ISSUE_URL:http://127.0.0.1:19002/api/invoices/issue}
+      payment-refund-url: ${BMS_PAYMENT_REFUND_URL:http://127.0.0.1:19003/api/refunds}
+      callback-max-clock-skew-seconds: ${BMS_CALLBACK_MAX_CLOCK_SKEW_SECONDS:300}
+      batch-size: ${BMS_EXTERNAL_BATCH_SIZE:50}
+      fixed-delay: ${BMS_EXTERNAL_FIXED_DELAY:2000}
+  rocketmq:
+    endpoints: ${ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
+    bms-topic: ${ROCKETMQ_BMS_TOPIC:bms-domain-event}
+    bms-consumer:
+      topics: ${ROCKETMQ_BMS_CONSUMER_TOPICS:purchase-domain-event,supplier-domain-event,wms-domain-event,tms-domain-event,oms-domain-event}
+      group: ${ROCKETMQ_BMS_CONSUMER_GROUP:bms-business-event-consumer}
+  outbox:
+    batch-size: ${BMS_OUTBOX_BATCH_SIZE:100}
+    max-retries: ${BMS_OUTBOX_MAX_RETRIES:16}
+    fixed-delay: ${BMS_OUTBOX_FIXED_DELAY:1000}

@@ -128,13 +128,16 @@ public class WmsOperationApplicationService {
      * @return 执行命令的结果，类型为 {@code StatusResult}
      */
     @Transactional(rollbackFor = Exception.class)
-    public StatusResult createStocktake(String stocktakeNo, long warehouseId, String sku, BigDecimal differenceQty) {
+    public StatusResult createStocktake(String stocktakeNo, long warehouseId, long ownerId,
+                                        String sku, BigDecimal differenceQty) {
         var existed = stocktakes.find(stocktakeNo);
         if (existed != null) {
+            requireScope(existed.warehouseId(), existed.ownerId(), warehouseId, ownerId);
             return stocktakeView(toStocktake(existed), true);
         }
         var stocktake = new StocktakeAggregate(ids.incrementAndGet(), stocktakeNo, warehouseId, sku, differenceQty, 1, 0);
-        stocktakes.insert(stocktake.id(), stocktake.stocktakeNo(), stocktake.warehouseId(), stocktake.sku(), stocktake.differenceQty(), stocktake.status(), stocktake.version());
+        stocktakes.insert(stocktake.id(), stocktake.stocktakeNo(), stocktake.warehouseId(), ownerId,
+            stocktake.sku(), stocktake.differenceQty(), stocktake.status(), stocktake.version());
         return stocktakeView(stocktake, false);
     }
 
@@ -147,8 +150,10 @@ public class WmsOperationApplicationService {
      * @return 执行命令的结果，类型为 {@code StatusResult}
      */
     @Transactional(rollbackFor = Exception.class)
-    public StatusResult confirmStocktake(String stocktakeNo, int version) {
-        var stocktake = toStocktake(requiredStocktake(stocktakeNo));
+    public StatusResult confirmStocktake(String stocktakeNo, long warehouseId, long ownerId, int version) {
+        var row = requiredStocktake(stocktakeNo);
+        requireScope(row.warehouseId(), row.ownerId(), warehouseId, ownerId);
+        var stocktake = toStocktake(row);
         if (stocktake.version() != version) {
             throw new BusinessException(ErrorCode.VERSION_CONFLICT, "盘点差异版本冲突");
         }
@@ -169,13 +174,16 @@ public class WmsOperationApplicationService {
      * @return 执行命令的结果，类型为 {@code StatusResult}
      */
     @Transactional(rollbackFor = Exception.class)
-    public StatusResult createException(String exceptionNo, String reason) {
+    public StatusResult createException(String exceptionNo, long warehouseId, long ownerId,
+                                        String reason) {
         var existed = exceptions.find(exceptionNo);
         if (existed != null) {
+            requireScope(existed.warehouseId(), existed.ownerId(), warehouseId, ownerId);
             return exceptionView(toException(existed), true);
         }
         var exception = new WarehouseExceptionAggregate(ids.incrementAndGet(), exceptionNo, reason, 1, 0);
-        exceptions.insert(exception.id(), exception.exceptionNo(), exception.reason(), exception.status(), exception.version());
+        exceptions.insert(exception.id(), exception.exceptionNo(), warehouseId, ownerId,
+            exception.reason(), exception.status(), exception.version());
         events.publish("WmsWarehouseExceptionCreated", "WAREHOUSE_EXCEPTION", exception.exceptionNo(), exception.version(), "{\"exceptionNo\":\"" + exception.exceptionNo() + "\"}");
         return exceptionView(exception, false);
     }
@@ -189,8 +197,10 @@ public class WmsOperationApplicationService {
      * @return 执行命令的结果，类型为 {@code StatusResult}
      */
     @Transactional(rollbackFor = Exception.class)
-    public StatusResult closeException(String exceptionNo, int version) {
-        var exception = toException(requiredException(exceptionNo));
+    public StatusResult closeException(String exceptionNo, long warehouseId, long ownerId, int version) {
+        var row = requiredException(exceptionNo);
+        requireScope(row.warehouseId(), row.ownerId(), warehouseId, ownerId);
+        var exception = toException(row);
         if (exception.version() != version) {
             throw new BusinessException(ErrorCode.VERSION_CONFLICT, "仓内异常版本冲突");
         }
@@ -278,6 +288,13 @@ public class WmsOperationApplicationService {
      */
     private static WarehouseExceptionAggregate toException(WarehouseExceptionMapper.Row row) {
         return new WarehouseExceptionAggregate(row.id(), row.no(), row.reason(), row.status(), row.version());
+    }
+
+    private static void requireScope(long actualWarehouse, long actualOwner,
+                                     long warehouseId, long ownerId) {
+        if (actualWarehouse != warehouseId || actualOwner != ownerId) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "作业不属于当前仓库或货主");
+        }
     }
 
     /**

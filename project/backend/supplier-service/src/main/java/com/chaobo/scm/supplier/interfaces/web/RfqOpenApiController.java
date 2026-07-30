@@ -20,6 +20,8 @@ import java.util.*;
  */
 @RestController
 @RequestMapping("/openapi/supplier/v1/rfqs")
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+        name = "scm.legacy-http-event-ingress.enabled", havingValue = "true")
 public class RfqOpenApiController {
 
     /**

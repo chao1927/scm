@@ -21,6 +21,8 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/internal/supplier/v1/performance/events")
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+        name = "scm.legacy-http-event-ingress.enabled", havingValue = "true")
 public class PerformanceFactOpenApiController {
 
     /**

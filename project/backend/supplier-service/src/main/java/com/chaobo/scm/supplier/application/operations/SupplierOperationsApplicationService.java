@@ -2,6 +2,8 @@ package com.chaobo.scm.supplier.application.operations;
 
 import com.chaobo.scm.common.error.*;
 import com.chaobo.scm.supplier.application.shared.*;
+import com.chaobo.scm.supplier.application.operations.export.SupplierExportDefinitions;
+import com.chaobo.scm.supplier.application.operations.export.SupplierExportObjectStoragePort;
 import com.chaobo.scm.supplier.domain.shared.IdentifierGenerator;
 import com.chaobo.scm.supplier.infrastructure.persistence.operations.SupplierOperationsMapper;
 import org.springframework.stereotype.Service;
@@ -43,6 +45,11 @@ public class SupplierOperationsApplicationService {
     private final AuditLogRepository audit;
 
     /**
+     * 导出文件存储端口，只通过对象键暴露文件能力。
+     */
+    private final SupplierExportObjectStoragePort exportStorage;
+
+    /**
      * 创建 SupplierOperationsApplicationService。
      *
      * <p>构造阶段集中接收必需依赖或恢复对象状态，确保实例创建后即可安全参与所属用例。
@@ -50,10 +57,13 @@ public class SupplierOperationsApplicationService {
      * @param ids 业务或技术标识，类型为 {@code IdentifierGenerator}
      * @param audit 业务处理参数或成员，类型为 {@code AuditLogRepository}
      */
-    public SupplierOperationsApplicationService(SupplierOperationsMapper mapper, IdentifierGenerator ids, AuditLogRepository audit) {
+    public SupplierOperationsApplicationService(SupplierOperationsMapper mapper, IdentifierGenerator ids,
+                                                AuditLogRepository audit,
+                                                SupplierExportObjectStoragePort exportStorage) {
         this.mapper = mapper;
         this.ids = ids;
         this.audit = audit;
+        this.exportStorage = exportStorage;
     }
 
     /**
@@ -270,16 +280,33 @@ public class SupplierOperationsApplicationService {
     @Transactional(rollbackFor = Exception.class)
     public long createExport(String type, Long supplierId, String queryJson, CommandContext c) {
         c.requirePermission("supplier:export:create");
-        if (!Set.of(WORK_ITEM, WARNING, FAILED_EVENT, RECONCILIATION, SCORE, QUALITY, RETURN).contains(type)) {
+        if (!SupplierExportDefinitions.supports(type)) {
             throw rule("不支持的导出类型");
         }
         if (c.supplierScopeId() != null && supplierId != null && !c.supplierScopeId().equals(supplierId)) {
             throw new BusinessException(ErrorCode.SUPPLIER_SCOPE_DENIED, "无权导出该供应商数据");
         }
+        if (c.supplierScopeId() != null && Set.of(FAILED_EVENT, RECONCILIATION).contains(type)) {
+            throw new BusinessException(ErrorCode.SUPPLIER_SCOPE_DENIED, "供应商账号无权导出全局运营数据");
+        }
+        Long effectiveSupplierId = c.supplierScopeId() == null ? supplierId : c.supplierScopeId();
+        String effectiveQuery = queryJson == null || queryJson.isBlank() ? "{}" : queryJson;
         long id = ids.nextId();
-        mapper.insertExport(id, type, c.supplierScopeId() == null ? supplierId : c.supplierScopeId(), queryJson == null ? "{}" : queryJson, c.operatorId());
-        audit.save(c, "CREATE_EXPORT_TASK", "EXPORT_TASK", id, Long.toString(id), null, "{\"type\":\"" + type + "\"}");
-        return id;
+        mapper.insertExport(id, type, effectiveSupplierId, effectiveQuery, c.operatorId(), c.idempotencyKey());
+        var persisted = mapper.exportTaskByIdempotency(c.operatorId(), c.idempotencyKey());
+        if (persisted == null) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "导出任务创建结果不可用");
+        }
+        if (!Objects.equals(type, persisted.exportType())
+                || !Objects.equals(effectiveSupplierId, persisted.supplierId())
+                || !Objects.equals(effectiveQuery, persisted.queryJson())) {
+            throw new BusinessException(ErrorCode.IDEMPOTENCY_CONFLICT, "幂等键已被不同导出请求使用");
+        }
+        if (persisted.id() == id) {
+            audit.save(c, "CREATE_EXPORT_TASK", "EXPORT_TASK", id, Long.toString(id), null,
+                    "{\"type\":\"" + type + "\"}");
+        }
+        return persisted.id();
     }
 
     /**
@@ -307,54 +334,45 @@ public class SupplierOperationsApplicationService {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code OperationViews.ExportTask}
      */
     @Transactional(readOnly = true, rollbackFor = Exception.class)
-    public OperationViews.ExportTask exportTask(long id) {
+    public OperationViews.ExportTask exportTask(long id, Long supplierScopeId) {
         var task = mapper.exportTask(id);
-        if (task == null) {
+        boolean missing = task == null;
+        boolean outsideScope = !missing && supplierScopeId != null && !supplierScopeId.equals(task.supplierId());
+        if (missing || outsideScope) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "导出任务不存在");
         }
         return task;
     }
 
     /**
-     * 执行命令 {@code completeExport}。
-     *
-     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
-     * @param id 业务或技术标识，类型为 {@code long}
-     * @param version 乐观锁或契约版本，类型为 {@code int}
-     * @param fileUrl 业务处理参数或成员，类型为 {@code String}
-     * @param c 业务处理参数或成员，类型为 {@code CommandContext}
+     * 将失败导出任务重新放回待处理队列；失败原因和重试次数保留用于审计。
      */
     @Transactional(rollbackFor = Exception.class)
-    public void completeExport(long id, int version, String fileUrl, CommandContext c) {
-        c.requirePermission("supplier:export:complete");
-        if (fileUrl == null || fileUrl.isBlank()) {
-            throw rule("导出文件地址不能为空");
-        }
-        if (mapper.completeExport(id, version, fileUrl) != 1) {
+    public void retryExport(long id, int version, CommandContext c) {
+        c.requirePermission("supplier:export:retry");
+        if (mapper.retryExport(id, version, c.supplierScopeId()) != 1) {
             throw conflict();
         }
-        audit.save(c, "COMPLETE_EXPORT_TASK", "EXPORT_TASK", id, Long.toString(id), null, "{\"fileUrl\":\"" + fileUrl.replace("\"", "") + "\"}");
+        audit.save(c, "RETRY_EXPORT_TASK", "EXPORT_TASK", id, Long.toString(id), null,
+                "{\"status\":1,\"version\":" + (version + 1) + "}");
     }
 
     /**
-     * 处理当前类型职责中的操作 {@code failExport}。
-     *
-     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
-     * @param id 业务或技术标识，类型为 {@code long}
-     * @param version 乐观锁或契约版本，类型为 {@code int}
-     * @param reason 业务处理参数或成员，类型为 {@code String}
-     * @param c 业务处理参数或成员，类型为 {@code CommandContext}
+     * 在完成状态且数据范围允许时读取真实导出文件。
      */
-    @Transactional(rollbackFor = Exception.class)
-    public void failExport(long id, int version, String reason, CommandContext c) {
-        c.requirePermission("supplier:export:complete");
-        if (reason == null || reason.isBlank()) {
-            throw rule("导出失败原因不能为空");
+    public ExportFile downloadExport(long id, Long supplierScopeId) {
+        var task = exportTask(id, supplierScopeId);
+        if (task.status() != EXPORT_COMPLETED_STATUS || task.objectKey() == null || task.objectKey().isBlank()) {
+            throw rule("导出文件尚未生成");
         }
-        if (mapper.failExport(id, version, reason) != 1) {
-            throw conflict();
-        }
-        audit.save(c, "FAIL_EXPORT_TASK", "EXPORT_TASK", id, Long.toString(id), null, "{\"reason\":\"" + reason.replace("\"", "") + "\"}");
+        var content = exportStorage.load(task.objectKey());
+        return new ExportFile(task.fileName(), content.contentType(), content.bytes());
+    }
+
+    /**
+     * 下载文件传输对象。
+     */
+    public record ExportFile(String fileName, String contentType, byte[] bytes) {
     }
 
     /**
@@ -493,4 +511,9 @@ public class SupplierOperationsApplicationService {
      * <p>集中表达当前用例使用的固定业务值，避免含义不明的字面量散落在判断或调用参数中。
      */
     private static final int PROCESS_WORK_VALUE_4 = 4;
+
+    /**
+     * 导出任务已完成状态。
+     */
+    private static final int EXPORT_COMPLETED_STATUS = 3;
 }

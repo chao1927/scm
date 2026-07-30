@@ -8,6 +8,7 @@ import com.chaobo.scm.tms.application.WaybillApplicationServiceTest;
 import com.chaobo.scm.tms.domain.DeliveryReceiptAggregate;
 import com.chaobo.scm.tms.infrastructure.persistence.TrackingMapper;
 import com.chaobo.scm.common.security.ScmAccessContext;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.junit.jupiter.api.Test;
 import java.time.LocalDateTime;
@@ -35,14 +36,23 @@ class TrackingReceiptControllerTest {
         TrackingReceiptApplicationServiceTest.MemoryTrackingMapper mapper = new TrackingReceiptApplicationServiceTest.MemoryTrackingMapper();
         TrackingApplicationService trackingService = new TrackingApplicationService(mapper, base.waybillService());
         DeliveryReceiptApplicationService receiptService = new DeliveryReceiptApplicationService(mapper, base.waybillService());
-        CarrierCallbackApplicationService callbackService = new CarrierCallbackApplicationService(mapper, trackingService, receiptService);
+        CarrierCallbackApplicationService callbackService = new CarrierCallbackApplicationService(
+            mapper, trackingService, receiptService, base.waybillService(),
+            input -> { }, (carrierCode, node) -> node);
         TrackingController trackingController = new TrackingController(trackingService);
         DeliveryReceiptController receiptController = new DeliveryReceiptController(receiptService);
-        CarrierCallbackController callbackController = new CarrierCallbackController(callbackService);
+        CarrierCallbackController callbackController = new CarrierCallbackController(
+            callbackService, new ObjectMapper());
         TrackingMapper.TrackRow track = trackingController.supplement("WB800001", new TrackingController.SupplementTrackRequest("IN_TRANSIT", "人工补录在途", "嘉兴", LocalDateTime.parse("2026-07-12T11:00:00"), "承运商漏推", 1001L, "idem-track"));
         var carrier = UsernamePasswordAuthenticationToken.authenticated("sf", "n/a", java.util.List.of());
         carrier.setDetails(new ScmAccessContext(1, "sf", "SF", java.util.Set.of("tms:carrier-callback:write"), java.util.Map.of()));
-        callbackController.consume("SF", new CarrierCallbackController.CarrierCallbackRequest("evt-sign-1", "SIGNED", "WB800001", null, null, null, LocalDateTime.parse("2026-07-12T12:00:00"), DeliveryReceiptAggregate.SIGNED, "李四", null, "oss://proof/RCP1.jpg", 1001L, "{}"), carrier);
+        String body = """
+            {"eventId":"evt-sign-1","eventType":"SIGNED","waybillNo":"WB800001",
+             "occurredAt":"2026-07-12T12:00:00","receiptResult":1,"signedBy":"李四",
+             "proofUrl":"oss://proof/RCP1.jpg","operatorId":1001}
+            """;
+        callbackController.consume("SF", 1L, "nonce-sign-1", "test-signature",
+            body, carrier);
         assertThat(track.nodeCode()).isEqualTo("IN_TRANSIT");
         assertThat(trackingController.list("WB800001")).hasSize(1);
         assertThat(receiptController.get("RCP110001")).isNotNull();

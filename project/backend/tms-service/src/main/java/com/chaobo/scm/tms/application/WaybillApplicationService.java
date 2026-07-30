@@ -105,6 +105,38 @@ public class WaybillApplicationService {
     }
 
     /**
+     * 根据承运商标准轨迹节点推进运单状态。
+     *
+     * @param waybillNo 运单号
+     * @param nodeCode TMS 标准轨迹节点
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void advanceFromTrack(String waybillNo, String nodeCode) {
+        WaybillAggregate aggregate = load(waybillNo);
+        long before = aggregate.version();
+        aggregate.advanceFromTrack(nodeCode);
+        if (aggregate.version() != before) {
+            mapper.updateWaybill(toRow(aggregate));
+        }
+    }
+
+    /**
+     * 根据签收结果推进运单终态。
+     *
+     * @param waybillNo 运单号
+     * @param receiptResult 签收结果稳定值
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void advanceFromReceipt(String waybillNo, int receiptResult) {
+        WaybillAggregate aggregate = load(waybillNo);
+        long before = aggregate.version();
+        aggregate.advanceFromReceipt(receiptResult);
+        if (aggregate.version() != before) {
+            mapper.updateWaybill(toRow(aggregate));
+        }
+    }
+
+    /**
      * 查询并返回 {@code get}。
      *
      * <p>该方法只读取或转换当前上下文数据，不应绕过数据权限，也不应产生业务状态副作用。

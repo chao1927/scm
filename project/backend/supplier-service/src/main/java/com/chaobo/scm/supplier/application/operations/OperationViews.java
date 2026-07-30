@@ -85,6 +85,10 @@ public final class OperationViews {
      * @author SCM Team
      * @since 0.1.0
      */
-    public record ExportTask(long id, String exportType, Long supplierId, String queryJson, int status, String fileUrl, String failReason, OffsetDateTime createdAt, OffsetDateTime updatedAt, int version) {
+    public record ExportTask(long id, String exportType, Long supplierId, String queryJson, int status,
+                             String fileUrl, String failReason, String objectKey, String fileName,
+                             String contentType, Long fileSize, int retryCount, OffsetDateTime nextRetryAt,
+                             OffsetDateTime startedAt, OffsetDateTime completedAt,
+                             OffsetDateTime createdAt, OffsetDateTime updatedAt, int version) {
     }
 }

@@ -19,6 +19,8 @@ import java.time.OffsetDateTime;
  */
 @RestController
 @RequestMapping("/internal/supplier/v1/operations/events")
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+        name = "scm.legacy-http-event-ingress.enabled", havingValue = "true")
 public class OperationsEventOpenApiController {
 
     /**

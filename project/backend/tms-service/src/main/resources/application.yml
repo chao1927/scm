@@ -24,3 +24,25 @@ scm:
   security:
     hmac-secret: ${IAM_JWT_SECRET:}
     permission-namespace: tms
+  tms:
+    object-storage:
+      root: ${TMS_OBJECT_STORAGE_ROOT:${java.io.tmpdir}/scm-tms-objects}
+    carrier-callback:
+      max-clock-skew-seconds: ${TMS_CALLBACK_MAX_CLOCK_SKEW_SECONDS:300}
+      secrets:
+        SF: ${TMS_CALLBACK_SECRET_SF:}
+      node-mappings:
+        SF:
+          50: PICKED_UP
+          80: IN_TRANSIT
+          100: ARRIVED
+  rocketmq:
+    endpoints: ${ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
+    tms-topic: ${ROCKETMQ_TMS_TOPIC:tms-domain-event}
+    tms-consumer:
+      topics: ${ROCKETMQ_TMS_CONSUMER_TOPICS:oms-domain-event,wms-domain-event,purchase-domain-event,supplier-domain-event,master-data-domain-event,bms-domain-event}
+      group: ${ROCKETMQ_TMS_CONSUMER_GROUP:tms-business-event-consumer}
+  outbox:
+    batch-size: ${TMS_OUTBOX_BATCH_SIZE:100}
+    max-retries: ${TMS_OUTBOX_MAX_RETRIES:16}
+    fixed-delay: ${TMS_OUTBOX_FIXED_DELAY:1000}

@@ -70,7 +70,9 @@ public class MyBatisInboundOrderRepository implements InboundOrderRepository {
     @Override
     public void save(InboundOrderAggregate order, long operatorId) {
         if (mapper.findById(order.id()) == null) {
-            mapper.insert(order.id(), order.inboundNo(), order.sourceType(), order.sourceNo(), order.warehouseId(), order.status().code(), order.expectedArrivalAt(), order.cancelReason(), order.version(), operatorId);
+            mapper.insert(order.id(), order.inboundNo(), order.sourceType(), order.sourceNo(), order.warehouseId(),
+                order.ownerId(), order.status().code(), order.expectedArrivalAt(), order.cancelReason(),
+                order.version(), operatorId);
             return;
         }
         mapper.update(order.id(), order.status().code(), order.cancelReason(), order.version(), operatorId);
@@ -84,6 +86,8 @@ public class MyBatisInboundOrderRepository implements InboundOrderRepository {
      * @return 转换数据模型的结果，类型为 {@code InboundOrderAggregate}
      */
     private InboundOrderAggregate toAggregate(InboundOrderMapper.Row row) {
-        return new InboundOrderAggregate(row.id(), row.inboundNo(), row.sourceType(), row.sourceNo(), row.warehouseId(), InboundOrderStatus.of(row.status()), row.expectedArrivalAt(), row.cancelReason(), row.version());
+        return new InboundOrderAggregate(row.id(), row.inboundNo(), row.sourceType(), row.sourceNo(),
+            row.warehouseId(), row.ownerId(), InboundOrderStatus.of(row.status()),
+            row.expectedArrivalAt(), row.cancelReason(), row.version());
     }
 }

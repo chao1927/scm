@@ -49,6 +49,11 @@ public class OutboundOrderAggregate {
     private final long warehouseId;
 
     /**
+     * 出库单所属货主，创建后不可变。
+     */
+    private final long ownerId;
+
+    /**
      * status（类型：{@code int}）。
      *
      * <p>保存当前对象所需的生命周期状态；其具体生命周期由所属对象统一管理。
@@ -74,15 +79,18 @@ public class OutboundOrderAggregate {
      * @param status 生命周期状态，类型为 {@code int}
      * @param version 乐观锁或契约版本，类型为 {@code int}
      */
-    public OutboundOrderAggregate(long id, String no, String sourceType, String sourceNo, long warehouseId, int status, int version) {
-        if (sourceType == null || sourceType.isBlank() || sourceNo == null || sourceNo.isBlank() || warehouseId <= 0) {
-            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "出库来源和仓库不能为空");
+    public OutboundOrderAggregate(long id, String no, String sourceType, String sourceNo,
+                                  long warehouseId, long ownerId, int status, int version) {
+        if (sourceType == null || sourceType.isBlank() || sourceNo == null
+                || sourceNo.isBlank() || warehouseId <= 0 || ownerId <= 0) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "出库来源、仓库和货主不能为空");
         }
         this.id = id;
         this.no = no;
         this.sourceType = sourceType;
         this.sourceNo = sourceNo;
         this.warehouseId = warehouseId;
+        this.ownerId = ownerId;
         this.status = status;
         this.version = version;
     }
@@ -168,6 +176,15 @@ public class OutboundOrderAggregate {
      */
     public long warehouseId() {
         return warehouseId;
+    }
+
+    /**
+     * 返回出库单所属货主。
+     *
+     * @return 货主 ID
+     */
+    public long ownerId() {
+        return ownerId;
     }
 
     /**

@@ -20,6 +20,8 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/internal/supplier/v1/returns/events")
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+        name = "scm.legacy-http-event-ingress.enabled", havingValue = "true")
 public class SupplierReturnEventController {
 
     /**

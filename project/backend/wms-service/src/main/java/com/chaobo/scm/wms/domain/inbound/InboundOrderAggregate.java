@@ -50,6 +50,13 @@ public class InboundOrderAggregate {
     private final long warehouseId;
 
     /**
+     * ownerId（类型：{@code long}）。
+     *
+     * <p>货主是 WMS 数据隔离的事实维度，入库单创建后不得替换，避免仓内作业跨货主串单。
+     */
+    private final long ownerId;
+
+    /**
      * status（类型：{@code InboundOrderStatus}）。
      *
      * <p>保存当前对象所需的生命周期状态；其具体生命周期由所属对象统一管理。
@@ -86,20 +93,22 @@ public class InboundOrderAggregate {
      * @param sourceType 业务处理参数或成员，类型为 {@code String}
      * @param sourceNo 可追踪业务编码，类型为 {@code String}
      * @param warehouseId 业务或技术标识，类型为 {@code long}
+     * @param ownerId 货主标识，类型为 {@code long}
      * @param status 生命周期状态，类型为 {@code InboundOrderStatus}
      * @param expectedArrivalAt 业务时间，类型为 {@code OffsetDateTime}
      * @param cancelReason 业务处理参数或成员，类型为 {@code String}
      * @param version 乐观锁或契约版本，类型为 {@code int}
      */
-    public InboundOrderAggregate(long id, String inboundNo, String sourceType, String sourceNo, long warehouseId, InboundOrderStatus status, OffsetDateTime expectedArrivalAt, String cancelReason, int version) {
-        if (sourceType == null || sourceType.isBlank() || sourceNo == null || sourceNo.isBlank() || warehouseId <= 0) {
-            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "入库来源、来源单号和仓库不能为空");
+    public InboundOrderAggregate(long id, String inboundNo, String sourceType, String sourceNo, long warehouseId, long ownerId, InboundOrderStatus status, OffsetDateTime expectedArrivalAt, String cancelReason, int version) {
+        if (sourceType == null || sourceType.isBlank() || sourceNo == null || sourceNo.isBlank() || warehouseId <= 0 || ownerId <= 0) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "入库来源、来源单号、仓库和货主不能为空");
         }
         this.id = id;
         this.inboundNo = inboundNo;
         this.sourceType = sourceType;
         this.sourceNo = sourceNo;
         this.warehouseId = warehouseId;
+        this.ownerId = ownerId;
         this.status = status;
         this.expectedArrivalAt = expectedArrivalAt;
         this.cancelReason = cancelReason;
@@ -115,11 +124,12 @@ public class InboundOrderAggregate {
      * @param sourceType 业务处理参数或成员，类型为 {@code String}
      * @param sourceNo 可追踪业务编码，类型为 {@code String}
      * @param warehouseId 业务或技术标识，类型为 {@code long}
+     * @param ownerId 货主标识，类型为 {@code long}
      * @param expectedArrivalAt 业务时间，类型为 {@code OffsetDateTime}
      * @return 执行命令的结果，类型为 {@code InboundOrderAggregate}
      */
-    public static InboundOrderAggregate create(long id, String inboundNo, String sourceType, String sourceNo, long warehouseId, OffsetDateTime expectedArrivalAt) {
-        return new InboundOrderAggregate(id, inboundNo, sourceType, sourceNo, warehouseId, InboundOrderStatus.PENDING_ARRIVAL, expectedArrivalAt, null, 0);
+    public static InboundOrderAggregate create(long id, String inboundNo, String sourceType, String sourceNo, long warehouseId, long ownerId, OffsetDateTime expectedArrivalAt) {
+        return new InboundOrderAggregate(id, inboundNo, sourceType, sourceNo, warehouseId, ownerId, InboundOrderStatus.PENDING_ARRIVAL, expectedArrivalAt, null, 0);
     }
 
     /**
@@ -191,6 +201,15 @@ public class InboundOrderAggregate {
      */
     public long warehouseId() {
         return warehouseId;
+    }
+
+    /**
+     * 返回入库单所属货主。
+     *
+     * @return 货主 ID
+     */
+    public long ownerId() {
+        return ownerId;
     }
 
     /**

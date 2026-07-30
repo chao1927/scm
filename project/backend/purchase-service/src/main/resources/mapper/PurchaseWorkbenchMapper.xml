@@ -1,0 +1,324 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chaobo.scm.purchase.infrastructure.persistence.workbench.PurchaseWorkbenchMapper">
+
+    <!--
+      统一在采购事实上过滤组织、采购组、本人和创建时间。
+      采购组通过 IAM/组织关系同步形成的成员投影限定事实负责人，不复制业务写模型。
+    -->
+    <sql id="factScopeFilter">
+        <if test="!criteria.scope.unrestrictedOrganizations">
+            and f.purchase_org_id in
+            <foreach collection="criteria.scope.purchaseOrgIds"
+                     item="purchaseOrgId" open="(" separator="," close=")">
+                #{purchaseOrgId}
+            </foreach>
+        </if>
+        <if test="criteria.scope.purchaseGroupId != null">
+            and exists (
+                select 1
+                from purchase_group_member_scope group_scope
+                where group_scope.purchase_group_id = #{criteria.scope.purchaseGroupId}
+                  and group_scope.purchase_org_id = f.purchase_org_id
+                  and group_scope.member_id = f.owner_id
+                  and group_scope.status = 1
+                  and (
+                    group_scope.effective_from is null
+                    or group_scope.effective_from &lt;= #{criteria.businessDate}
+                  )
+                  and (
+                    group_scope.effective_to is null
+                    or group_scope.effective_to &gt;= #{criteria.businessDate}
+                  )
+            )
+        </if>
+        <if test="criteria.scope.ownerId != null">
+            and f.owner_id = #{criteria.scope.ownerId}
+        </if>
+        <if test="criteria.createdFrom != null">
+            and f.created_at &gt;= #{criteria.createdFrom}
+        </if>
+        <if test="criteria.createdTo != null">
+            and f.created_at &lt;= #{criteria.createdTo}
+        </if>
+    </sql>
+
+    <!--
+      每一行代表一个可计数采购事实。一个事实可以同时属于待办和经营指标，
+      例如供应商差异既是待办，也是异常指标。
+    -->
+    <sql id="metricFacts">
+        select 'TODO' group_code, 'REQUISITION_APPROVAL' metric_code,
+               '待审批请购' metric_name, 'purchase_requisition' fact_source,
+               '/purchase/requisition-approvals' target_route,
+               purchase_org_id, applicant_id owner_id, created_at
+        from purchase_requisition
+        where deleted = 0 and status = 2
+        union all
+        select 'TODO', 'RFQ_TO_RELEASE', '待发布询价', 'purchase_rfq',
+               '/purchase/rfqs', purchase_org_id, created_by, created_at
+        from purchase_rfq
+        where deleted = 0 and status = 1
+        union all
+        select 'TODO', 'BID_TO_AWARD', '待定标比价', 'purchase_bid_comparison',
+               '/purchase/compare-results', purchase_org_id, created_by, created_at
+        from purchase_bid_comparison
+        where deleted = 0 and status = 1
+        union all
+        select 'TODO', 'PO_APPROVAL', '待审批采购订单', 'purchase_order',
+               '/purchase/orders', purchase_org_id, created_by, created_at
+        from purchase_order
+        where deleted = 0 and status = 2
+        union all
+        select 'TODO', 'PO_TO_RELEASE', '待发布采购订单', 'purchase_order',
+               '/purchase/orders', purchase_org_id, created_by, created_at
+        from purchase_order
+        where deleted = 0 and status = 3
+        union all
+        select 'TODO', 'SUPPLIER_RETURN_APPROVAL', '待审批退供', 'purchase_supplier_return',
+               '/purchase/supplier-returns', purchase_org_id, created_by, created_at
+        from purchase_supplier_return
+        where deleted = 0 and status = 2
+        union all
+        select 'DELIVERY', 'ORDER_LINE_DUE_SOON', '七日内到期订单行',
+               'purchase_order_line', '/purchase/orders',
+               purchase_order.purchase_org_id, purchase_order.created_by,
+               purchase_order_line.created_at
+        from purchase_order_line
+        join purchase_order on purchase_order.id = purchase_order_line.order_id
+        where purchase_order_line.deleted = 0
+          and purchase_order.deleted = 0
+          and purchase_order.status not in (8, 9, 10)
+          and purchase_order_line.received_qty &lt; purchase_order_line.order_qty
+          and purchase_order_line.required_delivery_date between
+              #{criteria.businessDate}
+              and date_add(#{criteria.businessDate}, interval 7 day)
+        union all
+        select 'DELIVERY', 'ORDER_LINE_OVERDUE', '逾期未完成订单行',
+               'purchase_order_line', '/purchase/orders',
+               purchase_order.purchase_org_id, purchase_order.created_by,
+               purchase_order_line.created_at
+        from purchase_order_line
+        join purchase_order on purchase_order.id = purchase_order_line.order_id
+        where purchase_order_line.deleted = 0
+          and purchase_order.deleted = 0
+          and purchase_order.status not in (8, 9, 10)
+          and purchase_order_line.received_qty &lt; purchase_order_line.order_qty
+          and purchase_order_line.required_delivery_date &lt; #{criteria.businessDate}
+        union all
+        select 'PRICE', 'ACTIVE_PRICE', '当前有效价格', 'purchase_price',
+               '/purchase/prices', purchase_org_id, created_by, created_at
+        from purchase_price
+        where deleted = 0 and status = 1
+          and effective_from &lt;= #{criteria.businessDate}
+          and (effective_to is null or effective_to &gt;= #{criteria.businessDate})
+        union all
+        select 'PRICE', 'EXPIRING_PRICE', '三十日内到期价格', 'purchase_price',
+               '/purchase/prices', purchase_org_id, created_by, created_at
+        from purchase_price
+        where deleted = 0 and status = 1
+          and effective_to between #{criteria.businessDate}
+              and date_add(#{criteria.businessDate}, interval 30 day)
+        union all
+        select 'PRICE', 'EXPIRED_PRICE', '已到期未停用价格', 'purchase_price',
+               '/purchase/prices', purchase_org_id, created_by, created_at
+        from purchase_price
+        where deleted = 0 and status = 1
+          and effective_to &lt; #{criteria.businessDate}
+        union all
+        select 'ORDER_EXECUTION', 'ACTIVE_ORDER', '执行中采购订单', 'purchase_order',
+               '/purchase/orders', purchase_org_id, created_by, created_at
+        from purchase_order
+        where deleted = 0 and status in (4, 5, 6, 7, 12)
+        union all
+        select 'ORDER_EXECUTION', 'PARTIALLY_RECEIVED_ORDER', '部分入库采购订单',
+               'purchase_order', '/purchase/orders',
+               purchase_org_id, created_by, created_at
+        from purchase_order
+        where deleted = 0 and status = 7
+        union all
+        select 'ORDER_EXECUTION', 'COMPLETED_ORDER', '已完成采购订单', 'purchase_order',
+               '/purchase/orders', purchase_org_id, created_by, created_at
+        from purchase_order
+        where deleted = 0 and status = 8
+        union all
+        select 'EXCEPTION', 'SUPPLIER_DIFF', '供应商差异', 'purchase_order',
+               '/purchase/supplier-confirms', purchase_org_id, created_by, created_at
+        from purchase_order
+        where deleted = 0 and status in (6, 12)
+        union all
+        select 'EXCEPTION', 'INBOUND_EXCEPTION', '到货异常',
+               'purchase_inbound_tracking', '/purchase/inbound-tracks',
+               purchase_org_id, created_by, created_at
+        from purchase_inbound_tracking
+        where deleted = 0 and status = 7
+    </sql>
+
+    <select id="summarize"
+            resultType="com.chaobo.scm.purchase.application.workbench.PurchaseWorkbenchMetricView">
+        with metric_facts as (
+            <include refid="metricFacts"/>
+        )
+        select f.group_code groupCode,
+               f.metric_code metricCode,
+               f.metric_name metricName,
+               count(1) value,
+               f.fact_source factSource,
+               f.target_route targetRoute
+        from metric_facts f
+        where 1 = 1
+        <include refid="factScopeFilter"/>
+        group by f.group_code, f.metric_code, f.metric_name,
+                 f.fact_source, f.target_route
+        order by f.group_code, f.metric_code
+    </select>
+
+    <!-- 待办事实在 count 与 page 中复用，保证分页总数、过滤和明细完全同口径。 -->
+    <sql id="todoFacts">
+        select concat('REQUISITION_APPROVAL:', id) todo_id,
+               'REQUISITION_APPROVAL' business_type,
+               requisition_no business_no,
+               concat('审批请购单 ', requisition_no) title,
+               '审批中' status_name, 'NORMAL' priority, 2 priority_rank,
+               '/purchase/requisition-approvals' target_route,
+               purchase_org_id, applicant_id owner_id, null due_date,
+               'purchase_requisition' source_table, cast(id as char) source_id,
+               created_at, updated_at
+        from purchase_requisition
+        where deleted = 0 and status = 2
+        union all
+        select concat('RFQ_TO_RELEASE:', id), 'RFQ_TO_RELEASE', rfq_no,
+               concat('发布询价单 ', rfq_no), '草稿', 'NORMAL', 2,
+               '/purchase/rfqs', purchase_org_id, created_by, date(quote_deadline),
+               'purchase_rfq', cast(id as char), created_at, updated_at
+        from purchase_rfq
+        where deleted = 0 and status = 1
+        union all
+        select concat('BID_TO_AWARD:', id), 'BID_TO_AWARD', compare_no,
+               concat('定标比价结果 ', compare_no), '待定标', 'HIGH', 1,
+               '/purchase/compare-results', purchase_org_id, created_by, null,
+               'purchase_bid_comparison', cast(id as char), created_at, updated_at
+        from purchase_bid_comparison
+        where deleted = 0 and status = 1
+        union all
+        select concat('PO_APPROVAL:', id), 'PO_APPROVAL', order_no,
+               concat('审批采购订单 ', order_no), '待审批', 'NORMAL', 2,
+               '/purchase/orders', purchase_org_id, created_by, null,
+               'purchase_order', cast(id as char), created_at, updated_at
+        from purchase_order
+        where deleted = 0 and status = 2
+        union all
+        select concat('PO_TO_RELEASE:', id), 'PO_TO_RELEASE', order_no,
+               concat('发布采购订单 ', order_no), '已审批', 'NORMAL', 2,
+               '/purchase/orders', purchase_org_id, created_by, null,
+               'purchase_order', cast(id as char), created_at, updated_at
+        from purchase_order
+        where deleted = 0 and status = 3
+        union all
+        select concat('SUPPLIER_DIFF:', id), 'SUPPLIER_DIFF', order_no,
+               concat('处理供应商差异 ', order_no),
+               case when status = 12 then '供应商已拒绝' else '供应商差异' end,
+               'URGENT', 0, '/purchase/supplier-confirms',
+               purchase_org_id, created_by, null,
+               'purchase_order', cast(id as char), created_at, updated_at
+        from purchase_order
+        where deleted = 0 and status in (6, 12)
+        union all
+        select concat('DELIVERY_OVERDUE:', purchase_order_line.line_id),
+               'DELIVERY_OVERDUE', purchase_order.order_no,
+               concat('处理逾期订单行 ', purchase_order.order_no, ' / ',
+                      purchase_order_line.sku_code),
+               '逾期未完成', 'URGENT', 0, '/purchase/orders',
+               purchase_order.purchase_org_id, purchase_order.created_by,
+               purchase_order_line.required_delivery_date,
+               'purchase_order_line', cast(purchase_order_line.line_id as char),
+               purchase_order_line.created_at, purchase_order_line.updated_at
+        from purchase_order_line
+        join purchase_order on purchase_order.id = purchase_order_line.order_id
+        where purchase_order_line.deleted = 0
+          and purchase_order.deleted = 0
+          and purchase_order.status not in (8, 9, 10)
+          and purchase_order_line.received_qty &lt; purchase_order_line.order_qty
+          and purchase_order_line.required_delivery_date &lt; #{criteria.businessDate}
+        union all
+        select concat('PRICE_EXPIRING:', id), 'PRICE_EXPIRING', price_no,
+               concat('维护即将到期价格 ', price_no), '即将到期', 'HIGH', 1,
+               '/purchase/prices', purchase_org_id, created_by, effective_to,
+               'purchase_price', cast(id as char), created_at, updated_at
+        from purchase_price
+        where deleted = 0 and status = 1
+          and effective_to between #{criteria.businessDate}
+              and date_add(#{criteria.businessDate}, interval 30 day)
+        union all
+        select concat('INBOUND_EXCEPTION:', id), 'INBOUND_EXCEPTION', inbound_no,
+               concat('处理到货异常 ', inbound_no), '异常', 'URGENT', 0,
+               '/purchase/inbound-tracks', purchase_org_id, created_by, null,
+               'purchase_inbound_tracking', cast(id as char), created_at, updated_at
+        from purchase_inbound_tracking
+        where deleted = 0 and status = 7
+        union all
+        select concat('SUPPLIER_RETURN_APPROVAL:', id),
+               'SUPPLIER_RETURN_APPROVAL', return_no,
+               concat('审批退供申请 ', return_no), '待审批', 'HIGH', 1,
+               '/purchase/supplier-returns', purchase_org_id, created_by, null,
+               'purchase_supplier_return', cast(id as char), created_at, updated_at
+        from purchase_supplier_return
+        where deleted = 0 and status = 2
+    </sql>
+
+    <sql id="todoFilter">
+        <include refid="factScopeFilter"/>
+        <if test="criteria.todoType != null">
+            and f.business_type = #{criteria.todoType}
+        </if>
+    </sql>
+
+    <select id="countTodos" resultType="long">
+        with todo_facts as (
+            <include refid="todoFacts"/>
+        )
+        select count(1)
+        from todo_facts f
+        where 1 = 1
+        <include refid="todoFilter"/>
+    </select>
+
+    <select id="pageTodos"
+            resultType="com.chaobo.scm.purchase.application.workbench.PurchaseTodoView">
+        with todo_facts as (
+            <include refid="todoFacts"/>
+        )
+        select f.todo_id todoId,
+               f.business_type businessType,
+               f.business_no businessNo,
+               f.title,
+               f.status_name statusName,
+               f.priority,
+               f.target_route targetRoute,
+               f.purchase_org_id purchaseOrgId,
+               f.owner_id ownerId,
+               f.due_date dueDate,
+               f.source_table sourceTable,
+               f.source_id sourceId,
+               f.created_at createdAt,
+               f.updated_at updatedAt
+        from todo_facts f
+        where 1 = 1
+        <include refid="todoFilter"/>
+        order by
+        <choose>
+            <when test="criteria.sortField == 'createdAt'">f.created_at</when>
+            <when test="criteria.sortField == 'dueDate'">f.due_date</when>
+            <when test="criteria.sortField == 'priority'">f.priority_rank</when>
+            <otherwise>f.updated_at</otherwise>
+        </choose>
+        <choose>
+            <when test="criteria.sortOrder == 'asc'">asc</when>
+            <otherwise>desc</otherwise>
+        </choose>,
+        f.todo_id asc
+        limit #{criteria.offset}, #{criteria.pageSize}
+    </select>
+</mapper>

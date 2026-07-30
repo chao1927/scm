@@ -19,6 +19,8 @@ import java.math.BigDecimal;
  */
 @RestController
 @RequestMapping("/internal/supplier/v1/bms/events")
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+        name = "scm.legacy-http-event-ingress.enabled", havingValue = "true")
 public class BmsFinanceOpenApiController {
 
     /**

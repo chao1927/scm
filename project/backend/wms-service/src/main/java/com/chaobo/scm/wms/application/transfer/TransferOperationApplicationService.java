@@ -91,7 +91,8 @@ public class TransferOperationApplicationService {
         long id = ids.incrementAndGet();
         var aggregate = new TransferOperationAggregate(id, command.transferNo(), command.ownerId(), command.sourceWarehouseId(), command.targetWarehouseId(), command.sku(), command.batchNo(), command.qty(), BigDecimal.ZERO, BigDecimal.ZERO, TransferOperationAggregate.OUTBOUND_PENDING, 0);
         mapper.insert(row(aggregate));
-        outboundOrders.create("INVENTORY_TRANSFER", command.transferNo(), command.sourceWarehouseId(), operatorId);
+        outboundOrders.create("INVENTORY_TRANSFER", command.transferNo(),
+            command.sourceWarehouseId(), command.ownerId(), operatorId);
         return view(row(aggregate), false);
     }
 
@@ -132,7 +133,9 @@ public class TransferOperationApplicationService {
         int oldVersion = aggregate.version();
         aggregate.prepareInbound(oldVersion);
         save(aggregate, oldVersion);
-        inboundOrders.create(new InboundOrderApplicationService.Create("INVENTORY_TRANSFER", transferNo, aggregate.targetWarehouseId(), null, "transfer-inbound-" + transferNo + "-" + transferVersion), operatorId);
+        inboundOrders.create(new InboundOrderApplicationService.Create("INVENTORY_TRANSFER", transferNo,
+            aggregate.targetWarehouseId(), aggregate.ownerId(), null,
+            "transfer-inbound-" + transferNo + "-" + transferVersion), operatorId);
         return view(row(aggregate), false);
     }
 
@@ -172,8 +175,10 @@ public class TransferOperationApplicationService {
         int oldVersion = aggregate.version();
         aggregate.cancel(oldVersion);
         save(aggregate, oldVersion);
-        var outbound = outboundOrders.create("INVENTORY_TRANSFER", transferNo, aggregate.sourceWarehouseId(), 0);
-        outboundOrders.cancel("INVENTORY_TRANSFER", transferNo, aggregate.sourceWarehouseId(), outbound.version(), "中央库存调拨取消", 0);
+        var outbound = outboundOrders.create("INVENTORY_TRANSFER", transferNo,
+            aggregate.sourceWarehouseId(), aggregate.ownerId(), 0);
+        outboundOrders.cancel("INVENTORY_TRANSFER", transferNo, aggregate.sourceWarehouseId(),
+            aggregate.ownerId(), outbound.version(), "中央库存调拨取消", 0);
         events.publish("TransferCancellationCompensated", "TRANSFER_OPERATION", transferNo, aggregate.version(), payload(aggregate, BigDecimal.ZERO, false));
         return view(row(aggregate), false);
     }

@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * TrackingReceiptApplicationServiceTest。
@@ -31,13 +32,16 @@ public class TrackingReceiptApplicationServiceTest {
     void appendTrackRecordReceiptAndIgnoreDuplicateCarrierEvent() {
         Services services = servicesWithWaybill();
         LocalDateTime at = LocalDateTime.parse("2026-07-12T10:00:00");
-        services.callbackService.consume(new CarrierCallbackApplicationService.CarrierEvent("evt-track-1", "TRACK", "SF", "WB800001", "ARRIVED", "到达杭州", "杭州", at, 0, null, null, null, 1001L, "{}"));
-        services.callbackService.consume(new CarrierCallbackApplicationService.CarrierEvent("evt-track-1", "TRACK", "SF", "WB800001", "ARRIVED", "重复到达", "杭州", at, 0, null, null, null, 1001L, "{}"));
-        services.callbackService.consume(new CarrierCallbackApplicationService.CarrierEvent("evt-sign-1", "SIGNED", "SF", "WB800001", null, null, null, LocalDateTime.parse("2026-07-12T12:00:00"), DeliveryReceiptAggregate.SIGNED, "李四", null, "oss://proof/RCP1.jpg", 1001L, "{}"));
+        receive(services.callbackService, "nonce-track-1",
+            new CarrierCallbackApplicationService.CarrierEvent("evt-track-1", "TRACK", "SF", "WB800001", "ARRIVED", "到达杭州", "杭州", at, 0, null, null, null, 1001L, "{}"));
+        receive(services.callbackService, "nonce-track-1",
+            new CarrierCallbackApplicationService.CarrierEvent("evt-track-1", "TRACK", "SF", "WB800001", "ARRIVED", "重复到达", "杭州", at, 0, null, null, null, 1001L, "{}"));
+        receive(services.callbackService, "nonce-sign-1",
+            new CarrierCallbackApplicationService.CarrierEvent("evt-sign-1", "SIGNED", "SF", "WB800001", null, null, null, LocalDateTime.parse("2026-07-12T12:00:00"), DeliveryReceiptAggregate.SIGNED, "李四", null, "oss://proof/RCP1.jpg", 1001L, "{}"));
         assertThat(services.trackingMapper.tracks).hasSize(1);
         assertThat(services.trackingMapper.receipts).hasSize(1);
         assertThat(services.trackingMapper.outbox).extracting(TransportTaskMapper.OutboxRow::eventType).contains("TrackingAppended", "TransportArrived", "TransportSigned");
-        assertThat(services.trackingMapper.inbox.get("evt-track-1").status()).isEqualTo(2);
+        assertThat(services.trackingMapper.inbox.get("SF:nonce-track-1").status()).isEqualTo(2);
     }
 
     /**
@@ -51,6 +55,27 @@ public class TrackingReceiptApplicationServiceTest {
         services.trackingService.supplement("WB800001", new TrackingApplicationService.SupplementCommand("IN_TRANSIT", "人工补录在途", "嘉兴", LocalDateTime.parse("2026-07-12T11:00:00"), "承运商漏推", 1001L, "idem-supplement"));
         assertThat(services.trackingService.list("WB800001")).hasSize(1);
         assertThat(services.trackingMapper.outbox).extracting(TransportTaskMapper.OutboxRow::eventType).contains("TrackingSupplemented");
+    }
+
+    @Test
+    void invalidSignatureNeverClaimsInbox() {
+        Services services = servicesWithWaybill();
+        var callback = new CarrierCallbackApplicationService(
+            services.trackingMapper(), services.trackingService(), services.receiptService(),
+            services.waybillService(),
+            input -> { throw new IllegalArgumentException("signature invalid"); },
+            (carrier, node) -> node);
+        var event = new CarrierCallbackApplicationService.CarrierEvent(
+            "event-invalid", "TRACK", "SF", "WB800001", "ARRIVED",
+            "到达", "杭州", LocalDateTime.parse("2026-07-12T10:00:00"),
+            0, null, null, null, 1001L, "{}");
+
+        assertThatThrownBy(() -> callback.receive(
+            new CarrierCallbackApplicationService.SignedCarrierEvent(
+                event, 1L, "bad-nonce", "{}", "bad")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("signature invalid");
+        assertThat(services.trackingMapper().inbox).isEmpty();
     }
 
     /**
@@ -68,8 +93,17 @@ public class TrackingReceiptApplicationServiceTest {
         MemoryTrackingMapper trackingMapper = new MemoryTrackingMapper();
         TrackingApplicationService trackingService = new TrackingApplicationService(trackingMapper, base.waybillService());
         DeliveryReceiptApplicationService receiptService = new DeliveryReceiptApplicationService(trackingMapper, base.waybillService());
-        CarrierCallbackApplicationService callbackService = new CarrierCallbackApplicationService(trackingMapper, trackingService, receiptService);
-        return new Services(trackingMapper, trackingService, receiptService, callbackService);
+        CarrierCallbackApplicationService callbackService = new CarrierCallbackApplicationService(
+            trackingMapper, trackingService, receiptService, base.waybillService(),
+            input -> { }, (carrier, node) -> node);
+        return new Services(trackingMapper, trackingService, receiptService,
+            base.waybillService(), callbackService);
+    }
+
+    private static void receive(CarrierCallbackApplicationService service, String nonce,
+                                CarrierCallbackApplicationService.CarrierEvent event) {
+        service.receive(new CarrierCallbackApplicationService.SignedCarrierEvent(
+            event, 1L, nonce, "{}", "test-signature"));
     }
 
     /**
@@ -80,7 +114,11 @@ public class TrackingReceiptApplicationServiceTest {
      * @author SCM Team
      * @since 0.1.0
      */
-    record Services(MemoryTrackingMapper trackingMapper, TrackingApplicationService trackingService, DeliveryReceiptApplicationService receiptService, CarrierCallbackApplicationService callbackService) {
+    record Services(MemoryTrackingMapper trackingMapper,
+                    TrackingApplicationService trackingService,
+                    DeliveryReceiptApplicationService receiptService,
+                    WaybillApplicationService waybillService,
+                    CarrierCallbackApplicationService callbackService) {
     }
 
     /**
@@ -92,6 +130,8 @@ public class TrackingReceiptApplicationServiceTest {
      * @since 0.1.0
      */
     public static class MemoryTrackingMapper implements TrackingMapper {
+
+        private static final int FAILED_STATUS = 3;
 
         /**
          * tracks（类型：{@code Map<String,TrackRow>}）。
@@ -213,6 +253,22 @@ public class TrackingReceiptApplicationServiceTest {
                 return 0;
             }
             inbox.put(row.eventId(), row);
+            return 1;
+        }
+
+        @Override
+        public EventInboxRow findEvent(String eventId) {
+            return inbox.get(eventId);
+        }
+
+        @Override
+        public int reclaimFailedEvent(String eventId) {
+            EventInboxRow existing = inbox.get(eventId);
+            if (existing == null || existing.status() != FAILED_STATUS) {
+                return 0;
+            }
+            inbox.put(eventId, new EventInboxRow(existing.eventId(), existing.eventType(),
+                existing.businessNo(), existing.payload(), 1, null));
             return 1;
         }
 

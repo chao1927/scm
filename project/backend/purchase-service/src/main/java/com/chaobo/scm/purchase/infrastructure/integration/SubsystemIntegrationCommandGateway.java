@@ -2,6 +2,7 @@ package com.chaobo.scm.purchase.infrastructure.integration;
 
 import com.chaobo.scm.purchase.application.integration.IntegrationCommandGateway;
 import com.chaobo.scm.purchase.infrastructure.persistence.integration.IntegrationCommandMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -77,12 +78,52 @@ public class SubsystemIntegrationCommandGateway implements IntegrationCommandGat
      * @param failureThreshold 业务处理参数或成员，类型为 {@code int}
      * @param openMillis 业务处理参数或成员，类型为 {@code long}
      */
-    public SubsystemIntegrationCommandGateway(Environment environment, @Value("${scm.integration.access-token:}") String accessToken, @Value("${scm.integration.connect-timeout-ms:1000}") int connectTimeoutMillis, @Value("${scm.integration.read-timeout-ms:3000}") int readTimeoutMillis, @Value("${scm.integration.failure-threshold:5}") int failureThreshold, @Value("${scm.integration.circuit-open-ms:30000}") long openMillis) {
-        HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(connectTimeoutMillis)).build();
-        JdkClientHttpRequestFactory requests = new JdkClientHttpRequestFactory(http);
-        requests.setReadTimeout(Duration.ofMillis(readTimeoutMillis));
+    @Autowired
+    public SubsystemIntegrationCommandGateway(
+            Environment environment,
+            @Value("${scm.integration.access-token:}") String accessToken,
+            @Value("${scm.integration.connect-timeout-ms:1000}")
+            int connectTimeoutMillis,
+            @Value("${scm.integration.read-timeout-ms:3000}")
+            int readTimeoutMillis,
+            @Value("${scm.integration.failure-threshold:5}") int failureThreshold,
+            @Value("${scm.integration.circuit-open-ms:30000}") long openMillis
+    ) {
+        this(
+                environment,
+                accessToken,
+                restClient(connectTimeoutMillis, readTimeoutMillis),
+                failureThreshold,
+                openMillis
+        );
+    }
+
+    /**
+     * 创建使用指定 HTTP 客户端的集成网关。
+     *
+     * <p>该构造器供同包契约测试替换传输层，生产装配仍由公开构造器统一设置连接和读取超时。
+     *
+     * @param environment 路由配置来源
+     * @param accessToken 子系统调用令牌
+     * @param client HTTP 客户端
+     * @param failureThreshold 连续失败熔断阈值
+     * @param openMillis 熔断保持时间
+     */
+    SubsystemIntegrationCommandGateway(
+            Environment environment,
+            String accessToken,
+            RestClient client,
+            int failureThreshold,
+            long openMillis
+    ) {
+        if (failureThreshold < 1) {
+            throw new IllegalArgumentException("failureThreshold 必须大于零");
+        }
+        if (openMillis < 1L) {
+            throw new IllegalArgumentException("openMillis 必须大于零");
+        }
         this.environment = environment;
-        this.client = RestClient.builder().requestFactory(requests).build();
+        this.client = client;
         this.accessToken = accessToken;
         this.failureThreshold = failureThreshold;
         this.openMillis = openMillis;
@@ -97,29 +138,123 @@ public class SubsystemIntegrationCommandGateway implements IntegrationCommandGat
      */
     @Override
     public DispatchReceipt dispatch(IntegrationCommandMapper.CommandRow command) {
-        CircuitState circuit = circuits.computeIfAbsent(command.targetSystem(), ignored -> new CircuitState());
+        Route route = Route.resolve(command.commandType(), command.targetSystem());
+        String endpoint = environment.getProperty(route.property(), "");
+        if (endpoint == null || endpoint.isBlank()) {
+            throw new IllegalStateException(
+                    "未配置跨子系统命令路由: " + command.commandType());
+        }
+        if (accessToken == null || accessToken.isBlank()) {
+            throw new IllegalStateException("未配置跨子系统访问令牌");
+        }
+        CircuitState circuit = circuits.computeIfAbsent(
+                route.targetSystem(), ignored -> new CircuitState());
         long now = System.currentTimeMillis();
         if (now < circuit.openUntil) {
-            throw new IllegalStateException(command.targetSystem() + " 子系统调用熔断器已打开");
+            throw new IllegalStateException(
+                    route.targetSystem() + " 子系统调用熔断器已打开");
         }
         try {
-            String routeKey = command.commandType().toLowerCase(Locale.ROOT).replace('_', '-');
-            String endpoint = environment.getProperty("scm.integration.routes." + routeKey + ".url", "");
-            if (endpoint == null || endpoint.isBlank()) {
-                throw new IllegalStateException("未配置跨子系统命令路由: " + command.commandType());
-            }
-            RestClient.RequestBodySpec request = client.post().uri(endpoint).header("X-Idempotency-Key", String.valueOf(command.commandId())).header("X-Source-System", "PURCHASE").header("X-Command-Type", command.commandType()).contentType(MediaType.APPLICATION_JSON);
-            if (accessToken != null && !accessToken.isBlank()) {
-                request = request.header("Authorization", "Bearer " + accessToken);
-            }
+            RestClient.RequestBodySpec request = client.post()
+                    .uri(endpoint)
+                    .header("X-Idempotency-Key",
+                            String.valueOf(command.commandId()))
+                    .header("X-Source-System", "PURCHASE")
+                    .header("X-Target-System", route.targetSystem())
+                    .header("X-Command-Type", command.commandType())
+                    .header("X-Business-Type", command.businessType())
+                    .header("X-Business-Id", command.businessId())
+                    .header("X-Business-No",
+                            command.businessNo() == null ? "" : command.businessNo())
+                    .contentType(MediaType.APPLICATION_JSON);
+            request = request.header("Authorization", "Bearer " + accessToken);
             request.body(command.payloadJson()).retrieve().toBodilessEntity();
             circuit.reset();
-            return new DispatchReceipt(command.targetSystem() + ":" + command.commandId());
+            return new DispatchReceipt(
+                    route.targetSystem() + ":" + command.commandId());
         } catch (RuntimeException exception) {
             if (circuit.recordFailure() >= failureThreshold) {
                 circuit.openUntil = System.currentTimeMillis() + openMillis;
             }
             throw exception;
+        }
+    }
+
+    /**
+     * 创建带连接和读取超时的生产 HTTP 客户端。
+     *
+     * @param connectTimeoutMillis 建连超时毫秒数
+     * @param readTimeoutMillis 读取超时毫秒数
+     * @return 生产 HTTP 客户端
+     */
+    private static RestClient restClient(
+            int connectTimeoutMillis,
+            int readTimeoutMillis
+    ) {
+        if (connectTimeoutMillis < 1 || readTimeoutMillis < 1) {
+            throw new IllegalArgumentException("HTTP 超时必须大于零");
+        }
+        HttpClient http = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(connectTimeoutMillis))
+                .build();
+        JdkClientHttpRequestFactory requests =
+                new JdkClientHttpRequestFactory(http);
+        requests.setReadTimeout(Duration.ofMillis(readTimeoutMillis));
+        return RestClient.builder().requestFactory(requests).build();
+    }
+
+    /**
+     * 采购跨上下文命令固定路由目录。
+     *
+     * <p>命令类型、目标上下文和配置键在同一处声明，禁止通过任意字符串把采购载荷发送到错误系统。
+     */
+    private enum Route {
+
+        SUPPLIER_CREATE_PO_CONFIRM_TODO("SUPPLIER"),
+        WMS_CREATE_PURCHASE_INBOUND_PLAN("WMS"),
+        BMS_CREATE_PURCHASE_PAYABLE_PLAN("BMS"),
+        INVENTORY_LOCK_SUPPLIER_RETURN("INVENTORY"),
+        WMS_CREATE_SUPPLIER_RETURN_OUTBOUND("WMS"),
+        TMS_CREATE_SUPPLIER_RETURN_TRANSPORT("TMS"),
+        BMS_CREATE_SUPPLIER_RETURN_OFFSET("BMS");
+
+        private final String targetSystem;
+
+        Route(String targetSystem) {
+            this.targetSystem = targetSystem;
+        }
+
+        private String targetSystem() {
+            return targetSystem;
+        }
+
+        private String property() {
+            return "scm.integration.routes."
+                    + name().toLowerCase(Locale.ROOT).replace('_', '-')
+                    + ".url";
+        }
+
+        private static Route resolve(
+                String commandType,
+                String requestedTargetSystem
+        ) {
+            final Route route;
+            try {
+                route = Route.valueOf(commandType);
+            } catch (IllegalArgumentException | NullPointerException exception) {
+                throw new IllegalStateException(
+                        "不支持的采购集成命令: " + commandType);
+            }
+            if (requestedTargetSystem == null
+                    || !route.targetSystem.equalsIgnoreCase(
+                            requestedTargetSystem.trim())) {
+                throw new IllegalStateException(
+                        "采购集成命令目标子系统不匹配: "
+                                + commandType
+                                + " 应发送到 "
+                                + route.targetSystem);
+            }
+            return route;
         }
     }
 

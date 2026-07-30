@@ -65,7 +65,7 @@ class WmsInboundEventApplicationServiceTest {
     @Test
     void consumeInboundCreateCommandIsIdempotent() {
         var envelope = new WmsInboundEventApplicationService.EventEnvelope("PURCHASE", "EVT-001", "CreateInboundOrderRequested", """
-            {"sourceType":"PURCHASE","sourceNo":"PO-001","warehouseId":1,"expectedArrivalAt":"2026-07-12T10:00:00Z"}
+            {"sourceType":"PURCHASE","sourceNo":"PO-001","warehouseId":1,"ownerId":2,"expectedArrivalAt":"2026-07-12T10:00:00Z"}
             """);
         var first = service.consume(envelope, 99L);
         var duplicated = service.consume(envelope, 99L);
@@ -83,7 +83,7 @@ class WmsInboundEventApplicationServiceTest {
     @Test
     void consumeOutboundCreateCommandCreatesOutboundOrder() {
         var envelope = new WmsInboundEventApplicationService.EventEnvelope("OMS", "EVT-002", "CreateOutboundOrderRequested", """
-            {"sourceType":"OMS","sourceNo":"SO-001","warehouseId":1}
+            {"sourceType":"OMS","sourceNo":"SO-001","warehouseId":1,"ownerId":2}
             """);
         service.consume(envelope, 99L);
         assertThat(outboundMapper.rows).hasSize(1);
@@ -101,7 +101,7 @@ class WmsInboundEventApplicationServiceTest {
         assertThatThrownBy(() -> service.consume(envelope, 99L)).isInstanceOf(BusinessException.class);
         assertThat(service.failedEvents(10)).hasSize(1);
         inbox.rows.set(0, new WmsInboxMapper.Row(1, "OMS", "EVT-003", "CreateOutboundOrderRequested", """
-            {"sourceType":"OMS","sourceNo":"SO-REPLAY","warehouseId":1}
+            {"sourceType":"OMS","sourceNo":"SO-REPLAY","warehouseId":1,"ownerId":2}
             """, 3, 1, "不支持的WMS入站事件类型"));
         var replayed = service.replay(1, 99L);
         assertThat(replayed.message()).isEqualTo("重放成功");
@@ -315,8 +315,9 @@ class WmsInboundEventApplicationServiceTest {
          * @param operator 业务处理参数或成员，类型为 {@code long}
          */
         @Override
-        public void insert(long id, String no, String type, String sourceNo, long warehouseId, long operator) {
-            rows.add(new Row(id, no, type, sourceNo, warehouseId, 1, 0));
+        public void insert(long id, String no, String type, String sourceNo, long warehouseId,
+                           long ownerId, long operator) {
+            rows.add(new Row(id, no, type, sourceNo, warehouseId, ownerId, 1, 0));
         }
 
         /**

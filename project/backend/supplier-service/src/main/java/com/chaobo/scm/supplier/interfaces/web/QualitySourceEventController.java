@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/internal/supplier/v1/quality/events")
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+        name = "scm.legacy-http-event-ingress.enabled", havingValue = "true")
 public class QualitySourceEventController {
 
     /**

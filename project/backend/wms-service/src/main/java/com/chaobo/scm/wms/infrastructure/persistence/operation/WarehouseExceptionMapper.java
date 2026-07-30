@@ -21,7 +21,8 @@ public interface WarehouseExceptionMapper {
      * @author SCM Team
      * @since 0.1.0
      */
-    record Row(long id, String no, String reason, int status, int version) {
+    record Row(long id, String no, long warehouseId, long ownerId, String reason,
+               int status, int version) {
     }
 
     /**
@@ -31,7 +32,7 @@ public interface WarehouseExceptionMapper {
      * @param no 可追踪业务编码，类型为 {@code String}
      * @return 查询并返回的结果，类型为 {@code Row}
      */
-    @Select("select exception_id id,exception_no no,reason,exception_status status,version from wms_warehouse_exception where exception_no=#{no}")
+    @Select("select exception_id id,exception_no no,warehouse_id warehouseId,owner_id ownerId,reason,exception_status status,version from wms_warehouse_exception where exception_no=#{no}")
     Row find(@Param("no") String no);
 
     /**
@@ -44,8 +45,11 @@ public interface WarehouseExceptionMapper {
      * @param status 生命周期状态，类型为 {@code int}
      * @param version 乐观锁或契约版本，类型为 {@code int}
      */
-    @Insert("insert into wms_warehouse_exception(exception_id,exception_no,reason,exception_status,version,created_at,updated_at) values(#{id},#{no},#{reason},#{status},#{version},now(3),now(3))")
-    void insert(@Param("id") long id, @Param("no") String no, @Param("reason") String reason, @Param("status") int status, @Param("version") int version);
+    @Insert("insert into wms_warehouse_exception(exception_id,exception_no,warehouse_id,owner_id,reason,exception_status,version,created_at,updated_at) values(#{id},#{no},#{warehouseId},#{ownerId},#{reason},#{status},#{version},now(3),now(3))")
+    void insert(@Param("id") long id, @Param("no") String no,
+                @Param("warehouseId") long warehouseId, @Param("ownerId") long ownerId,
+                @Param("reason") String reason, @Param("status") int status,
+                @Param("version") int version);
 
     /**
      * 执行命令 {@code update}。

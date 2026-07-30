@@ -64,10 +64,10 @@ class WmsOperationApplicationServiceTest {
     void confirmHandoverStocktakeAndExceptionPublishesEvents() {
         service.createHandover("HO-001", 10L);
         service.confirmHandover("HO-001", 0);
-        service.createStocktake("ST-001", 1L, "SKU-001", BigDecimal.ONE);
-        service.confirmStocktake("ST-001", 0);
-        service.createException("EX-001", "少拣");
-        service.closeException("EX-001", 0);
+        service.createStocktake("ST-001", 1L, 2L, "SKU-001", BigDecimal.ONE);
+        service.confirmStocktake("ST-001", 1L, 2L, 0);
+        service.createException("EX-001", 1L, 2L, "少拣");
+        service.closeException("EX-001", 1L, 2L, 0);
         assertThat(events.types()).containsExactly("WmsShipmentHandedOver", "WmsStocktakeDifferenceConfirmed", "WmsWarehouseExceptionCreated", "WmsWarehouseExceptionClosed");
     }
 
@@ -79,11 +79,11 @@ class WmsOperationApplicationServiceTest {
     @Test
     void repeatedCreateIsIdempotent() {
         service.createHandover("HO-002", 10L);
-        service.createStocktake("ST-002", 1L, "SKU-001", BigDecimal.ONE);
-        service.createException("EX-002", "错货");
+        service.createStocktake("ST-002", 1L, 2L, "SKU-001", BigDecimal.ONE);
+        service.createException("EX-002", 1L, 2L, "错货");
         assertThat(service.createHandover("HO-002", 10L).duplicated()).isTrue();
-        assertThat(service.createStocktake("ST-002", 1L, "SKU-001", BigDecimal.ONE).duplicated()).isTrue();
-        assertThat(service.createException("EX-002", "错货").duplicated()).isTrue();
+        assertThat(service.createStocktake("ST-002", 1L, 2L, "SKU-001", BigDecimal.ONE).duplicated()).isTrue();
+        assertThat(service.createException("EX-002", 1L, 2L, "错货").duplicated()).isTrue();
     }
 
     /**
@@ -188,8 +188,9 @@ class WmsOperationApplicationServiceTest {
          * @param status 生命周期状态，类型为 {@code int}
          * @param version 乐观锁或契约版本，类型为 {@code int}
          */
-        public void insert(long id, String no, long warehouseId, String sku, BigDecimal differenceQty, int status, int version) {
-            rows.add(new Row(id, no, warehouseId, sku, differenceQty, status, version));
+        public void insert(long id, String no, long warehouseId, long ownerId, String sku,
+                           BigDecimal differenceQty, int status, int version) {
+            rows.add(new Row(id, no, warehouseId, ownerId, sku, differenceQty, status, version));
         }
 
         /**
@@ -207,7 +208,8 @@ class WmsOperationApplicationServiceTest {
             if (row == null) {
                 return 0;
             }
-            rows.set(rows.indexOf(row), new Row(row.id(), row.no(), row.warehouseId(), row.sku(), row.differenceQty(), status, version));
+            rows.set(rows.indexOf(row), new Row(row.id(), row.no(), row.warehouseId(),
+                row.ownerId(), row.sku(), row.differenceQty(), status, version));
             return 1;
         }
     }
@@ -250,8 +252,9 @@ class WmsOperationApplicationServiceTest {
          * @param status 生命周期状态，类型为 {@code int}
          * @param version 乐观锁或契约版本，类型为 {@code int}
          */
-        public void insert(long id, String no, String reason, int status, int version) {
-            rows.add(new Row(id, no, reason, status, version));
+        public void insert(long id, String no, long warehouseId, long ownerId,
+                           String reason, int status, int version) {
+            rows.add(new Row(id, no, warehouseId, ownerId, reason, status, version));
         }
 
         /**
@@ -269,7 +272,8 @@ class WmsOperationApplicationServiceTest {
             if (row == null) {
                 return 0;
             }
-            rows.set(rows.indexOf(row), new Row(row.id(), row.no(), row.reason(), status, version));
+            rows.set(rows.indexOf(row), new Row(row.id(), row.no(), row.warehouseId(),
+                row.ownerId(), row.reason(), status, version));
             return 1;
         }
     }

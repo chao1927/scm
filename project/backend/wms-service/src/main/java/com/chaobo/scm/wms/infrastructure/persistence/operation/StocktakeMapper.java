@@ -22,7 +22,8 @@ public interface StocktakeMapper {
      * @author SCM Team
      * @since 0.1.0
      */
-    record Row(long id, String no, long warehouseId, String sku, BigDecimal differenceQty, int status, int version) {
+    record Row(long id, String no, long warehouseId, long ownerId, String sku,
+               BigDecimal differenceQty, int status, int version) {
     }
 
     /**
@@ -32,7 +33,7 @@ public interface StocktakeMapper {
      * @param no 可追踪业务编码，类型为 {@code String}
      * @return 查询并返回的结果，类型为 {@code Row}
      */
-    @Select("select stocktake_id id,stocktake_no no,warehouse_id warehouseId,sku_code sku,difference_qty differenceQty,stocktake_status status,version from wms_stocktake where stocktake_no=#{no}")
+    @Select("select stocktake_id id,stocktake_no no,warehouse_id warehouseId,owner_id ownerId,sku_code sku,difference_qty differenceQty,stocktake_status status,version from wms_stocktake where stocktake_no=#{no}")
     Row find(@Param("no") String no);
 
     /**
@@ -47,8 +48,11 @@ public interface StocktakeMapper {
      * @param status 生命周期状态，类型为 {@code int}
      * @param version 乐观锁或契约版本，类型为 {@code int}
      */
-    @Insert("insert into wms_stocktake(stocktake_id,stocktake_no,warehouse_id,sku_code,difference_qty,stocktake_status,version,created_at,updated_at) values(#{id},#{no},#{warehouseId},#{sku},#{differenceQty},#{status},#{version},now(3),now(3))")
-    void insert(@Param("id") long id, @Param("no") String no, @Param("warehouseId") long warehouseId, @Param("sku") String sku, @Param("differenceQty") BigDecimal differenceQty, @Param("status") int status, @Param("version") int version);
+    @Insert("insert into wms_stocktake(stocktake_id,stocktake_no,warehouse_id,owner_id,sku_code,difference_qty,stocktake_status,version,created_at,updated_at) values(#{id},#{no},#{warehouseId},#{ownerId},#{sku},#{differenceQty},#{status},#{version},now(3),now(3))")
+    void insert(@Param("id") long id, @Param("no") String no,
+                @Param("warehouseId") long warehouseId, @Param("ownerId") long ownerId,
+                @Param("sku") String sku, @Param("differenceQty") BigDecimal differenceQty,
+                @Param("status") int status, @Param("version") int version);
 
     /**
      * 执行命令 {@code update}。

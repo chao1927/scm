@@ -2,6 +2,7 @@ package com.chaobo.scm.oms;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * OmsServiceApplication。
@@ -12,6 +13,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @since 0.1.0
  */
 @SpringBootApplication
+@EnableScheduling
 public class OmsServiceApplication {
 
     /**

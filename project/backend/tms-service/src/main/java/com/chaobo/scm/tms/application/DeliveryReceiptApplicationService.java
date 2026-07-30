@@ -74,6 +74,10 @@ public class DeliveryReceiptApplicationService {
         }
         TrackingMapper.ReceiptRow existing = mapper.findReceiptByWaybill(command.waybillNo());
         if (existing != null) {
+            if (existing.result() != command.result()) {
+                throw new IllegalStateException(
+                    "delivery receipt conflicts with existing terminal result");
+            }
             return existing;
         }
         DeliveryReceiptAggregate aggregate = DeliveryReceiptAggregate.record("RCP" + sequence.incrementAndGet(), command.waybillNo(), command.result(), command.signedBy(), command.signedAt(), command.rejectReason(), command.proofUrl());

@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -447,7 +448,15 @@ public class BmsController {
      * @return 执行命令的结果，类型为 {@code BmsMapper.InboxEventRow}
      */
     @PostMapping("/internal/bms/v1/events")
-    public BmsMapper.InboxEventRow consumeEvent(@RequestBody BmsApplicationService.ConsumeEventCommand command, Authentication authentication) {
+    @org.springframework.security.access.prepost.PreAuthorize(
+        "hasAnyAuthority('*','bms:*','bms:event:manual-consume')")
+    public BmsMapper.InboxEventRow consumeEvent(
+            @RequestBody BmsApplicationService.ConsumeEventCommand command,
+            @RequestHeader("X-Manual-Operation-Reason") String reason,
+            Authentication authentication) {
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("manual event consume reason is required");
+        }
         ScmAccessContexts.require(authentication).requireApplication(command.sourceSystem());
         return service.consumeEvent(command);
     }

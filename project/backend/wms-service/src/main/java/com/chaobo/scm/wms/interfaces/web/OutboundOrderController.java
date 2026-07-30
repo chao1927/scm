@@ -65,7 +65,9 @@ public class OutboundOrderController {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED, "缺少幂等键");
         }
         WmsAccessControl.requireWarehouse(authentication, body.warehouseId());
-        return ok(service.create(body.sourceType(), body.sourceNo(), body.warehouseId(), WmsAccessControl.operatorId(authentication)), request);
+        WmsAccessControl.requireOwner(authentication, body.ownerId());
+        return ok(service.create(body.sourceType(), body.sourceNo(), body.warehouseId(), body.ownerId(),
+            WmsAccessControl.operatorId(authentication)), request);
     }
 
     /**
@@ -80,7 +82,9 @@ public class OutboundOrderController {
     @PostMapping("/api/wms/v1/outbound-orders/allocate")
     public ApiResponse<OutboundApplicationService.Result> allocate(@Valid @RequestBody Change body, HttpServletRequest request, Authentication authentication) {
         WmsAccessControl.requireWarehouse(authentication, body.warehouseId());
-        return ok(service.allocate(body.sourceType(), body.sourceNo(), body.warehouseId(), body.version(), WmsAccessControl.operatorId(authentication)), request);
+        WmsAccessControl.requireOwner(authentication, body.ownerId());
+        return ok(service.allocate(body.sourceType(), body.sourceNo(), body.warehouseId(), body.ownerId(),
+            body.version(), WmsAccessControl.operatorId(authentication)), request);
     }
 
     /**
@@ -95,7 +99,9 @@ public class OutboundOrderController {
     @PostMapping("/openapi/wms/v1/outbound-orders/cancel")
     public ApiResponse<OutboundApplicationService.Result> cancel(@Valid @RequestBody Cancel body, HttpServletRequest request, Authentication authentication) {
         WmsAccessControl.requireWarehouse(authentication, body.warehouseId());
-        return ok(service.cancel(body.sourceType(), body.sourceNo(), body.warehouseId(), body.version(), body.reason(), WmsAccessControl.operatorId(authentication)), request);
+        WmsAccessControl.requireOwner(authentication, body.ownerId());
+        return ok(service.cancel(body.sourceType(), body.sourceNo(), body.warehouseId(), body.ownerId(),
+            body.version(), body.reason(), WmsAccessControl.operatorId(authentication)), request);
     }
 
     /**
@@ -118,7 +124,8 @@ public class OutboundOrderController {
      * @author SCM Team
      * @since 0.1.0
      */
-    public record Create(@NotBlank String sourceType, @NotBlank String sourceNo, @Positive long warehouseId) {
+    public record Create(@NotBlank String sourceType, @NotBlank String sourceNo,
+                         @Positive long warehouseId, @Positive long ownerId) {
     }
 
     /**
@@ -129,7 +136,9 @@ public class OutboundOrderController {
      * @author SCM Team
      * @since 0.1.0
      */
-    public record Change(@NotBlank String sourceType, @NotBlank String sourceNo, @Positive long warehouseId, @PositiveOrZero int version) {
+    public record Change(@NotBlank String sourceType, @NotBlank String sourceNo,
+                         @Positive long warehouseId, @Positive long ownerId,
+                         @PositiveOrZero int version) {
     }
 
     /**
@@ -140,7 +149,9 @@ public class OutboundOrderController {
      * @author SCM Team
      * @since 0.1.0
      */
-    public record Cancel(@NotBlank String sourceType, @NotBlank String sourceNo, @Positive long warehouseId, @PositiveOrZero int version, @NotBlank String reason) {
+    public record Cancel(@NotBlank String sourceType, @NotBlank String sourceNo,
+                         @Positive long warehouseId, @Positive long ownerId,
+                         @PositiveOrZero int version, @NotBlank String reason) {
     }
 
     /**
