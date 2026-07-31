@@ -46,6 +46,9 @@ class InventoryInboundEventApplicationServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("事件乱序");
         assertThat(processor.calls).isZero();
+        assertThat(store.inboxes.get("E-2").status())
+                .isEqualTo(InventoryInboundEventStore.STATUS_WAITING_REPLAY);
+        assertThat(store.inboxes.get("E-2").retryCount()).isZero();
 
         InventoryEventEnvelope first = event("E-1", "1.0", 1L);
         assertThat(service.consume(first, "{}").duplicated()).isFalse();
@@ -161,6 +164,11 @@ class InventoryInboundEventApplicationServiceTest {
         @Override
         public void markFailed(long inboxId, String reason) {
             replace(inboxId, STATUS_FAILED, reason, null);
+        }
+
+        @Override
+        public void markWaitingReplay(long inboxId, String reason) {
+            replace(inboxId, STATUS_WAITING_REPLAY, reason, null);
         }
 
         @Override

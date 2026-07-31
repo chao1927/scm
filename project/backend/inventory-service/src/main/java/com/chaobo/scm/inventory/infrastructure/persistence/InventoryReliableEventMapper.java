@@ -105,6 +105,16 @@ public interface InventoryReliableEventMapper {
             @Param("id") long id,
             @Param("reason") String reason);
 
+    /** 标记前置版本缺失，等待重放且不累计业务处理重试次数。 */
+    @Update("""
+            update inv_inbox_event
+               set status=5,last_error=#{reason},ignored_reason=null,updated_at=now(3)
+             where inbox_id=#{id}
+            """)
+    int markWaitingReplay(
+            @Param("id") long id,
+            @Param("reason") String reason);
+
     /**
      * 查询来源聚合消费顺序游标。
      *

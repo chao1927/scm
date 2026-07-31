@@ -22,7 +22,7 @@ public interface PurchaseOrderChangeMapper {
      * @author SCM Team
      * @since 0.1.0
      */
-    record ChangeRow(long id, String changeNo, String orderNo, int changeType, String beforeSnapshot, String afterSnapshot, String changeReason, int status, int version) {
+    record ChangeRow(long id, String changeNo, String orderNo, int baseOrderVersion, int changeType, String beforeSnapshot, String afterSnapshot, String changeReason, int status, int version) {
     }
 
     /**
@@ -44,10 +44,10 @@ public interface PurchaseOrderChangeMapper {
      */
     @Insert("""
         insert into purchase_order_change(
-          id, change_no, order_no, change_type, before_snapshot, after_snapshot, change_reason,
+          id, change_no, order_no, base_order_version, change_type, before_snapshot, after_snapshot, change_reason,
           status, version, deleted, created_by, updated_by, created_at, updated_at
         ) values (
-          #{id}, #{changeNo}, #{orderNo}, #{changeType}, #{beforeSnapshot}, #{afterSnapshot}, #{changeReason},
+          #{id}, #{changeNo}, #{orderNo}, #{baseOrderVersion}, #{changeType}, #{beforeSnapshot}, #{afterSnapshot}, #{changeReason},
           #{status}, #{version}, 0, #{operatorId}, #{operatorId}, now(3), now(3)
         )
         """)
@@ -65,9 +65,9 @@ public interface PurchaseOrderChangeMapper {
     @Update("""
         update purchase_order_change
         set status = #{status}, version = #{version}, updated_by = #{operatorId}, updated_at = now(3)
-        where id = #{id}
+        where id = #{id} and version = #{expectedVersion}
         """)
-    void updateStatus(@Param("id") long id, @Param("status") int status, @Param("version") int version, @Param("operatorId") long operatorId);
+    int updateStatus(@Param("id") long id, @Param("status") int status, @Param("version") int version, @Param("expectedVersion") int expectedVersion, @Param("operatorId") long operatorId);
 
     /**
      * 查询并返回 {@code count}。

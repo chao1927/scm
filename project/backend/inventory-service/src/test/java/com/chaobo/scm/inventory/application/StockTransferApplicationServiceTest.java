@@ -38,10 +38,18 @@ class StockTransferApplicationServiceTest {
         var outbound = service.recordOutbound(created.transferNo(), new BigDecimal("5"), reserved.version());
         var inTransit = service.markInTransit(created.transferNo(), outbound.version());
         var received = service.receive(created.transferNo(), new BigDecimal("4"), true, inTransit.version());
-        var confirmed = service.confirmDifference(created.transferNo(), received.version());
+        var confirmed = service.confirmDifference(
+                created.transferNo(),
+                "运输短少",
+                "CARRIER",
+                "EVIDENCE-1",
+                received.version());
         assertThat(duplicate.duplicated()).isTrue();
         assertThat(confirmed.status()).isEqualTo(StockTransferAggregate.DIFFERENCE_CONFIRMED);
         assertThat(confirmed.differenceQty()).isEqualByComparingTo("1");
+        assertThat(confirmed.differenceReason()).isEqualTo("运输短少");
+        assertThat(confirmed.responsibleParty()).isEqualTo("CARRIER");
+        assertThat(confirmed.evidenceRef()).isEqualTo("EVIDENCE-1");
         assertThat(stock.reservedTransferNo).isEqualTo(created.transferNo());
         assertThat(stock.outboundQty).isEqualByComparingTo("5");
         assertThat(stock.inboundQty).isEqualByComparingTo("4");
@@ -215,11 +223,11 @@ class StockTransferApplicationServiceTest {
          * @return 执行命令的结果，类型为 {@code int}
          */
         @Override
-        public int update(long id, BigDecimal reservedQty, BigDecimal outboundQty, BigDecimal receivedQty, BigDecimal differenceQty, int status, int version, int oldVersion) {
+        public int update(long id, BigDecimal reservedQty, BigDecimal outboundQty, BigDecimal receivedQty, BigDecimal differenceQty, String differenceReason, String responsibleParty, String evidenceRef, int status, int version, int oldVersion) {
             if (row == null || row.version() != oldVersion) {
                 return 0;
             }
-            row = new Row(row.id(), row.transferNo(), row.idempotencyKey(), row.ownerId(), row.sourceWarehouseId(), row.targetWarehouseId(), row.sku(), row.batchNo(), row.requestedQty(), reservedQty, outboundQty, receivedQty, differenceQty, status, version);
+            row = new Row(row.id(), row.transferNo(), row.idempotencyKey(), row.ownerId(), row.sourceWarehouseId(), row.targetWarehouseId(), row.sku(), row.batchNo(), row.requestedQty(), reservedQty, outboundQty, receivedQty, differenceQty, differenceReason, responsibleParty, evidenceRef, status, version);
             return 1;
         }
     }

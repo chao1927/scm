@@ -1,15 +1,8 @@
 package com.chaobo.scm.supplier.infrastructure.security;
 
-import org.springframework.context.annotation.Bean;
+import com.chaobo.scm.common.security.ScmSecurityConfiguration;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.convert.converter.Converter;
-import org.springframework.security.authentication.AbstractAuthenticationToken;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.security.web.SecurityFilterChain;
-import java.util.List;
+import org.springframework.context.annotation.Import;
 
 /**
  * SecurityConfiguration。
@@ -19,32 +12,7 @@ import java.util.List;
  * @author SCM Team
  * @since 0.1.0
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
+@Import(ScmSecurityConfiguration.class)
 public class SecurityConfiguration {
-
-    /**
-     * 处理当前类型职责中的操作 {@code securityFilterChain}。
-     *
-     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
-     * @param http 业务处理参数或成员，类型为 {@code HttpSecurity}
-     * @return 处理当前类型职责中的操作的结果，类型为 {@code SecurityFilterChain}
-     */
-    @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        return http.csrf(csrf -> csrf.disable()).authorizeHttpRequests(authorize -> authorize.requestMatchers("/actuator/health", "/actuator/info").permitAll().anyRequest().authenticated()).oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))).build();
-    }
-
-    /**
-     * 处理当前类型职责中的操作 {@code jwtAuthenticationConverter}。
-     *
-     * <p>该内部步骤用于收敛重复逻辑或保护局部规则，调用方应通过当前类型公开的业务入口使用该能力。
-     * @return 处理当前类型职责中的操作的结果，类型为 {@code Converter<Jwt,AbstractAuthenticationToken>}
-     */
-    private Converter<Jwt, AbstractAuthenticationToken> jwtAuthenticationConverter() {
-        return jwt -> {
-            List<String> permissions = jwt.getClaimAsStringList("permissions");
-            var authorities = permissions == null ? List.<SimpleGrantedAuthority>of() : permissions.stream().map(SimpleGrantedAuthority::new).toList();
-            return new JwtAuthenticationToken(jwt, authorities, jwt.getSubject());
-        };
-    }
 }

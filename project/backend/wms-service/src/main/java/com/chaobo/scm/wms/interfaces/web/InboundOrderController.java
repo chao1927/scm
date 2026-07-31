@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.core.Authentication;
 import java.time.OffsetDateTime;
+import java.math.BigDecimal;
 
 /**
  * InboundOrderController。
@@ -62,12 +63,14 @@ public class InboundOrderController {
     public ApiResponse<WmsCommandResult> create(@Valid @RequestBody CreateRequest body, HttpServletRequest request, Authentication authentication) {
         var source = request.getHeader("X-Source-System");
         var idempotencyKey = request.getHeader("X-Idempotency-Key");
-        if (source == null || source.isBlank() || !source.equals(body.sourceType())) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "来源系统与入库来源不一致");
+        if (source == null || source.isBlank()) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "缺少入库事实来源系统");
         }
         WmsAccessControl.requireWarehouse(authentication, body.warehouseId());
         WmsAccessControl.requireOwner(authentication, body.ownerId());
-        return ok(service.create(new InboundOrderApplicationService.Create(body.sourceType(), body.sourceNo(), body.warehouseId(), body.ownerId(), body.expectedArrivalAt(), idempotencyKey), WmsAccessControl.operatorId(authentication)), request);
+        return ok(service.create(new InboundOrderApplicationService.Create(source, body.inboundType(),
+            body.sourceNo(), body.sourceLineNo(), body.warehouseId(), body.ownerId(), body.allowedQty(),
+            body.expectedArrivalAt(), idempotencyKey), WmsAccessControl.operatorId(authentication)), request);
     }
 
     /**
@@ -122,7 +125,11 @@ public class InboundOrderController {
      * @author SCM Team
      * @since 0.1.0
      */
-    public record CreateRequest(@NotBlank String sourceType, @NotBlank String sourceNo, @Positive long warehouseId, @Positive long ownerId, OffsetDateTime expectedArrivalAt) {
+    public record CreateRequest(@NotBlank String inboundType, @NotBlank String sourceNo,
+                                @NotBlank String sourceLineNo, @Positive long warehouseId,
+                                @Positive long ownerId, @jakarta.validation.constraints.NotNull
+                                @jakarta.validation.constraints.DecimalMin("0.000001") BigDecimal allowedQty,
+                                OffsetDateTime expectedArrivalAt) {
     }
 
     /**

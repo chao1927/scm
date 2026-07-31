@@ -13,6 +13,7 @@ public interface InventoryInboundEventStore {
     int STATUS_SUCCEEDED = 2;
     int STATUS_FAILED = 3;
     int STATUS_IGNORED = 4;
+    int STATUS_WAITING_REPLAY = 5;
 
     /**
      * 查找指定消费者的 Inbox 记录。
@@ -59,6 +60,16 @@ public interface InventoryInboundEventStore {
      * @param reason 失败原因
      */
     void markFailed(long inboxId, String reason);
+
+    /**
+     * 标记因前置版本缺失而等待 Broker 重投或人工重放。
+     *
+     * @param inboxId Inbox ID
+     * @param reason 等待原因
+     */
+    default void markWaitingReplay(long inboxId, String reason) {
+        markFailed(inboxId, reason);
+    }
 
     /**
      * 查询同一来源聚合的最后成功版本。

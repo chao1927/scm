@@ -6,6 +6,8 @@ import com.chaobo.scm.purchase.application.inbound.InboundCommands;
 import com.chaobo.scm.purchase.application.inbound.InboundTrackingApplicationService;
 import com.chaobo.scm.purchase.application.order.PurchaseOrderApplicationService;
 import com.chaobo.scm.purchase.application.shared.CommandContext;
+import com.chaobo.scm.purchase.domain.rfq.RfqRepository;
+import com.chaobo.scm.purchase.domain.rfq.RfqStatus;
 import com.chaobo.scm.purchase.infrastructure.persistence.integration.PurchaseExternalFactMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -70,6 +72,8 @@ public class PurchaseExternalEventConsumerApplicationService
      */
     private final PurchaseOrderApplicationService purchaseOrders;
 
+    private final RfqRepository rfqs;
+
     /**
      * json（类型：{@code ObjectMapper}）。
      *
@@ -88,12 +92,13 @@ public class PurchaseExternalEventConsumerApplicationService
      * @param purchaseOrders 业务处理参数或成员，类型为 {@code PurchaseOrderApplicationService}
      * @param json 业务处理参数或成员，类型为 {@code ObjectMapper}
      */
-    public PurchaseExternalEventConsumerApplicationService(InboundEventLogPort inbox, InboundEventPayloadStore payloads, PurchaseExternalFactMapper facts, InboundTrackingApplicationService inbounds, PurchaseOrderApplicationService purchaseOrders, ObjectMapper json) {
+    public PurchaseExternalEventConsumerApplicationService(InboundEventLogPort inbox, InboundEventPayloadStore payloads, PurchaseExternalFactMapper facts, InboundTrackingApplicationService inbounds, PurchaseOrderApplicationService purchaseOrders, RfqRepository rfqs, ObjectMapper json) {
         this.inbox = inbox;
         this.payloads = payloads;
         this.facts = facts;
         this.inbounds = inbounds;
         this.purchaseOrders = purchaseOrders;
+        this.rfqs = rfqs;
         this.json = json;
     }
 
@@ -162,8 +167,10 @@ public class PurchaseExternalEventConsumerApplicationService
     @SuppressWarnings("PMD.SwitchStatementRule")
     private void dispatch(PurchaseExternalEvent event) {
         switch(event.eventType()) {
-            case "SupplierQuoteSubmitted", "SupplierQuoteChanged", "SupplierQuoteVoided", "SupplierQuoteAdopted" ->
-                facts.upsertQuote(event.eventCode(), text(event.quoteNo(), event.businessNo()), event.rfqNo(), requiredLong(event.supplierId(), "供应商ID"), event.skuCode(), zero(event.quantity()), zero(event.amount()), event.currency(), event.eventType(), write(event.payload()));
+            case "SupplierQuoteSubmitted", "SupplierQuoteChanged", "SupplierQuoteVoided" ->
+                consumeSupplierQuote(event, true);
+            case "SupplierQuoteAdopted" ->
+                consumeSupplierQuote(event, false);
             case "PurchaseOrderConfirmed", "PurchaseOrderConfirmedBySupplier" ->
                 consumeSupplierResponse(event, PurchaseOrderApplicationService.SupplierResponseType.CONFIRMED);
             case "PurchaseOrderRejected", "PurchaseOrderRejectedBySupplier" ->
@@ -179,6 +186,18 @@ public class PurchaseExternalEventConsumerApplicationService
             default ->
                 inbox.markSucceeded(event.sourceSystem(), event.eventCode(), CONSUMER, true);
         }
+    }
+
+    private void consumeSupplierQuote(PurchaseExternalEvent event, boolean requiresOpenBidding) {
+        var rfqNo = text(event.rfqNo(), event.businessNo());
+        if (rfqNo == null || rfqNo.isBlank()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "供应商报价事件缺少询价单号");
+        }
+        var rfq = rfqs.findByNo(rfqNo).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "询价单不存在"));
+        if (requiresOpenBidding && rfq.status() != RfqStatus.QUOTING && rfq.status() != RfqStatus.PUBLISHED) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT, "询价已截标或关闭，禁止新增或变更报价");
+        }
+        facts.upsertQuote(event.eventCode(), text(event.quoteNo(), event.businessNo()), rfqNo, requiredLong(event.supplierId(), "供应商ID"), event.skuCode(), zero(event.quantity()), zero(event.amount()), event.currency(), event.eventType(), write(event.payload()));
     }
 
     /**

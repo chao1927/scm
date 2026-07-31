@@ -161,9 +161,11 @@ public class WmsInboundEventApplicationService {
         var payload = readPayload(row.payload());
         switch(row.eventType()) {
             case "CreateInboundOrderRequested" ->
-                inboundOrders.create(new InboundOrderApplicationService.Create(text(payload, "sourceType"),
-                    text(payload, "sourceNo"), longValue(payload, "warehouseId"), longValue(payload, "ownerId"),
-                    offsetDateTime(payload, "expectedArrivalAt"), row.eventCode()), operatorId);
+                inboundOrders.create(new InboundOrderApplicationService.Create(row.sourceSystem(),
+                    inboundType(payload), text(payload, "sourceNo"), sourceLineNo(payload),
+                    longValue(payload, "warehouseId"), longValue(payload, "ownerId"),
+                    decimal(payload, "allowedQty"), offsetDateTime(payload, "expectedArrivalAt"),
+                    row.eventCode()), operatorId);
             case "CreateOutboundOrderRequested" ->
                 outboundOrders.create(text(payload, "sourceType"), text(payload, "sourceNo"),
                     longValue(payload, "warehouseId"), longValue(payload, "ownerId"), operatorId);
@@ -294,6 +296,16 @@ public class WmsInboundEventApplicationService {
     private static String nullableText(JsonNode payload, String field) {
         var value = payload.get(field);
         return value == null || value.isNull() || value.asText().isBlank() ? null : value.asText();
+    }
+
+    private static String inboundType(JsonNode payload) {
+        String value = nullableText(payload, "inboundType");
+        return value == null ? text(payload, "sourceType") : value;
+    }
+
+    private static String sourceLineNo(JsonNode payload) {
+        String value = nullableText(payload, "sourceLineNo");
+        return value == null ? "0" : value;
     }
 
     /**

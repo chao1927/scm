@@ -1,13 +1,23 @@
 package com.chaobo.scm.purchase.application.integration;
 
+import com.chaobo.scm.common.error.BusinessException;
 import com.chaobo.scm.purchase.infrastructure.persistence.integration.PurchaseExternalFactMapper;
+import com.chaobo.scm.purchase.domain.rfq.RfqAggregate;
+import com.chaobo.scm.purchase.domain.rfq.RfqInvitation;
+import com.chaobo.scm.purchase.domain.rfq.RfqLine;
+import com.chaobo.scm.purchase.domain.rfq.RfqRepository;
+import com.chaobo.scm.purchase.domain.rfq.RfqStatus;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * PurchaseExternalEventConsumerApplicationServiceTest。
@@ -38,7 +48,9 @@ class PurchaseExternalEventConsumerApplicationServiceTest {
      *
      * <p>保存当前对象所需的应用或外部协作依赖；其具体生命周期由所属对象统一管理。
      */
-    private final PurchaseExternalEventConsumerApplicationService service = new PurchaseExternalEventConsumerApplicationService(inbox, new InboundEventPayloadStore(inbox, new ObjectMapper()), facts.proxy(), null, null, new ObjectMapper());
+    private final FakeRfqRepository rfqs = new FakeRfqRepository();
+
+    private final PurchaseExternalEventConsumerApplicationService service = new PurchaseExternalEventConsumerApplicationService(inbox, new InboundEventPayloadStore(inbox, new ObjectMapper()), facts.proxy(), null, null, rfqs, new ObjectMapper());
 
     /**
      * 处理当前类型职责中的操作 {@code supplierQuoteEventWritesQuoteFactAndMarksInboxSucceeded}。
@@ -47,6 +59,7 @@ class PurchaseExternalEventConsumerApplicationServiceTest {
      */
     @Test
     void supplierQuoteEventWritesQuoteFactAndMarksInboxSucceeded() {
+        rfqs.aggregate = quotingRfq();
         service.consume(new PurchaseExternalEvent("SUPPLIER", "EVT-1", "SupplierQuoteSubmitted", null, null, "RFQ001", "Q001", null, null, 3001L, null, null, "SKU-01", new BigDecimal("10"), null, null, null, null, new BigDecimal("99.00"), "CNY", null, null, null, null, null, null, 1, null, Map.of("score", 90)));
         assertThat(facts.quoteNo).isEqualTo("Q001");
         assertThat(facts.rfqNo).isEqualTo("RFQ001");
@@ -65,6 +78,58 @@ class PurchaseExternalEventConsumerApplicationServiceTest {
         inbox.claimResult = InboundEventLogPort.ClaimResult.ALREADY_SUCCEEDED;
         service.consume(new PurchaseExternalEvent("SUPPLIER", "EVT-1", "SupplierQuoteSubmitted", null, null, "RFQ001", "Q001", null, null, 3001L, null, null, "SKU-01", BigDecimal.ONE, null, null, null, null, BigDecimal.TEN, "CNY", null, null, null, null, null, null, 1, null, Map.of()));
         assertThat(facts.quoteNo).isNull();
+    }
+
+    @Test
+    void quoteChangeAfterBiddingClosedIsRejectedWithoutUpdatingFact() {
+        rfqs.aggregate = closedRfq();
+
+        assertThatThrownBy(() -> service.consume(new PurchaseExternalEvent("SUPPLIER", "EVT-CLOSED-1", "SupplierQuoteChanged", null, null, "RFQ001", "Q001", null, null, 3001L, null, null, "SKU-01", BigDecimal.ONE, null, null, null, null, BigDecimal.TEN, "CNY", null, null, null, null, null, null, 2, null, Map.of())))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("截标");
+        assertThat(facts.quoteNo).isNull();
+        assertThat(inbox.status).isEqualTo(3);
+    }
+
+    @Test
+    void adoptedQuoteFactCanBeRecordedAfterBiddingClosed() {
+        rfqs.aggregate = closedRfq();
+
+        service.consume(new PurchaseExternalEvent("SUPPLIER", "EVT-ADOPTED-1", "SupplierQuoteAdopted", null, null, "RFQ001", "Q001", null, null, 3001L, null, null, "SKU-01", BigDecimal.ONE, null, null, null, null, BigDecimal.TEN, "CNY", null, null, null, null, null, null, 3, null, Map.of()));
+
+        assertThat(facts.quoteNo).isEqualTo("Q001");
+        assertThat(inbox.status).isEqualTo(2);
+    }
+
+    private RfqAggregate closedRfq() {
+        return new RfqAggregate(1, "RFQ001", 2, 2001, "CATE-01", "PR001", OffsetDateTime.now().plusDays(1), RfqStatus.BIDDING_CLOSED, OffsetDateTime.now().minusDays(1), "到期截标", 2,
+                List.of(new RfqLine(11, "SKU-01", BigDecimal.TEN, "PCS", LocalDate.now().plusDays(7), null)),
+                List.of(new RfqInvitation(21, 3001, 4)));
+    }
+
+    private RfqAggregate quotingRfq() {
+        return new RfqAggregate(1, "RFQ001", 2, 2001, "CATE-01", "PR001", OffsetDateTime.now().plusDays(1), RfqStatus.QUOTING, OffsetDateTime.now().minusDays(1), null, 1,
+                List.of(new RfqLine(11, "SKU-01", BigDecimal.TEN, "PCS", LocalDate.now().plusDays(7), null)),
+                List.of(new RfqInvitation(21, 3001, 2)));
+    }
+
+    private static final class FakeRfqRepository implements RfqRepository {
+        private RfqAggregate aggregate;
+
+        @Override
+        public Optional<RfqAggregate> findById(long id) {
+            return Optional.ofNullable(aggregate);
+        }
+
+        @Override
+        public Optional<RfqAggregate> findByNo(String rfqNo) {
+            return Optional.ofNullable(aggregate);
+        }
+
+        @Override
+        public void save(RfqAggregate aggregate, long operatorId) {
+            this.aggregate = aggregate;
+        }
     }
 
     /**

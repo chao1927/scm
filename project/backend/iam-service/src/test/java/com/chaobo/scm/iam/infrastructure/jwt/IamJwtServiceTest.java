@@ -3,7 +3,6 @@ package com.chaobo.scm.iam.infrastructure.jwt;
 import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.Map;
-import java.util.Map;
 import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -72,6 +71,42 @@ class IamJwtServiceTest {
         assertThatThrownBy(() -> verifier.verify(token))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("unknown jwt kid");
+    }
+
+    @Test
+    void rejectsTokenWhoseUnverifiedHeaderClaimsUnexpectedAlgorithm() {
+        Instant now = Instant.parse("2026-07-30T00:00:00Z");
+        IamJwtService service = new IamJwtService(
+                "active",
+                "01234567890123456789012345678901",
+                Map.of(),
+                now::getEpochSecond);
+        String valid = service.issue(new IamJwtService.TokenClaims(
+                "1", "admin", "IAM", "jti", "ACCESS",
+                now.getEpochSecond(), now.plusSeconds(60).getEpochSecond()));
+        String forgedHeader = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(
+                "{\"alg\":\"none\",\"typ\":\"JWT\",\"kid\":\"active\"}"
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String[] parts = valid.split("\\.");
+        String signingInput = forgedHeader + "." + parts[1];
+        String forged = signingInput + "." + hmac(signingInput,
+                "01234567890123456789012345678901");
+
+        assertThatThrownBy(() -> service.verify(forged))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("algorithm");
+    }
+
+    private static String hmac(String input, String secret) {
+        try {
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new javax.crypto.spec.SecretKeySpec(
+                    secret.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
+            return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(
+                    mac.doFinal(input.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.GeneralSecurityException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     /**

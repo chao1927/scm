@@ -30,6 +30,10 @@ public class IamJwtService {
      */
     private static final int MINIMUM_SECRET_BYTES = 32;
 
+    private static final String JWT_ALGORITHM_HEADER = "alg";
+
+    private static final String JWT_HMAC_SHA_256 = "HS256";
+
     /**
      * secret（类型：{@code byte[]}）。
      *
@@ -178,6 +182,9 @@ public class IamJwtService {
         }
         try {
             Map<String, Object> header = json.readValue(Base64.getUrlDecoder().decode(parts[0]), Map.class);
+            if (!JWT_HMAC_SHA_256.equals(text(header, JWT_ALGORITHM_HEADER))) {
+                throw new IllegalArgumentException("unsupported jwt algorithm");
+            }
             String kid = text(header, "kid");
             if (kid.isBlank()) {
                 throw new IllegalArgumentException("jwt kid is required");

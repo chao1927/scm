@@ -16,7 +16,7 @@ import sys
 import xml.etree.ElementTree as ElementTree
 
 
-EXPECTED_REQUIREMENT_COUNT = 64
+EXPECTED_REQUIREMENT_COUNT = 72
 EXPECTED_BUSINESS_SERVICES = (
     "supplier-service",
     "purchase-service",
@@ -71,22 +71,22 @@ class PlanTask:
 
 
 def parse_matrix_requirement_ids(matrix_path: Path) -> list[str]:
-    """读取状态矩阵 12.3 精确索引中的需求编号，保留重复项。"""
+    """读取开发总纲 12.3 精确索引中的需求编号，保留重复项。"""
 
     text = matrix_path.read_text(encoding="utf-8")
     start_match = re.search(
-        r"^###\s+12\.3\s+64\s+张需求精确覆盖索引\s*$",
+        r"^###\s+12\.3\s+\d+\s+张需求精确覆盖索引\s*$",
         text,
         re.MULTILINE,
     )
     if start_match is None:
-        raise ValidationError("状态矩阵缺少“12.3 64 张需求精确覆盖索引”章节")
+        raise ValidationError("开发总纲缺少“12.3 <数量> 张需求精确覆盖索引”章节")
     remaining = text[start_match.end() :]
     end_match = re.search(r"^#{1,3}\s+", remaining, re.MULTILINE)
     section = remaining[: end_match.start()] if end_match else remaining
     requirement_ids = REQUIREMENT_ID_PATTERN.findall(section)
     if not requirement_ids:
-        raise ValidationError("状态矩阵精确覆盖索引未列出任何需求编号")
+        raise ValidationError("开发总纲精确覆盖索引未列出任何需求编号")
     return requirement_ids
 
 
@@ -117,7 +117,7 @@ def validate_requirement_coverage(
     matrix_ids: list[str],
     expected_count: int = EXPECTED_REQUIREMENT_COUNT,
 ) -> None:
-    """校验正式需求数量及其在状态矩阵中的唯一归属。"""
+    """校验正式需求数量及其在开发总纲中的唯一归属。"""
 
     if len(requirement_ids) != expected_count:
         raise ValidationError(
@@ -126,7 +126,7 @@ def validate_requirement_coverage(
     duplicate_matrix_ids = _duplicates(matrix_ids)
     if duplicate_matrix_ids:
         raise ValidationError(
-            "状态矩阵存在重复归属: " + "、".join(duplicate_matrix_ids)
+            "开发总纲存在重复归属: " + "、".join(duplicate_matrix_ids)
         )
     matrix_id_set = set(matrix_ids)
     missing = sorted(requirement_ids - matrix_id_set)
@@ -137,7 +137,7 @@ def validate_requirement_coverage(
     if unexpected:
         problems.append("无对应需求文件=" + "、".join(unexpected))
     if problems:
-        raise ValidationError("正式需求与状态矩阵不一致: " + "；".join(problems))
+        raise ValidationError("正式需求与开发总纲不一致: " + "；".join(problems))
 
 
 def validate_backend_modules(backend_directory: Path) -> None:
@@ -202,7 +202,7 @@ def parse_todo_tasks(todo_path: Path) -> list[TodoTask]:
 
 
 def parse_plan_tasks(plan_path: Path) -> list[PlanTask]:
-    """解析 06 计划中的 NEXT 任务及其文件范围。"""
+    """解析开发总纲中的 NEXT 任务及其文件范围。"""
 
     text = plan_path.read_text(encoding="utf-8")
     headings = list(PLAN_TASK_HEADING_PATTERN.finditer(text))
@@ -229,7 +229,7 @@ def parse_plan_tasks(plan_path: Path) -> list[PlanTask]:
         )
         tasks.append(PlanTask(task_id=heading.group("task_id"), scopes=scopes))
     if not tasks:
-        raise ValidationError("06-多Agent并行执行计划未解析到 NEXT 任务")
+        raise ValidationError("开发总纲未解析到 NEXT 任务")
     return tasks
 
 
@@ -257,7 +257,7 @@ def validate_task_set(
     todo_tasks: list[TodoTask],
     plan_tasks: list[PlanTask],
 ) -> None:
-    """校验 06 计划与任务看板拥有完全相同且唯一的 NEXT 任务集合。"""
+    """校验开发总纲与任务看板拥有相同且唯一的 NEXT 任务集合。"""
 
     todo_ids = [
         task.task_id for task in todo_tasks if NEXT_TASK_ID_PATTERN.fullmatch(task.task_id)
@@ -270,7 +270,7 @@ def validate_task_set(
         if todo_duplicates:
             details.append("todo 重复=" + "、".join(todo_duplicates))
         if plan_duplicates:
-            details.append("06 计划重复=" + "、".join(plan_duplicates))
+            details.append("开发总纲重复=" + "、".join(plan_duplicates))
         raise ValidationError("NEXT 任务编号不唯一: " + "；".join(details))
     todo_set = set(todo_ids)
     plan_set = set(plan_ids)
@@ -281,7 +281,7 @@ def validate_task_set(
         if missing_in_todo:
             details.append("todo 缺少=" + "、".join(missing_in_todo))
         if missing_in_plan:
-            details.append("06 计划缺少=" + "、".join(missing_in_plan))
+            details.append("开发总纲缺少=" + "、".join(missing_in_plan))
         raise ValidationError("计划任务集合不一致: " + "；".join(details))
 
 
@@ -337,13 +337,13 @@ def validate_active_assignments(
     ]
     if missing_plan_tasks:
         raise ValidationError(
-            "进行中任务缺少 06 计划定义: " + "、".join(missing_plan_tasks)
+            "进行中任务缺少开发总纲定义: " + "、".join(missing_plan_tasks)
         )
     active_plan_tasks = [plan_by_id[task.task_id] for task in active_tasks]
     missing_scopes = [task.task_id for task in active_plan_tasks if not task.scopes]
     if missing_scopes:
         raise ValidationError(
-            "进行中任务无法解析文件范围，请在 06 计划中使用反引号路径声明: "
+            "进行中任务无法解析文件范围，请在开发总纲中使用反引号路径声明: "
             + "、".join(missing_scopes)
         )
     for index, left in enumerate(active_plan_tasks):
@@ -368,14 +368,14 @@ def validate_repository(repository_root: Path) -> list[str]:
 
     checks = (
         (
-            "64 张正式需求在状态矩阵唯一归属",
+            f"{EXPECTED_REQUIREMENT_COUNT} 张正式需求在开发总纲唯一归属",
             lambda: validate_requirement_coverage(
                 discover_requirement_ids(
                     repository_root / "docs/09-开发计划/需求单"
                 ),
                 parse_matrix_requirement_ids(
-                    repository_root
-                    / "docs/09-开发计划/05-九子系统模块状态矩阵.md"
+                repository_root
+                    / "docs/09-开发计划/00-供应链系统开发总纲.md"
                 ),
             ),
         ),
@@ -384,12 +384,12 @@ def validate_repository(repository_root: Path) -> list[str]:
             lambda: validate_backend_modules(repository_root / "project/backend"),
         ),
         (
-            "06 计划与 tasks/todo NEXT 任务集合",
+            "开发总纲与 tasks/todo NEXT 任务集合",
             lambda: validate_task_set(
                 parse_todo_tasks(repository_root / "tasks/todo.md"),
                 parse_plan_tasks(
                     repository_root
-                    / "docs/09-开发计划/06-多Agent并行执行计划.md"
+                    / "docs/09-开发计划/00-供应链系统开发总纲.md"
                 ),
             ),
         ),
@@ -410,7 +410,7 @@ def validate_repository(repository_root: Path) -> list[str]:
                 parse_todo_tasks(repository_root / "tasks/todo.md"),
                 parse_plan_tasks(
                     repository_root
-                    / "docs/09-开发计划/06-多Agent并行执行计划.md"
+                    / "docs/09-开发计划/00-供应链系统开发总纲.md"
                 ),
             ),
         ),

@@ -23,7 +23,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 class RequirementCoverageTest(unittest.TestCase):
-    """验证正式需求文件与状态矩阵精确索引的一一对应关系。"""
+    """验证正式需求文件与开发总纲精确索引的一一对应关系。"""
 
     def test_accepts_unique_requirement_coverage(self) -> None:
         matrix_ids = parse_matrix_requirement_ids(FIXTURES / "matrix-valid.md")

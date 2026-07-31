@@ -173,9 +173,9 @@ public class StockTransferController {
      * @return 执行命令的结果，类型为 {@code ApiResponse<StockTransferApplicationService.TransferResult>}
      */
     @PostMapping("/{transferNo}/difference/confirm")
-    public ApiResponse<StockTransferApplicationService.TransferResult> confirmDifference(@PathVariable String transferNo, @Valid @RequestBody VersionRequest body, HttpServletRequest request, Authentication authentication) {
+    public ApiResponse<StockTransferApplicationService.TransferResult> confirmDifference(@PathVariable String transferNo, @Valid @RequestBody DifferenceConfirmationRequest body, HttpServletRequest request, Authentication authentication) {
         requireScope(authentication, service.detail(transferNo));
-        return ok(service.confirmDifference(transferNo, body.version()), request);
+        return ok(service.confirmDifference(transferNo, body.reason(), body.responsibleParty(), body.evidenceRef(), body.version()), request);
     }
 
     /**
@@ -267,6 +267,10 @@ public class StockTransferController {
      * @since 0.1.0
      */
     public record VersionRequest(@PositiveOrZero int version) {
+    }
+
+    /** 调拨差异确认命令。 */
+    public record DifferenceConfirmationRequest(@NotBlank String reason, @NotBlank String responsibleParty, @NotBlank String evidenceRef, @PositiveOrZero int version) {
     }
 
     /**

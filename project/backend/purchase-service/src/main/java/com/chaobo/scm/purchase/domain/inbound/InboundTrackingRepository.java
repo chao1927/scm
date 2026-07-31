@@ -30,6 +30,8 @@ public interface InboundTrackingRepository {
      */
     Optional<InboundTrackingAggregate> findByAsnNo(String asnNo);
 
+    boolean existsByOrderNo(String orderNo);
+
     /**
      * 执行命令 {@code save}。
      *

@@ -874,3 +874,15 @@ sequenceDiagram
 | WMS 是否直接调用中央库存接口 | 优先发布 WMS 作业事实事件；对发货扣减、盘点调整等强一致要求高的场景，可同步调用并保留事件补偿 |
 | 出库短拣由 WMS 直接改库存还是通知 OMS/库存 | WMS 只发布短拣事实，OMS 决定改配、拆单、取消，中央库存决定释放或调整 |
 | 不合格品是否进入中央库存 | 建议进入中央库存的不可用/不合格库存账户，同时 WMS 保留库位级实物位置 |
+
+## 12. 多类型入库接口收口（DOC-NEXT-001）
+
+外部创建入库单必须携带 `inboundType=PURCHASE|TRANSFER|SALES_RETURN`，业务唯一键为 `sourceSystem + sourceOrderNo + sourceLineNo + inboundType`。三类业务复用入库、收货、质检和上架接口，不创建重复的退货入库单接口族。
+
+| 类型 | 创建必填 | 完成/事件差异 |
+| --- | --- | --- |
+| PURCHASE | PO/ASN、供应商、可收量 | 采购质检结论、让步审批、不合格原因 |
+| TRANSFER | 调拨单、调出仓、调入仓、已出库量 | `finalReceipt`、累计实收、短损差异；TMS 送达不能代收货 |
+| SALES_RETURN | 售后单、RMA、原订单行、应退量 | 良品/残次/冻结/报废/无单异常五类数量及凭证 |
+
+`ReturnOperation` 和 `TransferOperation` 是执行协调用例，创建时必须关联对应类型的入库单。重复来源命令返回原入库单；同一来源键改变类型、仓库、货主或数量时返回冲突，不静默覆盖。

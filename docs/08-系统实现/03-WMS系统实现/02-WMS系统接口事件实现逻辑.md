@@ -170,3 +170,9 @@ flowchart TB
 关键假设：WMS 是仓内实物事实源，中央库存是全局库存账户事实源。  
 待决问题：PDA 是否支持离线作业；超收/短拣策略是否按仓库配置。  
 下一步：继续维护 `03-WMS系统接口逐项实现设计.md` 的逐接口编码说明。
+
+## 10. 多类型入库实现收口（DOC-NEXT-001）
+
+`InboundOrderAggregate` 统一承接 PURCHASE、TRANSFER、SALES_RETURN 的接单/到货/取消。`TransferOperationAggregate` 和 `ReturnOperationAggregate` 是执行聚合：前者协调双仓调拨执行，后者保护 RMA 实收和五类处置；二者创建时必须关联相应类型入库单，不能形成第二套入库状态。
+
+实现必须校验来源复合唯一键、类型专属必填字段、收货上限和下游事件。当前实现类型字符串存在 `INVENTORY_TRANSFER`、`AFTERSALE_RETURN` 与文档标准 `TRANSFER`、`SALES_RETURN` 的差异，`WMS-NEXT-002` 应通过枚举/ACL 归一，不直接混用外部语言。

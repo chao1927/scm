@@ -51,6 +51,36 @@ class StockTransferAggregateTest {
         assertThatThrownBy(() -> transfer.reserve(new BigDecimal("9"), 2)).isInstanceOf(BusinessException.class);
     }
 
+    @Test
+    void rejectsOverReceiptAndRequiresDifferenceResponsibilityEvidence() {
+        StockTransferAggregate transfer = transfer();
+        transfer.submit(0);
+        transfer.approve(1);
+        transfer.reserve(new BigDecimal("10"), 2);
+        transfer.recordOutbound(new BigDecimal("10"), 3);
+        transfer.markInTransit(4);
+
+        assertThatThrownBy(() -> transfer.receive(new BigDecimal("11"), true, 5))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不得超过出库量");
+
+        transfer.receive(new BigDecimal("9"), true, 5);
+        assertThatThrownBy(() -> transfer.confirmDifference("", "WMS", "EVIDENCE-1", 6))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("差异原因");
+        assertThatThrownBy(() -> transfer.confirmDifference("运输短少", "", "EVIDENCE-1", 6))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("责任方");
+        assertThatThrownBy(() -> transfer.confirmDifference("运输短少", "CARRIER", "", 6))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("证据");
+
+        transfer.confirmDifference("运输短少", "CARRIER", "EVIDENCE-1", 6);
+        assertThat(transfer.differenceReason()).isEqualTo("运输短少");
+        assertThat(transfer.responsibleParty()).isEqualTo("CARRIER");
+        assertThat(transfer.evidenceRef()).isEqualTo("EVIDENCE-1");
+    }
+
     /**
      * 处理当前类型职责中的操作 {@code transfer}。
      *

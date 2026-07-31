@@ -52,7 +52,11 @@ public class InventoryInboundEventApplicationService {
             return transactions.required(() -> process(event, inbox.id()));
         } catch (RuntimeException exception) {
             transactions.requiresNew(() -> {
-                store.markFailed(inbox.id(), errorMessage(exception));
+                InventoryInboundEventStore.InboxEvent latest = store.find(
+                        event.sourceSystem(), event.eventId(), CONSUMER_NAME);
+                if (latest == null || latest.status() != InventoryInboundEventStore.STATUS_WAITING_REPLAY) {
+                    store.markFailed(inbox.id(), errorMessage(exception));
+                }
                 return null;
             });
             throw exception;
@@ -85,14 +89,14 @@ public class InventoryInboundEventApplicationService {
                 event.aggregateId(),
                 CONSUMER_NAME);
         if (cursor == null && event.aggregateVersion() != FIRST_AGGREGATE_VERSION) {
-            throw outOfOrder(event.aggregateVersion(), 0L);
+            throw waitingReplay(inboxId, event.aggregateVersion(), 0L);
         }
         if (cursor != null && event.aggregateVersion() <= cursor.aggregateVersion()) {
             store.markIgnored(inboxId, "聚合版本已处理");
             return new ConsumeResult(false, InventoryInboundEventStore.STATUS_IGNORED, "过期事件已忽略");
         }
         if (cursor != null && event.aggregateVersion() != cursor.aggregateVersion() + 1L) {
-            throw outOfOrder(event.aggregateVersion(), cursor.aggregateVersion());
+            throw waitingReplay(inboxId, event.aggregateVersion(), cursor.aggregateVersion());
         }
         processor.process(event);
         advanceCursor(event, cursor);
@@ -143,6 +147,12 @@ public class InventoryInboundEventApplicationService {
         return new BusinessException(
                 ErrorCode.STATE_CONFLICT,
                 "事件乱序，当前聚合版本=" + last + "，收到版本=" + actual);
+    }
+
+    private BusinessException waitingReplay(long inboxId, long actual, long last) {
+        BusinessException exception = outOfOrder(actual, last);
+        store.markWaitingReplay(inboxId, exception.getMessage());
+        return exception;
     }
 
     private static boolean completed(InventoryInboundEventStore.InboxEvent inbox) {

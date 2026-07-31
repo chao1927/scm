@@ -25,7 +25,7 @@ public interface StockTransferMapper {
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
      * @param row 业务处理参数或成员，类型为 {@code Row}
      */
-    @Insert("insert into inv_stock_transfer(transfer_id,transfer_no,idempotency_key,owner_id,source_warehouse_id," + "target_warehouse_id,sku_code,batch_no,requested_qty,reserved_qty,outbound_qty,received_qty," + "difference_qty,transfer_status,version,created_at,updated_at) values(#{id},#{transferNo}," + "#{idempotencyKey},#{ownerId},#{sourceWarehouseId},#{targetWarehouseId},#{sku},#{batchNo}," + "#{requestedQty},#{reservedQty},#{outboundQty},#{receivedQty},#{differenceQty},#{status},#{version}," + "now(3),now(3))")
+    @Insert("insert into inv_stock_transfer(transfer_id,transfer_no,idempotency_key,owner_id,source_warehouse_id," + "target_warehouse_id,sku_code,batch_no,requested_qty,reserved_qty,outbound_qty,received_qty," + "difference_qty,difference_reason,responsible_party,evidence_ref,transfer_status,version,created_at,updated_at) values(#{id},#{transferNo}," + "#{idempotencyKey},#{ownerId},#{sourceWarehouseId},#{targetWarehouseId},#{sku},#{batchNo}," + "#{requestedQty},#{reservedQty},#{outboundQty},#{receivedQty},#{differenceQty},#{differenceReason},#{responsibleParty},#{evidenceRef},#{status},#{version}," + "now(3),now(3))")
     void insert(Row row);
 
     /**
@@ -35,7 +35,7 @@ public interface StockTransferMapper {
      * @param transferNo 可追踪业务编码，类型为 {@code String}
      * @return 查询并返回的结果，类型为 {@code Row}
      */
-    @Select("select transfer_id id,transfer_no transferNo,idempotency_key idempotencyKey,owner_id ownerId," + "source_warehouse_id sourceWarehouseId,target_warehouse_id targetWarehouseId,sku_code sku," + "batch_no batchNo,requested_qty requestedQty,reserved_qty reservedQty,outbound_qty outboundQty," + "received_qty receivedQty,difference_qty differenceQty,transfer_status status,version " + "from inv_stock_transfer where transfer_no=#{transferNo}")
+    @Select("select transfer_id id,transfer_no transferNo,idempotency_key idempotencyKey,owner_id ownerId," + "source_warehouse_id sourceWarehouseId,target_warehouse_id targetWarehouseId,sku_code sku," + "batch_no batchNo,requested_qty requestedQty,reserved_qty reservedQty,outbound_qty outboundQty," + "received_qty receivedQty,difference_qty differenceQty,difference_reason differenceReason,responsible_party responsibleParty,evidence_ref evidenceRef,transfer_status status,version " + "from inv_stock_transfer where transfer_no=#{transferNo}")
     Row find(@Param("transferNo") String transferNo);
 
     /**
@@ -45,7 +45,7 @@ public interface StockTransferMapper {
      * @param idempotencyKey 业务或技术标识，类型为 {@code String}
      * @return 查询并返回的结果，类型为 {@code Row}
      */
-    @Select("select transfer_id id,transfer_no transferNo,idempotency_key idempotencyKey,owner_id ownerId," + "source_warehouse_id sourceWarehouseId,target_warehouse_id targetWarehouseId,sku_code sku," + "batch_no batchNo,requested_qty requestedQty,reserved_qty reservedQty,outbound_qty outboundQty," + "received_qty receivedQty,difference_qty differenceQty,transfer_status status,version " + "from inv_stock_transfer where idempotency_key=#{idempotencyKey}")
+    @Select("select transfer_id id,transfer_no transferNo,idempotency_key idempotencyKey,owner_id ownerId," + "source_warehouse_id sourceWarehouseId,target_warehouse_id targetWarehouseId,sku_code sku," + "batch_no batchNo,requested_qty requestedQty,reserved_qty reservedQty,outbound_qty outboundQty," + "received_qty receivedQty,difference_qty differenceQty,difference_reason differenceReason,responsible_party responsibleParty,evidence_ref evidenceRef,transfer_status status,version " + "from inv_stock_transfer where idempotency_key=#{idempotencyKey}")
     Row findByIdempotencyKey(@Param("idempotencyKey") String idempotencyKey);
 
     /**
@@ -55,7 +55,7 @@ public interface StockTransferMapper {
      * @param limit 业务处理参数或成员，类型为 {@code int}
      * @return 查询并返回的结果，类型为 {@code List<Row>}
      */
-    @Select("select transfer_id id,transfer_no transferNo,idempotency_key idempotencyKey,owner_id ownerId," + "source_warehouse_id sourceWarehouseId,target_warehouse_id targetWarehouseId,sku_code sku," + "batch_no batchNo,requested_qty requestedQty,reserved_qty reservedQty,outbound_qty outboundQty," + "received_qty receivedQty,difference_qty differenceQty,transfer_status status,version " + "from inv_stock_transfer order by updated_at desc limit #{limit}")
+    @Select("select transfer_id id,transfer_no transferNo,idempotency_key idempotencyKey,owner_id ownerId," + "source_warehouse_id sourceWarehouseId,target_warehouse_id targetWarehouseId,sku_code sku," + "batch_no batchNo,requested_qty requestedQty,reserved_qty reservedQty,outbound_qty outboundQty," + "received_qty receivedQty,difference_qty differenceQty,difference_reason differenceReason,responsible_party responsibleParty,evidence_ref evidenceRef,transfer_status status,version " + "from inv_stock_transfer order by updated_at desc limit #{limit}")
     List<Row> list(@Param("limit") int limit);
 
     /**
@@ -72,8 +72,8 @@ public interface StockTransferMapper {
      * @param oldVersion 乐观锁或契约版本，类型为 {@code int}
      * @return 执行命令的结果，类型为 {@code int}
      */
-    @Update("update inv_stock_transfer set reserved_qty=#{reservedQty},outbound_qty=#{outboundQty}," + "received_qty=#{receivedQty},difference_qty=#{differenceQty},transfer_status=#{status}," + "version=#{version},updated_at=now(3) where transfer_id=#{id} and version=#{oldVersion}")
-    int update(@Param("id") long id, @Param("reservedQty") BigDecimal reservedQty, @Param("outboundQty") BigDecimal outboundQty, @Param("receivedQty") BigDecimal receivedQty, @Param("differenceQty") BigDecimal differenceQty, @Param("status") int status, @Param("version") int version, @Param("oldVersion") int oldVersion);
+    @Update("update inv_stock_transfer set reserved_qty=#{reservedQty},outbound_qty=#{outboundQty}," + "received_qty=#{receivedQty},difference_qty=#{differenceQty},difference_reason=#{differenceReason}," + "responsible_party=#{responsibleParty},evidence_ref=#{evidenceRef},transfer_status=#{status}," + "version=#{version},updated_at=now(3) where transfer_id=#{id} and version=#{oldVersion}")
+    int update(@Param("id") long id, @Param("reservedQty") BigDecimal reservedQty, @Param("outboundQty") BigDecimal outboundQty, @Param("receivedQty") BigDecimal receivedQty, @Param("differenceQty") BigDecimal differenceQty, @Param("differenceReason") String differenceReason, @Param("responsibleParty") String responsibleParty, @Param("evidenceRef") String evidenceRef, @Param("status") int status, @Param("version") int version, @Param("oldVersion") int oldVersion);
 
     /**
      * Row。
@@ -83,6 +83,6 @@ public interface StockTransferMapper {
      * @author SCM Team
      * @since 0.1.0
      */
-    record Row(long id, String transferNo, String idempotencyKey, long ownerId, long sourceWarehouseId, long targetWarehouseId, String sku, String batchNo, BigDecimal requestedQty, BigDecimal reservedQty, BigDecimal outboundQty, BigDecimal receivedQty, BigDecimal differenceQty, int status, int version) {
+    record Row(long id, String transferNo, String idempotencyKey, long ownerId, long sourceWarehouseId, long targetWarehouseId, String sku, String batchNo, BigDecimal requestedQty, BigDecimal reservedQty, BigDecimal outboundQty, BigDecimal receivedQty, BigDecimal differenceQty, String differenceReason, String responsibleParty, String evidenceRef, int status, int version) {
     }
 }

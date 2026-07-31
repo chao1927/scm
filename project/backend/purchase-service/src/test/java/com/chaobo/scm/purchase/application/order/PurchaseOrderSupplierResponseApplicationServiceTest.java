@@ -8,6 +8,7 @@ import com.chaobo.scm.purchase.domain.order.PurchaseOrderAggregate;
 import com.chaobo.scm.purchase.domain.order.PurchaseOrderLine;
 import com.chaobo.scm.purchase.domain.order.PurchaseOrderRepository;
 import com.chaobo.scm.purchase.domain.order.PurchaseOrderStatus;
+import com.chaobo.scm.purchase.domain.inbound.InboundTrackingRepository;
 import com.chaobo.scm.purchase.domain.shared.DomainEvent;
 import com.chaobo.scm.purchase.domain.shared.IdentifierGenerator;
 import org.junit.jupiter.api.Test;
@@ -55,7 +56,30 @@ class PurchaseOrderSupplierResponseApplicationServiceTest {
      *
      * <p>保存当前对象所需的应用或外部协作依赖；其具体生命周期由所属对象统一管理。
      */
-    private final PurchaseOrderApplicationService service = new PurchaseOrderApplicationService(repository, outboxEvents::addAll, noAudit(), ids, new InMemoryIdempotencyPort(), null);
+    private final PurchaseOrderApplicationService service = new PurchaseOrderApplicationService(repository, outboxEvents::addAll, noAudit(), ids, new InMemoryIdempotencyPort(), null, emptyInbounds());
+
+    private static InboundTrackingRepository emptyInbounds() {
+        return new InboundTrackingRepository() {
+            @Override
+            public Optional<com.chaobo.scm.purchase.domain.inbound.InboundTrackingAggregate> findByNo(String inboundNo) {
+                return Optional.empty();
+            }
+
+            @Override
+            public Optional<com.chaobo.scm.purchase.domain.inbound.InboundTrackingAggregate> findByAsnNo(String asnNo) {
+                return Optional.empty();
+            }
+
+            @Override
+            public boolean existsByOrderNo(String orderNo) {
+                return false;
+            }
+
+            @Override
+            public void save(com.chaobo.scm.purchase.domain.inbound.InboundTrackingAggregate aggregate, long operatorId) {
+            }
+        };
+    }
 
     /**
      * 执行命令 {@code confirmationEventChangesOrderAndWritesLocalDomainEvent}。

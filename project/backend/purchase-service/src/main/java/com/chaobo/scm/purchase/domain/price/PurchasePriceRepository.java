@@ -35,7 +35,7 @@ public interface PurchasePriceRepository {
      * @param effectiveTo 业务处理参数或成员，类型为 {@code LocalDate}
      * @return 查询并返回的结果，类型为 {@code List<PurchasePriceAggregate>}
      */
-    List<PurchasePriceAggregate> findActiveOverlaps(long supplierId, String skuCode, long purchaseOrgId, String currency, LocalDate effectiveFrom, LocalDate effectiveTo);
+    List<PurchasePriceAggregate> findActiveOverlaps(long supplierId, String skuCode, long purchaseOrgId, int priceType, String currency, LocalDate effectiveFrom, LocalDate effectiveTo);
 
     /**
      * 执行命令 {@code save}。

@@ -589,3 +589,13 @@ sequenceDiagram
 WMS 系统事件生产与消费的核心是“仓内实物事实可信”。WMS 不替采购、OMS、中央库存、BMS 做业务决策，但必须把真实发生的收货、质检、上架、拣货、包装、发货、盘点差异和异常处理，以带仓库、库位、SKU、批次、质量状态、容器、包裹、操作人的事件发布出去。
 
 第一版不需要完整事件溯源，但必须保留 `wms_domain_event`、`wms_event_consume_log` 和 `wms_operation_audit_log`。这样既能保证 WMS 作业事实可靠投递给库存、采购、OMS、BMS，也能把外部入库/出库/取消/预占/主数据变更事件安全、幂等地沉淀为 WMS 作业状态和仓内异常。
+
+## 12. 多类型入库事件收口（DOC-NEXT-001）
+
+所有入库事件必须携带 `inboundType/sourceSystem/sourceOrderNo/sourceLineNo/inboundOrderNo/warehouseId/ownerId`。类型差异如下：
+
+- PURCHASE：`QualityInspectionCompleted` 携带合格、不合格、隔离和让步接收数量，通知采购/供应商。
+- TRANSFER：`TransferReceived` 携带本次/累计实收、`finalReceipt`、差异量和质量处置；通知中央库存调拨聚合。
+- SALES_RETURN：`ReturnReceived/ReturnInspected` 携带 RMA 及良品、残次、冻结、报废、无单异常五类数量；通知 OMS 与中央库存。
+
+到达事件不得冒充收货，收货事件不得冒充上架。只有 `PutawayCompleted` 或明确质量处置完成事实可触发中央库存增加对应库存；同一来源事件用 `sourceSystem + eventId` 去重。

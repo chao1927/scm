@@ -634,6 +634,12 @@ public final class BmsDomain {
          */
         public static final int FAILED = 3;
 
+        /** 支付结果未知，继续占用退款额度并等待查单或人工处置。 */
+        public static final int CONFIRMATION_PENDING = 4;
+
+        /** 已人工确认未退款并关闭，释放退款额度。 */
+        public static final int CLOSED = 5;
+
         /**
          * sourceNo（类型：{@code String}）。
          *
@@ -2564,7 +2570,7 @@ public final class BmsDomain {
          */
         public void finish(long expectedVersion) {
             ensureVersion(expectedVersion);
-            if (status != REQUESTED) {
+            if (status != REQUESTED && status != CONFIRMATION_PENDING) {
                 throw new IllegalStateException("refund cannot finish");
             }
             status = FINISHED;
@@ -2581,7 +2587,7 @@ public final class BmsDomain {
         public void fail(String reason, long expectedVersion) {
             ensureVersion(expectedVersion);
             require(reason, "failure reason is required");
-            if (status != REQUESTED) {
+            if (status != REQUESTED && status != CONFIRMATION_PENDING) {
                 throw new IllegalStateException("refund cannot fail");
             }
             status = FAILED;
@@ -2602,6 +2608,34 @@ public final class BmsDomain {
             }
             status = REQUESTED;
             failureReason = null;
+            version++;
+        }
+
+        /**
+         * 支付超时或结果未知时进入待确认。待确认不是失败，额度必须继续占用。
+         */
+        public void markConfirmationPending(String reason, long expectedVersion) {
+            ensureVersion(expectedVersion);
+            require(reason, "confirmation pending reason is required");
+            if (status != REQUESTED) {
+                throw new IllegalStateException("only requested refund can wait for confirmation");
+            }
+            status = CONFIRMATION_PENDING;
+            failureReason = reason;
+            version++;
+        }
+
+        /**
+         * 仅允许对结果未知的退款人工关闭；调用方负责凭证和双人复核校验。
+         */
+        public void closeManually(String reason, long expectedVersion) {
+            ensureVersion(expectedVersion);
+            require(reason, "manual close reason is required");
+            if (status != CONFIRMATION_PENDING) {
+                throw new IllegalStateException("only confirmation pending refund can close manually");
+            }
+            status = CLOSED;
+            failureReason = reason;
             version++;
         }
 

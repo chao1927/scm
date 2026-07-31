@@ -333,7 +333,7 @@ BMS 的审计要覆盖计费、费用、调整、对账、账单、开票、财�
 | `CarrierEnabled` | 主数据 | 创建物流商应付计费对象候选 | `bms_billing` | 事件重放 |
 | `InboundOrderPutawayCompleted` | WMS | 采集入库费、上架费、增值服务费来源事件 | `bms_fee`、`bms_fee_line` | 重放来源事件 |
 | `OutboundOrderShipped` | WMS | 采集出库费、耗材费、运输交接费来源事件 | `bms_fee`、`bms_fee_line` | 重放来源事件 |
-| `ReturnInboundInspected` | WMS | 采集售后退货质检费、退货入库费 | `bms_fee`、`bms_fee_line` | 标记异常待处理 |
+| `ReturnInspected` | WMS | 采集售后退货质检费、退货入库费 | `bms_fee`、`bms_fee_line` | 标记异常待处理 |
 | `InventorySnapshotGenerated` | 中央库存 | 采集仓储费库存占用指标 | `bms_fee`、`bms_fee_line` | 账期重算 |
 | `InventoryAdjusted` | 中央库存 | 采集盘点差异或库存调整费用依据 | `bms_fee` | 人工确认是否计费 |
 | `AfterSaleApproved` | OMS | 采集售后服务费或退款结算事实 | `bms_fee`、`bms_fee_line` | OMS 重推或人工补录 |
@@ -365,7 +365,7 @@ BMS 的审计要覆盖计费、费用、调整、对账、账单、开票、财�
 
 | 项 | 设计 |
 | --- | --- |
-| 消费事件 | `InboundOrderPutawayCompleted`、`OutboundOrderShipped`、`ReturnInboundInspected` |
+| 消费事件 | `InboundOrderPutawayCompleted`、`OutboundOrderShipped`、`ReturnInspected` |
 | 消费者 | WMS 作业事实消费者 |
 | 应用服务 | 费用来源事件应用服务、费用计算应用服务 |
 | 聚合/领域服务 | 费用来源事件聚合、费用明细聚合、计费规则匹配服务、费用计算服务 |
@@ -717,3 +717,16 @@ sequenceDiagram
 ## 11. 设计结论
 
 BMS 的事件主线是：先消费业务源系统产生的可计费事实，再通过计费规则生成费用明细，之后进入对账、账单、发票和财务交接链路。BMS 自产事件主要表达“结算事实已经形成或状态已经推进”，外部系统不应直接修改 BMS 费用和账单，只能通过事件、接口或回调提交事实。费用错误、对账差异、开票差异和入账失败都应通过幂等重放、调整单、差异处理或财务交接补偿解决，保证 BMS 的结算历史可追溯、可审计、可对账。
+
+## 12. 退款事件收口（DOC-NEXT-001）
+
+| 事件 | 最小载荷 | 关键规则 |
+| --- | --- | --- |
+| `RefundSettlementRequested` | refundNo、afterSaleNo、billNo、paymentNo、amount、currency、attemptNo | 请求、额度占用和 Outbox 同事务 |
+| `RefundConfirmationPending` | refundNo、attemptNo、timeoutAt、queryTaskNo | 结果未知，继续占额并触发主动查单 |
+| `RefundCompleted` | refundNo、receiptNo、paymentTxnNo、amount、currency、completedAt | 回执唯一且金额币种匹配 |
+| `RefundFailed` | refundNo、receiptNo、failureCode/reason、failedAt | 明确失败才释放额度 |
+| `RefundRetryRequested` | refundNo、newAttemptNo、previousFailure | 重试前重新校验可退额度 |
+| `RefundManuallyClosed` | refundNo、reason、evidenceRef、operator/reviewer | 仅待确认，双人复核 |
+
+支付回执使用全局 `receiptNo` 去重；迟到或冲突回执不覆盖终态，转人工审计。财务交接只消费已完成/已关闭结果，不反向修改退款聚合。

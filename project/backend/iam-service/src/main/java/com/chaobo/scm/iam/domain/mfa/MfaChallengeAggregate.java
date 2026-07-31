@@ -12,6 +12,9 @@ public final class MfaChallengeAggregate {
     private final String challengeNo;
     private final long userId;
     private final String appCode;
+    private final long sessionId;
+    private final String purpose;
+    private final String deviceDigest;
     private final String secretCiphertext;
     private final String idempotencyKey;
     private final int maxAttempts;
@@ -22,6 +25,7 @@ public final class MfaChallengeAggregate {
     private int version;
 
     private MfaChallengeAggregate(long id, String challengeNo, long userId, String appCode,
+                                  long sessionId, String purpose, String deviceDigest,
                                   String secretCiphertext, String idempotencyKey, int failedAttempts,
                                   int maxAttempts, Instant expiresAt, Status status,
                                   Instant verifiedAt, int version) {
@@ -29,6 +33,9 @@ public final class MfaChallengeAggregate {
         this.challengeNo = challengeNo;
         this.userId = userId;
         this.appCode = appCode;
+        this.sessionId = sessionId;
+        this.purpose = purpose;
+        this.deviceDigest = deviceDigest;
         this.secretCiphertext = secretCiphertext;
         this.idempotencyKey = idempotencyKey;
         this.failedAttempts = failedAttempts;
@@ -40,25 +47,37 @@ public final class MfaChallengeAggregate {
     }
 
     public static MfaChallengeAggregate create(long id, String challengeNo, long userId,
-                                               String appCode, String secretCiphertext,
+                                               String appCode, long sessionId, String purpose,
+                                               String deviceDigest, String secretCiphertext,
                                                String idempotencyKey, int maxAttempts,
                                                Instant expiresAt) {
-        if (id <= 0 || userId <= 0 || blank(challengeNo) || blank(appCode)
+        if (id <= 0 || userId <= 0 || sessionId <= 0 || blank(challengeNo) || blank(appCode)
+                || blank(purpose) || blank(deviceDigest)
                 || blank(secretCiphertext) || blank(idempotencyKey)
                 || maxAttempts <= 0 || expiresAt == null) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED, "MFA挑战参数不合法");
         }
-        return new MfaChallengeAggregate(id, challengeNo, userId, appCode, secretCiphertext,
+        return new MfaChallengeAggregate(id, challengeNo, userId, appCode, sessionId, purpose,
+                deviceDigest, secretCiphertext,
                 idempotencyKey, 0, maxAttempts, expiresAt, Status.PENDING, null, 0);
     }
 
     public static MfaChallengeAggregate restore(long id, String challengeNo, long userId,
-                                                String appCode, String secretCiphertext,
+                                                String appCode, long sessionId, String purpose,
+                                                String deviceDigest, String secretCiphertext,
                                                 String idempotencyKey, int failedAttempts,
                                                 int maxAttempts, Instant expiresAt, Status status,
                                                 Instant verifiedAt, int version) {
-        return new MfaChallengeAggregate(id, challengeNo, userId, appCode, secretCiphertext,
+        return new MfaChallengeAggregate(id, challengeNo, userId, appCode, sessionId, purpose,
+                deviceDigest, secretCiphertext,
                 idempotencyKey, failedAttempts, maxAttempts, expiresAt, status, verifiedAt, version);
+    }
+
+    public void assertContext(long requestedSessionId, String requestedPurpose, String requestedDeviceDigest) {
+        if (sessionId != requestedSessionId || !purpose.equals(requestedPurpose)
+                || !deviceDigest.equals(requestedDeviceDigest)) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "MFA挑战上下文不匹配");
+        }
     }
 
     public boolean canVerify(Instant now) {
@@ -99,6 +118,9 @@ public final class MfaChallengeAggregate {
     public String challengeNo() { return challengeNo; }
     public long userId() { return userId; }
     public String appCode() { return appCode; }
+    public long sessionId() { return sessionId; }
+    public String purpose() { return purpose; }
+    public String deviceDigest() { return deviceDigest; }
     public String secretCiphertext() { return secretCiphertext; }
     public String idempotencyKey() { return idempotencyKey; }
     public int failedAttempts() { return failedAttempts; }

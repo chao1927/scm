@@ -5,6 +5,7 @@ import com.chaobo.scm.common.error.ErrorCode;
 import com.chaobo.scm.purchase.application.integration.IntegrationCommandEnqueuer;
 import com.chaobo.scm.purchase.application.shared.*;
 import com.chaobo.scm.purchase.domain.order.*;
+import com.chaobo.scm.purchase.domain.inbound.InboundTrackingRepository;
 import com.chaobo.scm.purchase.domain.shared.IdentifierGenerator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -65,6 +66,8 @@ public class PurchaseOrderApplicationService {
      */
     private final IntegrationCommandEnqueuer integrations;
 
+    private final InboundTrackingRepository inbounds;
+
     /**
      * 创建 PurchaseOrderApplicationService。
      *
@@ -76,13 +79,14 @@ public class PurchaseOrderApplicationService {
      * @param idempotency 业务或技术标识，类型为 {@code IdempotencyPort}
      * @param integrations 业务处理参数或成员，类型为 {@code IntegrationCommandEnqueuer}
      */
-    public PurchaseOrderApplicationService(PurchaseOrderRepository repository, OutboxRepository outbox, AuditLogRepository auditLog, IdentifierGenerator ids, IdempotencyPort idempotency, IntegrationCommandEnqueuer integrations) {
+    public PurchaseOrderApplicationService(PurchaseOrderRepository repository, OutboxRepository outbox, AuditLogRepository auditLog, IdentifierGenerator ids, IdempotencyPort idempotency, IntegrationCommandEnqueuer integrations, InboundTrackingRepository inbounds) {
         this.repository = repository;
         this.outbox = outbox;
         this.auditLog = auditLog;
         this.ids = ids;
         this.idempotency = idempotency;
         this.integrations = integrations;
+        this.inbounds = inbounds;
     }
 
     /**
@@ -168,7 +172,12 @@ public class PurchaseOrderApplicationService {
     @Transactional(rollbackFor = Exception.class)
     public CommandResult cancel(String orderNo, PurchaseOrderCommands.Cancel command, CommandContext context) {
         context.requirePermission("purchase:po:cancel");
-        return change(orderNo, command.version(), context, "CANCEL_PO", order -> order.cancel(command.reason(), ids));
+        return change(orderNo, command.version(), context, "CANCEL_PO", order -> {
+            if (inbounds.existsByOrderNo(order.orderNo())) {
+                throw new BusinessException(ErrorCode.STATE_CONFLICT, "采购订单已有 ASN，不能直接取消");
+            }
+            order.cancel(command.reason(), ids);
+        });
     }
 
     /**
@@ -265,12 +274,23 @@ public class PurchaseOrderApplicationService {
      * @param context 业务处理参数或成员，类型为 {@code CommandContext}
      */
     @Transactional(rollbackFor = Exception.class)
-    public void applyChange(String orderNo, java.util.Map<Long, BigDecimal> lineQtyChanges, CommandContext context) {
+    public void applyChange(String orderNo, int expectedVersion, java.util.Map<Long, BigDecimal> lineQtyChanges, CommandContext context) {
         var order = load(orderNo);
         context.requirePurchaseOrgScope(order.purchaseOrgId());
+        if (order.version() != expectedVersion) {
+            throw new BusinessException(ErrorCode.VERSION_CONFLICT, "采购订单版本已变化，旧版本变更不能生效");
+        }
         var before = snapshot(order);
         order.applyLineQtyChanges(lineQtyChanges, ids);
         persist(order, context, "APPLY_PO_CHANGE", before);
+    }
+
+    public void requireCurrentVersion(String orderNo, int expectedVersion, CommandContext context) {
+        var order = load(orderNo);
+        context.requirePurchaseOrgScope(order.purchaseOrgId());
+        if (order.version() != expectedVersion) {
+            throw new BusinessException(ErrorCode.VERSION_CONFLICT, "采购订单版本已变化，请重新创建变更单");
+        }
     }
 
     /**

@@ -189,6 +189,14 @@ public class StockTransferApplicationService {
         return view(row(aggregate, current.idempotencyKey()), false);
     }
 
+    /** 校验 WMS 收货事实；库存入账延后到上架完成事实。 */
+    public TransferResult validateReceiptFact(String transferNo, BigDecimal qty) {
+        StockTransferMapper.Row current = required(transferNo);
+        StockTransferAggregate aggregate = aggregate(current);
+        aggregate.validateReceipt(qty);
+        return view(current, false);
+    }
+
     /**
      * 执行命令 {@code confirmDifference}。
      *
@@ -198,8 +206,8 @@ public class StockTransferApplicationService {
      * @return 执行命令的结果，类型为 {@code TransferResult}
      */
     @Transactional(rollbackFor = Exception.class)
-    public TransferResult confirmDifference(String transferNo, int version) {
-        return change(transferNo, aggregate -> aggregate.confirmDifference(version), "TransferDifferenceConfirmed");
+    public TransferResult confirmDifference(String transferNo, String reason, String responsibleParty, String evidenceRef, int version) {
+        return change(transferNo, aggregate -> aggregate.confirmDifference(reason, responsibleParty, evidenceRef, version), "TransferDifferenceConfirmed");
     }
 
     /**
@@ -273,7 +281,7 @@ public class StockTransferApplicationService {
      * @param oldVersion 乐观锁或契约版本，类型为 {@code int}
      */
     private void save(StockTransferAggregate aggregate, int oldVersion) {
-        if (mapper.update(aggregate.id(), aggregate.reservedQty(), aggregate.outboundQty(), aggregate.receivedQty(), aggregate.differenceQty(), aggregate.status(), aggregate.version(), oldVersion) != 1) {
+        if (mapper.update(aggregate.id(), aggregate.reservedQty(), aggregate.outboundQty(), aggregate.receivedQty(), aggregate.differenceQty(), aggregate.differenceReason(), aggregate.responsibleParty(), aggregate.evidenceRef(), aggregate.status(), aggregate.version(), oldVersion) != 1) {
             throw new BusinessException(ErrorCode.VERSION_CONFLICT, "调拨单持久化版本冲突");
         }
     }
@@ -347,7 +355,7 @@ public class StockTransferApplicationService {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code StockTransferAggregate}
      */
     private static StockTransferAggregate aggregate(StockTransferMapper.Row row) {
-        return StockTransferAggregate.restore(row.id(), row.transferNo(), row.ownerId(), row.sourceWarehouseId(), row.targetWarehouseId(), row.sku(), row.batchNo(), row.requestedQty(), row.reservedQty(), row.outboundQty(), row.receivedQty(), row.differenceQty(), row.status(), row.version());
+        return StockTransferAggregate.restore(row.id(), row.transferNo(), row.ownerId(), row.sourceWarehouseId(), row.targetWarehouseId(), row.sku(), row.batchNo(), row.requestedQty(), row.reservedQty(), row.outboundQty(), row.receivedQty(), row.differenceQty(), row.differenceReason(), row.responsibleParty(), row.evidenceRef(), row.status(), row.version());
     }
 
     /**
@@ -359,7 +367,7 @@ public class StockTransferApplicationService {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code StockTransferMapper.Row}
      */
     private static StockTransferMapper.Row row(StockTransferAggregate aggregate, String idempotencyKey) {
-        return new StockTransferMapper.Row(aggregate.id(), aggregate.transferNo(), idempotencyKey, aggregate.ownerId(), aggregate.sourceWarehouseId(), aggregate.targetWarehouseId(), aggregate.sku(), aggregate.batchNo(), aggregate.requestedQty(), aggregate.reservedQty(), aggregate.outboundQty(), aggregate.receivedQty(), aggregate.differenceQty(), aggregate.status(), aggregate.version());
+        return new StockTransferMapper.Row(aggregate.id(), aggregate.transferNo(), idempotencyKey, aggregate.ownerId(), aggregate.sourceWarehouseId(), aggregate.targetWarehouseId(), aggregate.sku(), aggregate.batchNo(), aggregate.requestedQty(), aggregate.reservedQty(), aggregate.outboundQty(), aggregate.receivedQty(), aggregate.differenceQty(), aggregate.differenceReason(), aggregate.responsibleParty(), aggregate.evidenceRef(), aggregate.status(), aggregate.version());
     }
 
     /**
@@ -371,7 +379,7 @@ public class StockTransferApplicationService {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code TransferResult}
      */
     private static TransferResult view(StockTransferMapper.Row row, boolean duplicated) {
-        return new TransferResult(row.transferNo(), row.ownerId(), row.sourceWarehouseId(), row.targetWarehouseId(), row.sku(), row.batchNo(), row.requestedQty(), row.reservedQty(), row.outboundQty(), row.receivedQty(), row.differenceQty(), row.status(), row.version(), duplicated);
+        return new TransferResult(row.transferNo(), row.ownerId(), row.sourceWarehouseId(), row.targetWarehouseId(), row.sku(), row.batchNo(), row.requestedQty(), row.reservedQty(), row.outboundQty(), row.receivedQty(), row.differenceQty(), row.differenceReason(), row.responsibleParty(), row.evidenceRef(), row.status(), row.version(), duplicated);
     }
 
     /**
@@ -393,6 +401,6 @@ public class StockTransferApplicationService {
      * @author SCM Team
      * @since 0.1.0
      */
-    public record TransferResult(String transferNo, long ownerId, long sourceWarehouseId, long targetWarehouseId, String sku, String batchNo, BigDecimal requestedQty, BigDecimal reservedQty, BigDecimal outboundQty, BigDecimal receivedQty, BigDecimal differenceQty, int status, int version, boolean duplicated) {
+    public record TransferResult(String transferNo, long ownerId, long sourceWarehouseId, long targetWarehouseId, String sku, String batchNo, BigDecimal requestedQty, BigDecimal reservedQty, BigDecimal outboundQty, BigDecimal receivedQty, BigDecimal differenceQty, String differenceReason, String responsibleParty, String evidenceRef, int status, int version, boolean duplicated) {
     }
 }

@@ -13,6 +13,10 @@ public interface OAuthTokenIssuerPort {
 
     IssuedTokens issueClientCredentialsToken(ClientCredentialsTokenCommand command);
 
+    default IssuedTokens issueRefreshTokenTokens(AuthorizationCodeTokenCommand command) {
+        return issueAuthorizationCodeTokens(command);
+    }
+
     UserInfo userInfo(String bearerToken);
 
     record AuthorizationCodeTokenCommand(

@@ -140,6 +140,9 @@ public class ScmSecurityProperties {
     }
 
     public SecretKey activeSecretKey() {
+        if (activeKid.isBlank()) {
+            throw new IllegalStateException("scm.security.active-kid is required");
+        }
         return secretKey(hmacSecret, "scm.security.hmac-secret");
     }
 
@@ -149,6 +152,13 @@ public class ScmSecurityProperties {
         }
         if (previousKid.isBlank() || previousHmacSecret.isBlank()) {
             throw new IllegalStateException("previous JWT kid and secret must be configured together");
+        }
+        if (previousKid.equals(activeKid)) {
+            throw new IllegalStateException("previous JWT kid must differ from active kid");
+        }
+        if (previousValidUntilEpochSecond <= 0) {
+            throw new IllegalStateException(
+                    "scm.security.previous-valid-until-epoch-second must be positive");
         }
         return Optional.of(secretKey(previousHmacSecret, "scm.security.previous-hmac-secret"));
     }

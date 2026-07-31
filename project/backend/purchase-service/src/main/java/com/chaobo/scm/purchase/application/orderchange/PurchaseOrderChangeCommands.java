@@ -29,7 +29,7 @@ public final class PurchaseOrderChangeCommands {
      * @author SCM Team
      * @since 0.1.0
      */
-    public record Create(String orderNo, int changeType, String beforeSnapshot, String afterSnapshot, String changeReason, Map<Long, BigDecimal> lineQtyChanges) {
+    public record Create(String orderNo, int baseOrderVersion, int changeType, String beforeSnapshot, String afterSnapshot, String changeReason, Map<Long, BigDecimal> lineQtyChanges) {
     }
 
     /**

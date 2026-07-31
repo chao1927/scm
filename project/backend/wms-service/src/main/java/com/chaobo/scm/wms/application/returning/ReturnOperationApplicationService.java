@@ -80,8 +80,9 @@ public class ReturnOperationApplicationService {
         }
         var a = new ReturnOperationAggregate(ids.incrementAndGet(), c.afterSaleNo(), c.rmaNo(), c.ownerId(), c.warehouseId(), c.sku(), c.batchNo(), c.qty(), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, ReturnOperationAggregate.RECEIVING, 0);
         mapper.insert(row(a));
-        inbound.create(new InboundOrderApplicationService.Create("AFTERSALE_RETURN", c.afterSaleNo(),
-            c.warehouseId(), c.ownerId(), null, "return-inbound-" + c.afterSaleNo()), operator);
+        inbound.create(new InboundOrderApplicationService.Create("OMS", "SALES_RETURN", c.afterSaleNo(),
+            sourceLineNo(a), c.warehouseId(), c.ownerId(), c.qty(), null,
+            "return-inbound-" + c.afterSaleNo() + "-" + sourceLineNo(a)), operator);
         return view(row(a), false);
     }
 
@@ -168,8 +169,21 @@ public class ReturnOperationApplicationService {
      * @param a 业务处理参数或成员，类型为 {@code ReturnOperationAggregate}
      * @return 处理当前类型职责中的操作的结果，类型为 {@code String}
      */
-    private static String payload(ReturnOperationAggregate a) {
-        return "{\"afterSaleNo\":\"" + a.afterSaleNo() + "\",\"rmaNo\":\"" + a.rmaNo() + "\",\"ownerId\":" + a.ownerId() + ",\"warehouseId\":" + a.warehouseId() + ",\"sku\":\"" + a.sku() + "\",\"batchNo\":" + (a.batchNo() == null ? "null" : "\"" + a.batchNo() + "\"") + ",\"receivedQty\":" + a.receivedQty() + ",\"sellableQty\":" + a.sellableQty() + ",\"defectiveQty\":" + a.defectiveQty() + ",\"frozenQty\":" + a.frozenQty() + ",\"scrappedQty\":" + a.scrappedQty() + ",\"unmatchedQty\":" + a.unmatchedQty() + ",\"version\":" + a.version() + "}";
+    private String payload(ReturnOperationAggregate a) {
+        String inboundOrderNo = inbound.findBySource("OMS", a.afterSaleNo(), sourceLineNo(a),
+            "SALES_RETURN").inboundNo();
+        return "{\"inboundType\":\"SALES_RETURN\",\"sourceSystem\":\"OMS\",\"sourceOrderNo\":\""
+            + a.afterSaleNo() + "\",\"sourceLineNo\":\"" + sourceLineNo(a) + "\",\"inboundOrderNo\":\""
+            + inboundOrderNo + "\",\"rmaNo\":\"" + a.rmaNo() + "\",\"ownerId\":" + a.ownerId()
+            + ",\"warehouseId\":" + a.warehouseId() + ",\"sku\":\"" + a.sku() + "\",\"batchNo\":"
+            + (a.batchNo() == null ? "null" : "\"" + a.batchNo() + "\"") + ",\"receivedQty\":"
+            + a.receivedQty() + ",\"sellableQty\":" + a.sellableQty() + ",\"defectiveQty\":"
+            + a.defectiveQty() + ",\"frozenQty\":" + a.frozenQty() + ",\"scrappedQty\":"
+            + a.scrappedQty() + ",\"unmatchedQty\":" + a.unmatchedQty() + ",\"version\":" + a.version() + "}";
+    }
+
+    private static String sourceLineNo(ReturnOperationAggregate aggregate) {
+        return aggregate.rmaNo() + ":" + aggregate.sku();
     }
 
     /**

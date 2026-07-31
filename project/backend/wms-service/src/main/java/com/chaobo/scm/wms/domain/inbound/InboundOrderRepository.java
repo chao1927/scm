@@ -30,7 +30,8 @@ public interface InboundOrderRepository {
      * @param warehouseId 业务或技术标识，类型为 {@code long}
      * @return 查询并返回的结果，类型为 {@code Optional<InboundOrderAggregate>}
      */
-    Optional<InboundOrderAggregate> findBySource(String sourceType, String sourceNo, long warehouseId);
+    Optional<InboundOrderAggregate> findBySource(String sourceSystem, String sourceNo,
+                                                  String sourceLineNo, String inboundType);
 
     /**
      * 执行命令 {@code save}。

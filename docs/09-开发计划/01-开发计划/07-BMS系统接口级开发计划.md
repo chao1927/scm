@@ -1,6 +1,6 @@
 # BMS 系统接口级开发计划
 
-> 状态：接口首轮完成；ERP/税控/支付防腐层、异步报表和财务页面仍为二期。当前模块状态见 [05-九子系统模块状态矩阵](../05-九子系统模块状态矩阵.md#9-bms-系统)。
+> 当前状态与剩余验收见[供应链系统开发总纲](../00-供应链系统开发总纲.md#5-九子系统当前状态)。
 
 实现资料：`docs/08-系统实现/07-BMS系统实现/03-BMS系统接口逐项实现设计.md`。
 
@@ -81,13 +81,16 @@ flowchart LR
 ```
 
 ## BMS-API-005 退款结算、报表与通用事件
-`POST /refund-settlements`、`GET /reports/settlement-summary`、`POST /events`
+`POST /refund-settlements`、`GET /refund-settlements/{refundNo}`、`POST /refund-settlements/{refundNo}/retry|close`、`GET /reports/settlement-summary`、`POST /events`
 
-- 接口层：`RefundSettlementController`、`BmsReportController`、事件入口。
-- 应用层：退款结算服务校验 OMS 售后引用与原账单；报表查询服务使用读模型；事件消费者维护投影。
-- 领域层：退款结算不得超过可退金额，状态需等待财务回执。
-- 基础设施层：退款结算资源库、OMS/支付/ERP ACL、报表投影、Inbox。
-- 事件：消费 OMS 退款请求，生产退款结算/失败事实。
+- 接口层：`RefundSettlementController` 校验原支付/账单、售后单、退款金额、币种、幂等键和版本；重试/人工关闭需要高风险权限和原因。`BmsReportController` 和事件入口只操作读模型或 Inbox。
+- 应用层：退款结算服务加载 OMS 售后快照和原账单/支付事实，执行创建、提交支付、消费回执、失败重试和人工补偿；报表查询服务使用读模型。
+- 领域层：`RefundSettlementAggregate` 保护累计退款不超过可退金额、币种一致、终态不可重提、支付回执只应用一次。状态为 `REQUESTED/CONFIRMATION_PENDING/FINISHED/FAILED/CLOSED`。
+- 基础设施层：退款资源库、退款累计投影、OMS/支付/ERP ACL、回执 Inbox、Outbox、失败记录和审计。
+- 事件：消费 `RefundRequested` 和支付回执；生产 `RefundSettlementRequested/RefundConfirmationPending/RefundCompleted/RefundFailed/RefundRetryRequested/RefundManuallyClosed`。
+- 补偿：支付超时进入待确认并主动查询；失败可按同一退款业务键重试但不得重复增加累计退款；人工关闭必须记录未退款金额和责任原因。
+- 测试：并发退款、重复请求、重复/乱序回执、超额退款、币种不一致、超时查询和人工关闭。
+- 设计事实源：[退款结算聚合 CQRS 设计](../../03-核心业务模型/07-BMS领域模型/11-退款结算聚合CQRS设计.md)。规范状态为 `REQUESTED/CONFIRMATION_PENDING/FINISHED/FAILED/CLOSED`；超时待确认继续占额，人工处置需凭证与双人复核。
 
 ```mermaid
 flowchart LR

@@ -56,6 +56,11 @@ public class MyBatisInboundTrackingRepository implements InboundTrackingReposito
         return Optional.ofNullable(mapper.findByAsnNo(asnNo)).map(this::aggregate);
     }
 
+    @Override
+    public boolean existsByOrderNo(String orderNo) {
+        return mapper.count(null, orderNo, null, null, null) > 0;
+    }
+
     /**
      * 执行命令 {@code save}。
      *

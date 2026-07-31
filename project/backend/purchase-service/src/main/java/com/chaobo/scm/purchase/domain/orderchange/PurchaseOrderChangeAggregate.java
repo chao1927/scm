@@ -41,6 +41,8 @@ public class PurchaseOrderChangeAggregate {
      */
     private final String orderNo;
 
+    private final int baseOrderVersion;
+
     /**
      * changeType（类型：{@code int}）。
      *
@@ -104,7 +106,7 @@ public class PurchaseOrderChangeAggregate {
      * @param status 生命周期状态，类型为 {@code PurchaseOrderChangeStatus}
      * @param version 乐观锁或契约版本，类型为 {@code int}
      */
-    public PurchaseOrderChangeAggregate(long id, String changeNo, String orderNo, int changeType, String beforeSnapshot, String afterSnapshot, String changeReason, PurchaseOrderChangeStatus status, int version) {
+    public PurchaseOrderChangeAggregate(long id, String changeNo, String orderNo, int baseOrderVersion, int changeType, String beforeSnapshot, String afterSnapshot, String changeReason, PurchaseOrderChangeStatus status, int version) {
         if (orderNo == null || orderNo.isBlank()) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED, "采购订单号不能为空");
         }
@@ -114,6 +116,7 @@ public class PurchaseOrderChangeAggregate {
         this.id = id;
         this.changeNo = changeNo;
         this.orderNo = orderNo;
+        this.baseOrderVersion = baseOrderVersion;
         this.changeType = changeType;
         this.beforeSnapshot = beforeSnapshot;
         this.afterSnapshot = afterSnapshot;
@@ -134,8 +137,8 @@ public class PurchaseOrderChangeAggregate {
      * @param ids 业务或技术标识，类型为 {@code IdentifierGenerator}
      * @return 执行命令的结果，类型为 {@code PurchaseOrderChangeAggregate}
      */
-    public static PurchaseOrderChangeAggregate create(String orderNo, int changeType, String beforeSnapshot, String afterSnapshot, String changeReason, IdentifierGenerator ids) {
-        var aggregate = new PurchaseOrderChangeAggregate(ids.nextId(), ids.nextCode("POC"), orderNo, changeType, beforeSnapshot, afterSnapshot, changeReason, PurchaseOrderChangeStatus.PENDING_APPROVAL, 0);
+    public static PurchaseOrderChangeAggregate create(String orderNo, int baseOrderVersion, int changeType, String beforeSnapshot, String afterSnapshot, String changeReason, IdentifierGenerator ids) {
+        var aggregate = new PurchaseOrderChangeAggregate(ids.nextId(), ids.nextCode("POC"), orderNo, baseOrderVersion, changeType, beforeSnapshot, afterSnapshot, changeReason, PurchaseOrderChangeStatus.PENDING_APPROVAL, 0);
         aggregate.raise("PurchaseOrderChangeCreated", Map.of());
         return aggregate;
     }
@@ -180,6 +183,7 @@ public class PurchaseOrderChangeAggregate {
         payload.put("changeId", id);
         payload.put("changeNo", changeNo);
         payload.put("orderNo", orderNo);
+        payload.put("baseOrderVersion", baseOrderVersion);
         payload.put("changeType", changeType);
         payload.put("status", status.code());
         payload.put("version", version);
@@ -215,6 +219,10 @@ public class PurchaseOrderChangeAggregate {
      */
     public String orderNo() {
         return orderNo;
+    }
+
+    public int baseOrderVersion() {
+        return baseOrderVersion;
     }
 
     /**

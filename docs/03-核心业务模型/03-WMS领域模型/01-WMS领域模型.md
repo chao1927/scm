@@ -720,3 +720,17 @@ WMS 不能只建模库存调拨。调拨只是 WMS 的一种出库来源和入�
 - [发货交接聚合 CQRS 设计](./12-发货交接聚合CQRS设计.md)
 - [盘点计划聚合 CQRS 设计](./13-盘点计划聚合CQRS设计.md)
 - [仓内异常聚合 CQRS 设计](./14-仓内异常聚合CQRS设计.md)
+
+## DOC-NEXT-001 多类型入库统一口径
+
+采购、调拨和售后退货共用 `入库单 -> 收货 -> 质检 -> 上架` 主链路。`inboundType` 必须取 `PURCHASE`、`TRANSFER`、`SALES_RETURN`；唯一键统一为 `来源上下文 + 来源单号 + 来源行号 + inboundType`。
+
+| 业务类型 | 收货上限 | 质检/处置 | 下游事实 |
+| --- | --- | --- | --- |
+| `PURCHASE` | ASN 或采购可收量 | 合格、不合格、隔离或让步接收 | `WmsReceiptCompleted/QualityInspectionCompleted/PutawayCompleted` |
+| `TRANSFER` | 调出量减累计实收 | 支持短收、破损；最终收货产生差异 | `TransferReceived`，携带累计实收、最终标志和差异量 |
+| `SALES_RETURN` | RMA 应退量或人工确认上限 | 良品、残次、冻结、报废、无单异常互斥分类 | `ReturnReceived/ReturnInspected/PutawayCompleted` |
+
+现有 `ReturnOperationAggregate` 是售后执行聚合，用于保护 RMA、实收与五类处置数量，并必须关联一个 `SALES_RETURN` 入库单；它不是另一份入库单。`TransferOperationAggregate` 同理不替代 `TRANSFER` 入库单。
+
+三类入库统一遵守“到达不等于收货、收货不等于可用、上架/处置才触发中央库存记账”。无单、错退和多退不得自动入账或触发退款。

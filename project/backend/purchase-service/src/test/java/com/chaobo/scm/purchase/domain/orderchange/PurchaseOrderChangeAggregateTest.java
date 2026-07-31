@@ -31,7 +31,7 @@ class PurchaseOrderChangeAggregateTest {
      */
     @Test
     void approveMakesChangeEffective() {
-        var change = PurchaseOrderChangeAggregate.create("PO001", 1, "{\"qty\":10}", "{\"qty\":20}", "供应商要求调整", ids);
+        var change = PurchaseOrderChangeAggregate.create("PO001", 3, 1, "{\"qty\":10}", "{\"qty\":20}", "供应商要求调整", ids);
         change.pullEvents();
         change.approve(true, ids);
         assertThat(change.status()).isEqualTo(PurchaseOrderChangeStatus.EFFECTIVE);
@@ -45,7 +45,7 @@ class PurchaseOrderChangeAggregateTest {
      */
     @Test
     void cannotApproveTwice() {
-        var change = PurchaseOrderChangeAggregate.create("PO001", 1, "{\"qty\":10}", "{\"qty\":20}", "供应商要求调整", ids);
+        var change = PurchaseOrderChangeAggregate.create("PO001", 3, 1, "{\"qty\":10}", "{\"qty\":20}", "供应商要求调整", ids);
         change.approve(true, ids);
         assertThatThrownBy(() -> change.approve(true, ids)).isInstanceOf(BusinessException.class).hasMessageContaining("不能审批");
     }

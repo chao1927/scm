@@ -137,7 +137,7 @@ public class PurchaseOrderChangeController {
      * @author SCM Team
      * @since 0.1.0
      */
-    public record CreateRequest(@NotBlank String orderNo, @Min(1) @Max(5) int changeType, @NotBlank String beforeSnapshot, @NotBlank String afterSnapshot, @NotBlank String changeReason, Map<@Positive Long, @DecimalMin(value = "0", inclusive = false) BigDecimal> lineQtyChanges) {
+    public record CreateRequest(@NotBlank String orderNo, @PositiveOrZero int baseOrderVersion, @Min(1) @Max(5) int changeType, @NotBlank String beforeSnapshot, @NotBlank String afterSnapshot, @NotBlank String changeReason, Map<@Positive Long, @DecimalMin(value = "0", inclusive = false) BigDecimal> lineQtyChanges) {
 
         /**
          * 转换数据模型 {@code toCommand}。
@@ -146,7 +146,7 @@ public class PurchaseOrderChangeController {
          * @return 转换数据模型的结果，类型为 {@code PurchaseOrderChangeCommands.Create}
          */
         PurchaseOrderChangeCommands.Create toCommand() {
-            return new PurchaseOrderChangeCommands.Create(orderNo, changeType, beforeSnapshot, afterSnapshot, changeReason, lineQtyChanges);
+            return new PurchaseOrderChangeCommands.Create(orderNo, baseOrderVersion, changeType, beforeSnapshot, afterSnapshot, changeReason, lineQtyChanges);
         }
     }
 

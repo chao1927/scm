@@ -110,6 +110,12 @@ class StockTransferEventApplicationServiceTest {
         }
 
         @Override
+        public void markWaitingReplay(long inboxId, String reason) {
+            InboxEvent row = inboxes.get("E-1");
+            inboxes.put("E-1", copy(row, STATUS_WAITING_REPLAY));
+        }
+
+        @Override
         public EventCursor findCursor(
                 String sourceSystem,
                 String aggregateType,

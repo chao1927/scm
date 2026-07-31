@@ -61,8 +61,8 @@ public class MyBatisPurchasePriceRepository implements PurchasePriceRepository {
      * @return 查询并返回的结果，类型为 {@code List<PurchasePriceAggregate>}
      */
     @Override
-    public List<PurchasePriceAggregate> findActiveOverlaps(long supplierId, String skuCode, long purchaseOrgId, String currency, LocalDate effectiveFrom, LocalDate effectiveTo) {
-        return mapper.findActiveOverlaps(supplierId, skuCode, purchaseOrgId, currency, effectiveFrom, effectiveTo).stream().map(this::aggregate).toList();
+    public List<PurchasePriceAggregate> findActiveOverlaps(long supplierId, String skuCode, long purchaseOrgId, int priceType, String currency, LocalDate effectiveFrom, LocalDate effectiveTo) {
+        return mapper.findActiveOverlaps(supplierId, skuCode, purchaseOrgId, priceType, currency, effectiveFrom, effectiveTo).stream().map(this::aggregate).toList();
     }
 
     /**

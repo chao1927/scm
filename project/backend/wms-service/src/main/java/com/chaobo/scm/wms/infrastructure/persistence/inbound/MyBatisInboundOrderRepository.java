@@ -56,8 +56,10 @@ public class MyBatisInboundOrderRepository implements InboundOrderRepository {
      * @return 查询并返回的结果，类型为 {@code Optional<InboundOrderAggregate>}
      */
     @Override
-    public Optional<InboundOrderAggregate> findBySource(String sourceType, String sourceNo, long warehouseId) {
-        return Optional.ofNullable(mapper.findBySource(sourceType, sourceNo, warehouseId)).map(this::toAggregate);
+    public Optional<InboundOrderAggregate> findBySource(String sourceSystem, String sourceNo,
+                                                         String sourceLineNo, String inboundType) {
+        return Optional.ofNullable(mapper.findBySource(sourceSystem, sourceNo, sourceLineNo, inboundType))
+            .map(this::toAggregate);
     }
 
     /**
@@ -70,9 +72,10 @@ public class MyBatisInboundOrderRepository implements InboundOrderRepository {
     @Override
     public void save(InboundOrderAggregate order, long operatorId) {
         if (mapper.findById(order.id()) == null) {
-            mapper.insert(order.id(), order.inboundNo(), order.sourceType(), order.sourceNo(), order.warehouseId(),
-                order.ownerId(), order.status().code(), order.expectedArrivalAt(), order.cancelReason(),
-                order.version(), operatorId);
+            mapper.insert(order.id(), order.inboundNo(), order.sourceSystem(), order.sourceType(),
+                order.sourceNo(), order.sourceLineNo(), order.warehouseId(), order.ownerId(),
+                order.allowedQty(), order.status().code(), order.expectedArrivalAt(),
+                order.cancelReason(), order.version(), operatorId);
             return;
         }
         mapper.update(order.id(), order.status().code(), order.cancelReason(), order.version(), operatorId);
@@ -86,8 +89,8 @@ public class MyBatisInboundOrderRepository implements InboundOrderRepository {
      * @return 转换数据模型的结果，类型为 {@code InboundOrderAggregate}
      */
     private InboundOrderAggregate toAggregate(InboundOrderMapper.Row row) {
-        return new InboundOrderAggregate(row.id(), row.inboundNo(), row.sourceType(), row.sourceNo(),
-            row.warehouseId(), row.ownerId(), InboundOrderStatus.of(row.status()),
-            row.expectedArrivalAt(), row.cancelReason(), row.version());
+        return new InboundOrderAggregate(row.id(), row.inboundNo(), row.sourceSystem(), row.inboundType(),
+            row.sourceNo(), row.sourceLineNo(), row.warehouseId(), row.ownerId(), row.allowedQty(),
+            InboundOrderStatus.of(row.status()), row.expectedArrivalAt(), row.cancelReason(), row.version());
     }
 }

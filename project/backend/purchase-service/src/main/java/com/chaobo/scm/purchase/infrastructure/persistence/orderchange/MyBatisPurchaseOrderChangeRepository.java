@@ -1,5 +1,7 @@
 package com.chaobo.scm.purchase.infrastructure.persistence.orderchange;
 
+import com.chaobo.scm.common.error.BusinessException;
+import com.chaobo.scm.common.error.ErrorCode;
 import com.chaobo.scm.purchase.domain.orderchange.*;
 import org.springframework.stereotype.Repository;
 import java.util.Optional;
@@ -55,9 +57,12 @@ public class MyBatisPurchaseOrderChangeRepository implements PurchaseOrderChange
     public void save(PurchaseOrderChangeAggregate change, long operatorId) {
         var existed = mapper.findByNo(change.changeNo()) != null;
         if (existed) {
-            mapper.updateStatus(change.id(), change.status().code(), change.version(), operatorId);
+            int updated = mapper.updateStatus(change.id(), change.status().code(), change.version(), change.version() - 1, operatorId);
+            if (updated != 1) {
+                throw new BusinessException(ErrorCode.VERSION_CONFLICT, "采购订单变更单已被其他事务修改");
+            }
         } else {
-            mapper.insert(new PurchaseOrderChangeMapper.ChangeRow(change.id(), change.changeNo(), change.orderNo(), change.changeType(), change.beforeSnapshot(), change.afterSnapshot(), change.changeReason(), change.status().code(), change.version()), operatorId);
+            mapper.insert(new PurchaseOrderChangeMapper.ChangeRow(change.id(), change.changeNo(), change.orderNo(), change.baseOrderVersion(), change.changeType(), change.beforeSnapshot(), change.afterSnapshot(), change.changeReason(), change.status().code(), change.version()), operatorId);
         }
     }
 
@@ -69,6 +74,6 @@ public class MyBatisPurchaseOrderChangeRepository implements PurchaseOrderChange
      * @return 处理当前类型职责中的操作的结果，类型为 {@code PurchaseOrderChangeAggregate}
      */
     private PurchaseOrderChangeAggregate aggregate(PurchaseOrderChangeMapper.ChangeRow row) {
-        return new PurchaseOrderChangeAggregate(row.id(), row.changeNo(), row.orderNo(), row.changeType(), row.beforeSnapshot(), row.afterSnapshot(), row.changeReason(), PurchaseOrderChangeStatus.of(row.status()), row.version());
+        return new PurchaseOrderChangeAggregate(row.id(), row.changeNo(), row.orderNo(), row.baseOrderVersion(), row.changeType(), row.beforeSnapshot(), row.afterSnapshot(), row.changeReason(), PurchaseOrderChangeStatus.of(row.status()), row.version());
     }
 }

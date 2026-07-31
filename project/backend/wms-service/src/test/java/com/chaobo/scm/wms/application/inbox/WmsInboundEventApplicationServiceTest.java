@@ -65,7 +65,7 @@ class WmsInboundEventApplicationServiceTest {
     @Test
     void consumeInboundCreateCommandIsIdempotent() {
         var envelope = new WmsInboundEventApplicationService.EventEnvelope("PURCHASE", "EVT-001", "CreateInboundOrderRequested", """
-            {"sourceType":"PURCHASE","sourceNo":"PO-001","warehouseId":1,"ownerId":2,"expectedArrivalAt":"2026-07-12T10:00:00Z"}
+            {"inboundType":"PURCHASE","sourceNo":"PO-001","sourceLineNo":"1","warehouseId":1,"ownerId":2,"allowedQty":10,"expectedArrivalAt":"2026-07-12T10:00:00Z"}
             """);
         var first = service.consume(envelope, 99L);
         var duplicated = service.consume(envelope, 99L);
@@ -255,8 +255,9 @@ class WmsInboundEventApplicationServiceTest {
          * @return 查询并返回的结果，类型为 {@code Optional<InboundOrderAggregate>}
          */
         @Override
-        public Optional<InboundOrderAggregate> findBySource(String sourceType, String sourceNo, long warehouseId) {
-            return Optional.ofNullable(values.get(sourceType + ":" + sourceNo + ":" + warehouseId));
+        public Optional<InboundOrderAggregate> findBySource(String sourceSystem, String sourceNo,
+                                                             String sourceLineNo, String inboundType) {
+            return Optional.ofNullable(values.get(sourceSystem + ":" + sourceNo + ":" + sourceLineNo + ":" + inboundType));
         }
 
         /**
@@ -268,7 +269,8 @@ class WmsInboundEventApplicationServiceTest {
          */
         @Override
         public void save(InboundOrderAggregate order, long operatorId) {
-            values.put(order.sourceType() + ":" + order.sourceNo() + ":" + order.warehouseId(), order);
+            values.put(order.sourceSystem() + ":" + order.sourceNo() + ":" + order.sourceLineNo()
+                + ":" + order.sourceType(), order);
         }
     }
 

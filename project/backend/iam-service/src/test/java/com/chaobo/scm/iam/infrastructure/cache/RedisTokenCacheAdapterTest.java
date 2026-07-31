@@ -11,8 +11,30 @@ import org.springframework.data.redis.core.HashOperations;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class RedisTokenCacheAdapterTest {
+
+    @Test
+    void rejectsRefreshLookupThatBelongsToAnotherSessionBeforeRunningLua() {
+        long now = Instant.now().getEpochSecond();
+        TokenCachePort.OnlineSession replacement = new TokenCachePort.OnlineSession(
+                42, 2, "access-next", "refresh-next", 1, now + 60, now + 120, true);
+
+        assertThat(RedisTokenCacheAdapter.lookupBelongsToReplacement("41", replacement)).isFalse();
+        assertThat(RedisTokenCacheAdapter.lookupBelongsToReplacement("42", replacement)).isTrue();
+    }
+
+    @Test
+    void luaGuardsRefreshOwnershipSessionIdentityAndNextGenerationAtomically() {
+        String script = RedisTokenCacheAdapter.rotationScriptText();
+
+        assertThat(script)
+                .contains("redis.call('GET', refreshLookupKey)")
+                .contains("redis.call('HGET', sessionKey, 'sessionId')")
+                .contains("redis.call('HGET', sessionKey, 'generation')")
+                .contains("currentGeneration + 1 ~= requestedGeneration");
+    }
 
     @Test
     void convertsRedisOutageToExplicitFailClosedError() {

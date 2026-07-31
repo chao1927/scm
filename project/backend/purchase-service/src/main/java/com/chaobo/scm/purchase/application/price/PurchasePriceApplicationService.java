@@ -90,7 +90,7 @@ public class PurchasePriceApplicationService {
         context.requirePermission("purchase:price:create");
         context.requirePurchaseOrgScope(command.purchaseOrgId());
         return idempotency.execute("purchase:price:create", context, () -> {
-            var overlaps = repository.findActiveOverlaps(command.supplierId(), command.skuCode(), command.purchaseOrgId(), command.currency(), command.effectiveFrom(), command.effectiveTo());
+            var overlaps = repository.findActiveOverlaps(command.supplierId(), command.skuCode(), command.purchaseOrgId(), command.priceType(), command.currency(), command.effectiveFrom(), command.effectiveTo());
             if (!overlaps.isEmpty()) {
                 throw new BusinessException(ErrorCode.BUSINESS_RULE_FAILED, "存在有效期重叠的启用采购价格");
             }

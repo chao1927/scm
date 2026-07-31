@@ -67,6 +67,11 @@ public class MyBatisInventoryInboundEventStore implements InventoryInboundEventS
     }
 
     @Override
+    public void markWaitingReplay(long inboxId, String reason) {
+        mapper.markWaitingReplay(inboxId, reason);
+    }
+
+    @Override
     public EventCursor findCursor(
             String sourceSystem,
             String aggregateType,

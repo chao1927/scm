@@ -1,5 +1,7 @@
 package com.chaobo.scm.purchase.infrastructure.persistence.order;
 
+import com.chaobo.scm.common.error.BusinessException;
+import com.chaobo.scm.common.error.ErrorCode;
 import com.chaobo.scm.purchase.domain.order.*;
 import org.springframework.stereotype.Repository;
 import java.util.Optional;
@@ -55,7 +57,10 @@ public class MyBatisPurchaseOrderRepository implements PurchaseOrderRepository {
     public void save(PurchaseOrderAggregate order, long operatorId) {
         var existed = mapper.findByNo(order.orderNo()) != null;
         if (existed) {
-            mapper.updateHeader(order.id(), order.totalAmount(), order.taxAmount(), order.taxIncludedAmount(), order.status().code(), order.versionNo(), order.version(), order.releasedAt(), order.cancelReason(), operatorId);
+            int updated = mapper.updateHeader(order.id(), order.totalAmount(), order.taxAmount(), order.taxIncludedAmount(), order.status().code(), order.versionNo(), order.version(), order.version() - 1, order.releasedAt(), order.cancelReason(), operatorId);
+            if (updated != 1) {
+                throw new BusinessException(ErrorCode.VERSION_CONFLICT, "采购订单已被其他事务修改");
+            }
             mapper.deleteLines(order.id());
         } else {
             mapper.insertHeader(order.id(), order.orderNo(), order.purchaseType(), order.supplierId(), order.supplierCode(), order.supplierName(), order.purchaseOrgId(), order.warehouseCode(), order.currency(), order.totalAmount(), order.taxAmount(), order.taxIncludedAmount(), order.status().code(), order.versionNo(), order.version(), order.releasedAt(), order.cancelReason(), operatorId);

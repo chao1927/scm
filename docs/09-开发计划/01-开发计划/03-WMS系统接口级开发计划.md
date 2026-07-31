@@ -1,17 +1,18 @@
 # WMS 系统接口级开发计划
 
-> 状态：命令侧首轮完成；标准列表/详情读模型、前端接入和真实消息联调仍为二期。当前模块状态见 [05-九子系统模块状态矩阵](../05-九子系统模块状态矩阵.md#5-wms-系统)。
+> 当前状态与剩余验收见[供应链系统开发总纲](../00-供应链系统开发总纲.md#5-九子系统当前状态)。
 
 实现资料：`docs/08-系统实现/03-WMS系统实现/03-WMS系统接口逐项实现设计.md`。
 
 ## WMS-API-001 外部创建/取消入库单
 `POST /openapi/wms/v1/inbound-orders`、`POST /inbound-orders/{id}/cancel`
 
-- 接口层：`InboundOrderOpenApiController` 校验来源系统、事件编码、幂等键；`InboundOrderController.cancel` 校验仓库范围。
-- 应用层：`InboundOrderApplicationService` 处理创建/取消和预约关联。
-- 领域层：`InboundOrderAggregate` 保证同业务单据幂等、未收货才可取消。
+- 接口层：`InboundOrderOpenApiController` 校验来源系统、事件编码、幂等键和 `inboundType=PURCHASE/TRANSFER/SALES_RETURN`；`InboundOrderController.cancel` 校验仓库范围。
+- 应用层：`InboundOrderApplicationService` 按业务类型加载采购订单/调拨单/售后单快照，处理创建、预约和取消补偿。
+- 领域层：`InboundOrderAggregate` 保证“来源上下文 + 来源单号 + 来源行 + 业务类型”唯一、未收货才可取消；不同业务类型不得共用含义冲突的状态和数量字段。
 - 基础设施层：入库单资源库、Inbox、采购/供应商 ACL、Outbox。
-- 事件：消费采购订单/ASN 命令；生产 `WmsInboundOrderCreated/Cancelled`。
+- 事件：消费采购订单/ASN、调拨入库、OMS 售后退货命令；生产 `WmsInboundOrderCreated/Cancelled`，载荷必须携带业务类型和来源引用。
+- 设计事实源：[入库单聚合多类型规则](../../03-核心业务模型/03-WMS领域模型/02-入库单聚合CQRS设计.md#13-多类型入库规则doc-next-001)。`ReturnOperation/TransferOperation` 只作为执行聚合并关联统一入库单；外部类型经 ACL 归一为 `PURCHASE/TRANSFER/SALES_RETURN`。
 
 ```mermaid
 flowchart LR
@@ -50,10 +51,11 @@ sequenceDiagram
 `POST /quality-inspections/{id}/result`、`POST /putaway-tasks/{id}/scan`
 
 - 接口层：`QualityInspectionController`、`PutawayTaskController` 接收质检结果/目标库位和操作版本。
-- 应用层：质检服务生成合格/不合格库存；上架服务调用库位推荐并提交库内记账。
-- 领域层：`QualityInspectionAggregate` 保护抽检/全检状态；`PutawayTaskAggregate` 只允许合格数量上架到允许库位。
+- 应用层：质检服务按采购、调拨、售后退货生成合格/不合格/隔离处置；上架服务调用库位推荐并提交库内记账。
+- 领域层：`QualityInspectionAggregate` 保护抽检/全检状态；`PutawayTaskAggregate` 只允许可上架数量进入允许库位。售后退货必须记录原订单/售后行、实收、错退、少件、良品和不良品数量。
 - 基础设施层：质检/上架资源库、库位容量查询、库存 ACL。
-- 事件：生产 `QualityInspectionCompleted/PutawayCompleted`；质量不合格事件被供应商系统消费。
+- 事件：生产 `QualityInspectionCompleted/PutawayCompleted`；采购不合格通知供应商，调拨差异通知中央库存，售后退货发布 `ReturnInspected` 供 OMS/BMS/库存消费。
+- 测试补充：三类来源复合唯一键、到达/收货不提前增加可用、调拨最终实收与差异守恒、售后五类处置守恒、重复/乱序事实无副作用。
 
 ```mermaid
 flowchart LR

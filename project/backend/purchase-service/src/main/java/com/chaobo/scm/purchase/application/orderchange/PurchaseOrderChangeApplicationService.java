@@ -93,7 +93,10 @@ public class PurchaseOrderChangeApplicationService {
     @Transactional(rollbackFor = Exception.class)
     public CommandResult create(PurchaseOrderChangeCommands.Create command, CommandContext context) {
         context.requirePermission("purchase:po-change:create");
-        return idempotency.execute("purchase:po-change:create", context, () -> persist(PurchaseOrderChangeAggregate.create(command.orderNo(), command.changeType(), command.beforeSnapshot(), command.afterSnapshot(), command.changeReason(), ids), context, "CREATE_PO_CHANGE", null));
+        return idempotency.execute("purchase:po-change:create", context, () -> {
+            orders.requireCurrentVersion(command.orderNo(), command.baseOrderVersion(), context);
+            return persist(PurchaseOrderChangeAggregate.create(command.orderNo(), command.baseOrderVersion(), command.changeType(), command.beforeSnapshot(), command.afterSnapshot(), command.changeReason(), ids), context, "CREATE_PO_CHANGE", null);
+        });
     }
 
     /**
@@ -117,7 +120,7 @@ public class PurchaseOrderChangeApplicationService {
             var before = snapshot(change);
             change.approve(command.approved(), ids);
             if (command.approved() && change.changeType() == 1) {
-                orders.applyChange(change.orderNo(), lineQtyChanges, context);
+                orders.applyChange(change.orderNo(), change.baseOrderVersion(), lineQtyChanges, context);
             }
             return persist(change, context, "APPROVE_PO_CHANGE", before);
         });

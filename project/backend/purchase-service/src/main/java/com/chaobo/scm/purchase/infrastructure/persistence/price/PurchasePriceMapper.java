@@ -61,11 +61,12 @@ public interface PurchasePriceMapper {
           and supplier_id = #{supplierId}
           and sku_code = #{skuCode}
           and purchase_org_id = #{purchaseOrgId}
+          and price_type = #{priceType}
           and currency = #{currency}
           and not (coalesce(effective_to, '9999-12-31') < #{effectiveFrom}
                    or coalesce(#{effectiveTo}, '9999-12-31') < effective_from)
         """)
-    List<PriceRow> findActiveOverlaps(@Param("supplierId") long supplierId, @Param("skuCode") String skuCode, @Param("purchaseOrgId") long purchaseOrgId, @Param("currency") String currency, @Param("effectiveFrom") LocalDate effectiveFrom, @Param("effectiveTo") LocalDate effectiveTo);
+    List<PriceRow> findActiveOverlaps(@Param("supplierId") long supplierId, @Param("skuCode") String skuCode, @Param("purchaseOrgId") long purchaseOrgId, @Param("priceType") int priceType, @Param("currency") String currency, @Param("effectiveFrom") LocalDate effectiveFrom, @Param("effectiveTo") LocalDate effectiveTo);
 
     /**
      * 处理当前类型职责中的操作 {@code insert}。

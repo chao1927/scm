@@ -833,7 +833,7 @@
 | `CarrierEnabled` | 主数据 | 创建物流商应付计费对象候选 | `bms_billing` | 事件重放 |
 | `InboundOrderPutawayCompleted` | WMS | 采集入库费、上架费、增值服务费来源事件 | `bms_fee`、`bms_fee_line` | 重放来源事件 |
 | `OutboundOrderShipped` | WMS | 采集出库费、耗材费、运输交接费来源事件 | `bms_fee`、`bms_fee_line` | 重放来源事件 |
-| `ReturnInboundInspected` | WMS | 采集售后退货质检费、退货入库费 | `bms_fee`、`bms_fee_line` | 标记异常待处理 |
+| `ReturnInspected` | WMS | 采集售后退货质检费、退货入库费 | `bms_fee`、`bms_fee_line` | 标记异常待处理 |
 | `InventorySnapshotGenerated` | 中央库存 | 采集仓储费库存占用指标 | `bms_fee`、`bms_fee_line` | 账期重算 |
 | `InventoryAdjusted` | 中央库存 | 采集盘点差异或库存调整费用依据 | `bms_fee` | 人工确认是否计费 |
 | `AfterSaleApproved` | OMS | 采集售后服务费或退款结算事实 | `bms_fee`、`bms_fee_line` | OMS 重推或人工补录 |
@@ -1063,3 +1063,17 @@ sequenceDiagram
 BMS 接口应围绕“业务事实采集 -> 费用明细 -> 调整补偿 -> 对账确认 -> 账单确认 -> 发票交接 -> 财务交接”设计。前端接口主要服务结算运营和财务人员的查询、确认、补偿和交接；跨系统接口主要接收 WMS、OMS、中央库存、TMS 的业务事实，并把账单、开票和入账结果传递给财务系统、外部协同门户和 BI。
 
 最关键的边界是：BMS 不修改仓储、库存、订单的源业务事实，只把这些事实转成可结算的费用事实；费用已确认或已入账后不直接改原单，必须通过调整单、红冲或补差完成补偿。
+
+## 12. 退款接口契约收口（DOC-NEXT-001）
+
+退款接口统一映射[退款结算聚合](../03-核心业务模型/07-BMS领域模型/11-退款结算聚合CQRS设计.md)。规范状态为 `REQUESTED/CONFIRMATION_PENDING/FINISHED/FAILED/CLOSED`；历史 `finish|fail` 只允许可信回执或受控内部入口，人工处置必须使用独立接口和权限。
+
+| 接口 | 关键契约 |
+| --- | --- |
+| `POST /api/bms/v1/refund-settlements` | 请求幂等键、售后单/账单/支付单、金额、币种；锁定账单退款额度后创建 |
+| `POST /openapi/bms/v1/refund-settlements/{refundNo}/receipts` | 验签；全局回执号唯一；校验金额、币种、商户号和退款号 |
+| `POST /api/bms/v1/refund-settlements/{refundNo}/retry` | 仅 FAILED；重新校验并占用额度，生成新支付尝试 |
+| `POST /api/bms/v1/refund-settlements/{refundNo}/confirmation-pending` | 仅支付超时/未知结果；继续占额并触发主动查单 |
+| `POST /api/bms/v1/refund-settlements/{refundNo}/manual-complete|manual-close` | 仅待确认；高风险权限、凭证、原因和双人复核 |
+
+重复回执返回当前结果；回执号已绑定其他退款、成功后又收到失败回执、金额币种不一致均进入安全拒绝和审计待办。

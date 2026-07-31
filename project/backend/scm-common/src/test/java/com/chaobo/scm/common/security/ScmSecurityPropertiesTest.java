@@ -42,4 +42,35 @@ class ScmSecurityPropertiesTest {
         assertThat(properties.previousSecretKey().orElseThrow().getEncoded()).hasSize(32);
         assertThat(properties.getPreviousValidUntilEpochSecond()).isEqualTo(1_800_000_000L);
     }
+
+    @Test
+    void rejectsIncompleteDuplicateOrWindowlessPreviousKeyConfiguration() {
+        var incomplete = configuredActive();
+        incomplete.setPreviousKid("previous");
+        assertThatThrownBy(incomplete::previousSecretKey)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("configured together");
+
+        var duplicate = configuredActive();
+        duplicate.setPreviousKid("active");
+        duplicate.setPreviousHmacSecret("abcdefghijklmnopqrstuvwxyzABCDEF");
+        duplicate.setPreviousValidUntilEpochSecond(1_800_000_000L);
+        assertThatThrownBy(duplicate::previousSecretKey)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("must differ");
+
+        var windowless = configuredActive();
+        windowless.setPreviousKid("previous");
+        windowless.setPreviousHmacSecret("abcdefghijklmnopqrstuvwxyzABCDEF");
+        assertThatThrownBy(windowless::previousSecretKey)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("valid-until");
+    }
+
+    private static ScmSecurityProperties configuredActive() {
+        var properties = new ScmSecurityProperties();
+        properties.setActiveKid("active");
+        properties.setHmacSecret("01234567890123456789012345678901");
+        return properties;
+    }
 }

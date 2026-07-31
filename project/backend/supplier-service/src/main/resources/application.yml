@@ -15,12 +15,6 @@ spring:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          jwk-set-uri: ${IAM_JWK_SET_URI:http://127.0.0.1:8090/.well-known/jwks.json}
-
 server:
   port: ${SERVER_PORT:8101}
   shutdown: graceful
@@ -45,6 +39,13 @@ logging:
     correlation: "[%X{traceId:-},%X{spanId:-}] "
 
 scm:
+  security:
+    active-kid: ${IAM_JWT_ACTIVE_KID:active}
+    hmac-secret: ${IAM_JWT_SECRET:}
+    previous-kid: ${IAM_JWT_PREVIOUS_KID:}
+    previous-hmac-secret: ${IAM_JWT_PREVIOUS_SECRET:}
+    previous-valid-until-epoch-second: ${IAM_JWT_PREVIOUS_VALID_UNTIL_EPOCH_SECOND:0}
+    permission-namespace: supplier
   integration:
     batch-size: ${INTEGRATION_BATCH_SIZE:50}
     max-retries: ${INTEGRATION_MAX_RETRIES:8}

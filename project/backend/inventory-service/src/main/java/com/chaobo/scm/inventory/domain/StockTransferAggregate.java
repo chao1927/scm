@@ -168,6 +168,15 @@ public class StockTransferAggregate {
      */
     private BigDecimal differenceQty;
 
+    /** 已确认差异原因。 */
+    private String differenceReason;
+
+    /** 已确认差异责任方。 */
+    private String responsibleParty;
+
+    /** 可追溯的差异证据引用。 */
+    private String evidenceRef;
+
     /**
      * status（类型：{@code int}）。
      *
@@ -201,7 +210,7 @@ public class StockTransferAggregate {
      * @param status 生命周期状态，类型为 {@code int}
      * @param version 乐观锁或契约版本，类型为 {@code int}
      */
-    private StockTransferAggregate(long id, String transferNo, long ownerId, long sourceWarehouseId, long targetWarehouseId, String sku, String batchNo, BigDecimal requestedQty, BigDecimal reservedQty, BigDecimal outboundQty, BigDecimal receivedQty, BigDecimal differenceQty, int status, int version) {
+    private StockTransferAggregate(long id, String transferNo, long ownerId, long sourceWarehouseId, long targetWarehouseId, String sku, String batchNo, BigDecimal requestedQty, BigDecimal reservedQty, BigDecimal outboundQty, BigDecimal receivedQty, BigDecimal differenceQty, String differenceReason, String responsibleParty, String evidenceRef, int status, int version) {
         if (id <= 0 || blank(transferNo) || ownerId <= 0 || sourceWarehouseId <= 0 || targetWarehouseId <= 0 || sourceWarehouseId == targetWarehouseId || blank(sku) || positive(requestedQty) == false) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED, "调拨单主体和数量不合法");
         }
@@ -217,9 +226,13 @@ public class StockTransferAggregate {
         this.outboundQty = nonNegative(outboundQty);
         this.receivedQty = nonNegative(receivedQty);
         this.differenceQty = nonNegative(differenceQty);
+        this.differenceReason = differenceReason;
+        this.responsibleParty = responsibleParty;
+        this.evidenceRef = evidenceRef;
         this.status = status;
         this.version = version;
         validateQuantities();
+        validateDifferenceEvidence();
     }
 
     /**
@@ -237,7 +250,7 @@ public class StockTransferAggregate {
      * @return 执行命令的结果，类型为 {@code StockTransferAggregate}
      */
     public static StockTransferAggregate create(long id, String transferNo, long ownerId, long sourceWarehouseId, long targetWarehouseId, String sku, String batchNo, BigDecimal requestedQty) {
-        return new StockTransferAggregate(id, transferNo, ownerId, sourceWarehouseId, targetWarehouseId, sku, batchNo, requestedQty, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, DRAFT, 0);
+        return new StockTransferAggregate(id, transferNo, ownerId, sourceWarehouseId, targetWarehouseId, sku, batchNo, requestedQty, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, null, null, null, DRAFT, 0);
     }
 
     /**
@@ -260,8 +273,8 @@ public class StockTransferAggregate {
      * @param version 乐观锁或契约版本，类型为 {@code int}
      * @return 处理当前类型职责中的操作的结果，类型为 {@code StockTransferAggregate}
      */
-    public static StockTransferAggregate restore(long id, String transferNo, long ownerId, long sourceWarehouseId, long targetWarehouseId, String sku, String batchNo, BigDecimal requestedQty, BigDecimal reservedQty, BigDecimal outboundQty, BigDecimal receivedQty, BigDecimal differenceQty, int status, int version) {
-        return new StockTransferAggregate(id, transferNo, ownerId, sourceWarehouseId, targetWarehouseId, sku, batchNo, requestedQty, reservedQty, outboundQty, receivedQty, differenceQty, status, version);
+    public static StockTransferAggregate restore(long id, String transferNo, long ownerId, long sourceWarehouseId, long targetWarehouseId, String sku, String batchNo, BigDecimal requestedQty, BigDecimal reservedQty, BigDecimal outboundQty, BigDecimal receivedQty, BigDecimal differenceQty, String differenceReason, String responsibleParty, String evidenceRef, int status, int version) {
+        return new StockTransferAggregate(id, transferNo, ownerId, sourceWarehouseId, targetWarehouseId, sku, batchNo, requestedQty, reservedQty, outboundQty, receivedQty, differenceQty, differenceReason, responsibleParty, evidenceRef, status, version);
     }
 
     /**
@@ -341,9 +354,7 @@ public class StockTransferAggregate {
     public void receive(BigDecimal qty, boolean finalReceipt, int expectedVersion) {
         requireStatus(IN_TRANSIT, "只有在途调拨单可收货");
         requireVersion(expectedVersion);
-        if (!positive(qty) || receivedQty.add(qty).compareTo(outboundQty) > 0) {
-            throw new BusinessException(ErrorCode.BUSINESS_RULE_FAILED, "调拨收货累计不得超过出库量");
-        }
+        validateReceipt(qty);
         receivedQty = receivedQty.add(qty);
         if (finalReceipt || receivedQty.compareTo(outboundQty) == 0) {
             differenceQty = outboundQty.subtract(receivedQty);
@@ -353,14 +364,37 @@ public class StockTransferAggregate {
         validateQuantities();
     }
 
+    /** 校验 WMS 收货事实，但在上架完成前不改变可用库存或调拨累计收货量。 */
+    public void validateReceipt(BigDecimal qty) {
+        requireStatus(IN_TRANSIT, "只有在途调拨单可接收收货事实");
+        if (!positive(qty) || receivedQty.add(qty).compareTo(outboundQty) > 0) {
+            throw new BusinessException(ErrorCode.BUSINESS_RULE_FAILED, "调拨收货累计不得超过出库量");
+        }
+    }
+
     /**
      * 执行命令 {@code confirmDifference}。
      *
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
      * @param expectedVersion 乐观锁或契约版本，类型为 {@code int}
      */
-    public void confirmDifference(int expectedVersion) {
-        change(DIFFERENCE, DIFFERENCE_CONFIRMED, expectedVersion, "只有存在收货差异的调拨单可确认差异");
+    public void confirmDifference(String reason, String party, String evidence, int expectedVersion) {
+        requireStatus(DIFFERENCE, "只有存在收货差异的调拨单可确认差异");
+        requireVersion(expectedVersion);
+        if (blank(reason)) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "差异原因不能为空");
+        }
+        if (blank(party)) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "差异责任方不能为空");
+        }
+        if (blank(evidence)) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "差异证据不能为空");
+        }
+        differenceReason = reason.trim();
+        responsibleParty = party.trim();
+        evidenceRef = evidence.trim();
+        status = DIFFERENCE_CONFIRMED;
+        version++;
     }
 
     /**
@@ -438,6 +472,15 @@ public class StockTransferAggregate {
         boolean terminalQuantityMismatch = receivedQty.add(differenceQty).compareTo(outboundQty) != 0;
         if (terminalStatus && terminalQuantityMismatch) {
             throw new BusinessException(ErrorCode.BUSINESS_RULE_FAILED, "调拨终态数量不守恒");
+        }
+    }
+
+    private void validateDifferenceEvidence() {
+        if (status != DIFFERENCE_CONFIRMED) {
+            return;
+        }
+        if (blank(differenceReason) || blank(responsibleParty) || blank(evidenceRef)) {
+            throw new BusinessException(ErrorCode.BUSINESS_RULE_FAILED, "已确认差异必须包含原因、责任方和证据");
         }
     }
 
@@ -595,6 +638,18 @@ public class StockTransferAggregate {
      */
     public BigDecimal differenceQty() {
         return differenceQty;
+    }
+
+    public String differenceReason() {
+        return differenceReason;
+    }
+
+    public String responsibleParty() {
+        return responsibleParty;
+    }
+
+    public String evidenceRef() {
+        return evidenceRef;
     }
 
     /**

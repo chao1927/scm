@@ -145,6 +145,8 @@ class OAuthApplicationServiceTest {
 
         final Map<String, AuthorizationCodeRow> authorizationCodes = new LinkedHashMap<>();
         final Map<String, AuditRow> audits = new LinkedHashMap<>();
+        final Map<String, GrantRow> grants = new LinkedHashMap<>();
+        final Map<String, RefreshTokenRow> refreshTokens = new LinkedHashMap<>();
         int consumeCount;
 
         @Override
@@ -201,6 +203,39 @@ class OAuthApplicationServiceTest {
 
         @Override
         public void insertOutbox(OutboxRow row) {
+        }
+
+        @Override
+        public void insertGrant(GrantRow row) {
+            grants.put(row.grantId(), row);
+        }
+
+        @Override
+        public void insertRefreshToken(RefreshTokenRow row) {
+            refreshTokens.put(row.tokenHash(), row);
+        }
+
+        @Override
+        public RefreshGrantRow findRefreshGrant(String tokenHash) {
+            RefreshTokenRow token = refreshTokens.get(tokenHash);
+            if (token == null) { return null; }
+            GrantRow grant = grants.get(token.grantId());
+            return new RefreshGrantRow(token.tokenHash(), token.grantId(), token.generation(), token.expiresAt(),
+                    token.consumedAt(), grant.clientId(), grant.userId(), grant.scopes(), 1, null);
+        }
+
+        @Override
+        public int consumeRefreshToken(String tokenHash, Instant consumedAt) {
+            RefreshTokenRow token = refreshTokens.get(tokenHash);
+            if (token == null || token.consumedAt() != null || !token.expiresAt().isAfter(consumedAt)) { return 0; }
+            refreshTokens.put(tokenHash, new RefreshTokenRow(token.tokenHash(), token.grantId(), token.generation(),
+                    token.expiresAt(), consumedAt, token.createdAt()));
+            return 1;
+        }
+
+        @Override
+        public int revokeGrant(String grantId, Instant revokedAt) {
+            return grants.containsKey(grantId) ? 1 : 0;
         }
     }
 }

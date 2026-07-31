@@ -115,9 +115,9 @@ public interface PurchaseOrderMapper {
         set total_amount = #{totalAmount}, tax_amount = #{taxAmount}, tax_included_amount = #{taxIncludedAmount},
             status = #{status}, version_no = #{versionNo}, version = #{version}, released_at = #{releasedAt},
             cancel_reason = #{cancelReason}, updated_by = #{operatorId}, updated_at = now(3)
-        where id = #{id}
+        where id = #{id} and version = #{expectedVersion}
         """)
-    void updateHeader(@Param("id") long id, @Param("totalAmount") BigDecimal totalAmount, @Param("taxAmount") BigDecimal taxAmount, @Param("taxIncludedAmount") BigDecimal taxIncludedAmount, @Param("status") int status, @Param("versionNo") int versionNo, @Param("version") int version, @Param("releasedAt") OffsetDateTime releasedAt, @Param("cancelReason") String cancelReason, @Param("operatorId") long operatorId);
+    int updateHeader(@Param("id") long id, @Param("totalAmount") BigDecimal totalAmount, @Param("taxAmount") BigDecimal taxAmount, @Param("taxIncludedAmount") BigDecimal taxIncludedAmount, @Param("status") int status, @Param("versionNo") int versionNo, @Param("version") int version, @Param("expectedVersion") int expectedVersion, @Param("releasedAt") OffsetDateTime releasedAt, @Param("cancelReason") String cancelReason, @Param("operatorId") long operatorId);
 
     /**
      * 执行命令 {@code deleteLines}。

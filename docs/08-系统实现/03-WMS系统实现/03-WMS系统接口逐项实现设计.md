@@ -504,3 +504,13 @@ wms-service
 关键假设：WMS 拥有仓内作业事实，中央库存拥有全局账户事实。  
 待决问题：PDA 离线策略、超收/短拣策略、盘点差异审批阈值。  
 下一步：可继续补充每个接口的请求/响应 DTO 字段。
+
+## 18. 多类型入库逐项实现门禁
+
+| 类型 | 创建与唯一性 | 数量/状态门禁 | 事件 |
+| --- | --- | --- | --- |
+| PURCHASE | PO/ASN 行 + PURCHASE 唯一 | 不超采购可收量；质检后上架 | 采购质检/上架事实 |
+| TRANSFER | 调拨行 + TRANSFER 唯一 | 不超调出量；最终实收+差异=调出 | `TransferReceived` |
+| SALES_RETURN | 售后/RMA 行 + SALES_RETURN 唯一 | 五类处置合计=实收；异常品不自动入账 | `ReturnReceived/ReturnInspected` |
+
+统一测试必须证明三类来源不能串单、重复事实无副作用、到达/收货不提前增加可用库存。外部类型经 ACL 转为领域枚举，现有 `INVENTORY_TRANSFER/AFTERSALE_RETURN` 字符串需归一或建立明确映射。

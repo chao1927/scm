@@ -79,4 +79,4 @@ flowchart LR
 
 如果将 Java 服务也放入 Docker，组件地址应改为 Compose 服务名，并让容器内 Consumer 能访问 Provider 注册的地址；不能继续注册 `127.0.0.1`。
 
-完整说明见 [Mac Docker 本地开发与 Dubbo 真实 RPC 手册](../docs/14-Mac-Docker-本地开发与Dubbo真实RPC手册.md)。
+完整说明见 [供应链系统完整部署手册](../docs/10-供应链系统完整部署手册.md)。

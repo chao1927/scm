@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 import java.time.OffsetDateTime;
+import java.math.BigDecimal;
 
 /**
  * InboundOrderMapper。
@@ -26,7 +27,8 @@ public interface InboundOrderMapper {
      * @author SCM Team
      * @since 0.1.0
      */
-    record Row(long id, String inboundNo, String sourceType, String sourceNo, long warehouseId, long ownerId,
+    record Row(long id, String inboundNo, String sourceSystem, String inboundType, String sourceNo,
+               String sourceLineNo, long warehouseId, long ownerId, BigDecimal allowedQty,
                int status, OffsetDateTime expectedArrivalAt, String cancelReason, int version) {
     }
 
@@ -38,8 +40,9 @@ public interface InboundOrderMapper {
      * @return 查询并返回的结果，类型为 {@code Row}
      */
     @Select("""
-        select inbound_id as id, inbound_order_no as inboundNo, source_type as sourceType,
-          source_order_no as sourceNo, warehouse_id as warehouseId, owner_id as ownerId,
+        select inbound_id as id, inbound_order_no as inboundNo, source_system as sourceSystem,
+          inbound_type as inboundType, source_order_no as sourceNo, source_line_no as sourceLineNo,
+          warehouse_id as warehouseId, owner_id as ownerId, allowed_qty as allowedQty,
           inbound_status as status, expected_arrival_at as expectedArrivalAt,
           cancel_reason as cancelReason, version
         from wms_inbound
@@ -57,15 +60,17 @@ public interface InboundOrderMapper {
      * @return 查询并返回的结果，类型为 {@code Row}
      */
     @Select("""
-        select inbound_id as id, inbound_order_no as inboundNo, source_type as sourceType,
-          source_order_no as sourceNo, warehouse_id as warehouseId, owner_id as ownerId,
+        select inbound_id as id, inbound_order_no as inboundNo, source_system as sourceSystem,
+          inbound_type as inboundType, source_order_no as sourceNo, source_line_no as sourceLineNo,
+          warehouse_id as warehouseId, owner_id as ownerId, allowed_qty as allowedQty,
           inbound_status as status, expected_arrival_at as expectedArrivalAt,
           cancel_reason as cancelReason, version
         from wms_inbound
-        where source_type = #{sourceType} and source_order_no = #{sourceNo}
-          and warehouse_id = #{warehouseId} and deleted = 0
+        where source_system = #{sourceSystem} and source_order_no = #{sourceNo}
+          and source_line_no = #{sourceLineNo} and inbound_type = #{inboundType} and deleted = 0
         """)
-    Row findBySource(@Param("sourceType") String sourceType, @Param("sourceNo") String sourceNo, @Param("warehouseId") long warehouseId);
+    Row findBySource(@Param("sourceSystem") String sourceSystem, @Param("sourceNo") String sourceNo,
+                     @Param("sourceLineNo") String sourceLineNo, @Param("inboundType") String inboundType);
 
     /**
      * 处理当前类型职责中的操作 {@code insert}。
@@ -84,14 +89,18 @@ public interface InboundOrderMapper {
      * @param operatorId 业务或技术标识，类型为 {@code long}
      */
     @Insert("""
-        insert into wms_inbound(inbound_id, inbound_order_no, source_type, source_order_no, warehouse_id, owner_id,
-          inbound_status, expected_arrival_at, cancel_reason, version, deleted, created_by, updated_by, created_at, updated_at)
-        values(#{id}, #{inboundNo}, #{sourceType}, #{sourceNo}, #{warehouseId}, #{ownerId}, #{status}, #{expectedArrivalAt},
+        insert into wms_inbound(inbound_id, inbound_order_no, source_type, source_system, inbound_type,
+          source_order_no, source_line_no, warehouse_id, owner_id, allowed_qty, inbound_status,
+          expected_arrival_at, cancel_reason, version, deleted, created_by, updated_by, created_at, updated_at)
+        values(#{id}, #{inboundNo}, #{inboundType}, #{sourceSystem}, #{inboundType}, #{sourceNo},
+          #{sourceLineNo}, #{warehouseId}, #{ownerId}, #{allowedQty}, #{status}, #{expectedArrivalAt},
           #{cancelReason}, #{version}, 0, #{operatorId}, #{operatorId}, now(3), now(3))
         """)
     void insert(@Param("id") long id, @Param("inboundNo") String inboundNo,
-                @Param("sourceType") String sourceType, @Param("sourceNo") String sourceNo,
+                @Param("sourceSystem") String sourceSystem, @Param("inboundType") String inboundType,
+                @Param("sourceNo") String sourceNo, @Param("sourceLineNo") String sourceLineNo,
                 @Param("warehouseId") long warehouseId, @Param("ownerId") long ownerId,
+                @Param("allowedQty") BigDecimal allowedQty,
                 @Param("status") int status, @Param("expectedArrivalAt") OffsetDateTime expectedArrivalAt,
                 @Param("cancelReason") String cancelReason, @Param("version") int version,
                 @Param("operatorId") long operatorId);

@@ -14,7 +14,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/** Redis-backed online session registry. There is intentionally no fallback adapter. */
+/**
+ * Redis-backed online session registry. There is intentionally no fallback adapter.
+ *
+ * @author SCM Team
+ * @since 0.1.0
+ */
 @Component
 public class RedisTokenCacheAdapter implements TokenCachePort {
 
@@ -24,8 +29,19 @@ public class RedisTokenCacheAdapter implements TokenCachePort {
 
     private static final DefaultRedisScript<Long> ROTATE_SCRIPT = new DefaultRedisScript<>("""
             local sessionKey = KEYS[1]
+            local refreshLookupKey = KEYS[2]
             if redis.call('EXISTS', sessionKey) == 0 then return 0 end
             if redis.call('HGET', sessionKey, 'active') ~= 'true' then return 0 end
+            local expectedSessionId = ARGV[10]
+            local lookupOwner = redis.call('GET', refreshLookupKey)
+            if lookupOwner ~= expectedSessionId then return -2 end
+            if redis.call('HGET', sessionKey, 'sessionId') ~= expectedSessionId then return -2 end
+            if redis.call('HGET', sessionKey, 'userId') ~= ARGV[11] then return -2 end
+            local currentGeneration = tonumber(redis.call('HGET', sessionKey, 'generation'))
+            local requestedGeneration = tonumber(ARGV[4])
+            if currentGeneration == nil or requestedGeneration == nil or currentGeneration + 1 ~= requestedGeneration then
+              return -2
+            end
             local currentRefresh = redis.call('HGET', sessionKey, 'refreshJti')
             if currentRefresh ~= ARGV[1] then
               local currentAccess = redis.call('HGET', sessionKey, 'accessJti')
@@ -81,13 +97,17 @@ public class RedisTokenCacheAdapter implements TokenCachePort {
             if (sessionId == null) {
                 return RotationResult.NOT_FOUND;
             }
+            if (!lookupBelongsToReplacement(sessionId, replacement)) {
+                return RotationResult.REPLAY_DETECTED;
+            }
             long ttl = Math.max(1, replacement.refreshExpiresAtEpochSecond() - Instant.now().getEpochSecond());
-            Long result = redis.execute(ROTATE_SCRIPT, List.of(sessionKey(Long.parseLong(sessionId))),
+            Long result = redis.execute(ROTATE_SCRIPT,
+                    List.of(sessionKey(replacement.sessionId()), refreshKey(presentedRefreshJti)),
                     presentedRefreshJti, replacement.accessJti(), replacement.refreshJti(),
                     Long.toString(replacement.generation()),
                     Long.toString(replacement.accessExpiresAtEpochSecond()),
                     Long.toString(replacement.refreshExpiresAtEpochSecond()), Long.toString(ttl),
-                    ACCESS_PREFIX, REFRESH_PREFIX, sessionId);
+                    ACCESS_PREFIX, REFRESH_PREFIX, sessionId, Long.toString(replacement.userId()));
             if (result == null || result == 0) {
                 return RotationResult.NOT_FOUND;
             }
@@ -156,6 +176,15 @@ public class RedisTokenCacheAdapter implements TokenCachePort {
         return Duration.ofSeconds(Math.max(1, expiresAtEpochSecond - Instant.now().getEpochSecond()));
     }
 
+    static String rotationScriptText() {
+        return ROTATE_SCRIPT.getScriptAsString();
+    }
+
+    static boolean lookupBelongsToReplacement(String lookupSessionId, OnlineSession replacement) {
+        return lookupSessionId != null
+                && lookupSessionId.equals(Long.toString(replacement.sessionId()));
+    }
+
     private static String sessionKey(long sessionId) { return SESSION_PREFIX + sessionId; }
     private static String accessKey(String jti) { return ACCESS_PREFIX + jti; }
     private static String refreshKey(String jti) { return REFRESH_PREFIX + jti; }
@@ -170,5 +199,13 @@ public class RedisTokenCacheAdapter implements TokenCachePort {
     }
 
     @FunctionalInterface
-    private interface CacheOperation<T> { T execute(); }
+    private interface CacheOperation<T> {
+
+        /**
+         * Executes one fail-closed Redis cache operation.
+         *
+         * @return operation result
+         */
+        T execute();
+    }
 }

@@ -133,8 +133,8 @@ public class TransferOperationApplicationService {
         int oldVersion = aggregate.version();
         aggregate.prepareInbound(oldVersion);
         save(aggregate, oldVersion);
-        inboundOrders.create(new InboundOrderApplicationService.Create("INVENTORY_TRANSFER", transferNo,
-            aggregate.targetWarehouseId(), aggregate.ownerId(), null,
+        inboundOrders.create(new InboundOrderApplicationService.Create("INVENTORY", "TRANSFER", transferNo,
+            sourceLineNo(aggregate), aggregate.targetWarehouseId(), aggregate.ownerId(), aggregate.outboundQty(), null,
             "transfer-inbound-" + transferNo + "-" + transferVersion), operatorId);
         return view(row(aggregate), false);
     }
@@ -244,8 +244,28 @@ public class TransferOperationApplicationService {
      * @param finalReceipt 业务处理参数或成员，类型为 {@code boolean}
      * @return 处理当前类型职责中的操作的结果，类型为 {@code String}
      */
-    private static String payload(TransferOperationAggregate a, BigDecimal qty, boolean finalReceipt) {
-        return "{\"transferNo\":\"" + a.transferNo() + "\",\"qty\":" + qty + ",\"finalReceipt\":" + finalReceipt + ",\"version\":" + a.version() + "}";
+    private String payload(TransferOperationAggregate a, BigDecimal qty, boolean finalReceipt) {
+        String inboundOrderNo = resolveInboundOrderNo(a);
+        BigDecimal differenceQty = finalReceipt ? a.outboundQty().subtract(a.receivedQty()) : BigDecimal.ZERO;
+        return "{\"inboundType\":\"TRANSFER\",\"sourceSystem\":\"INVENTORY\",\"sourceOrderNo\":\""
+            + a.transferNo() + "\",\"sourceLineNo\":\"" + sourceLineNo(a) + "\",\"inboundOrderNo\":"
+            + (inboundOrderNo == null ? "null" : "\"" + inboundOrderNo + "\"") + ",\"warehouseId\":" + a.targetWarehouseId() + ",\"ownerId\":"
+            + a.ownerId() + ",\"currentReceivedQty\":" + qty + ",\"cumulativeReceivedQty\":"
+            + a.receivedQty() + ",\"outboundQty\":" + a.outboundQty() + ",\"differenceQty\":"
+            + differenceQty + ",\"finalReceipt\":" + finalReceipt + ",\"version\":" + a.version() + "}";
+    }
+
+    private static String sourceLineNo(TransferOperationAggregate aggregate) {
+        return aggregate.sku() + ":" + (aggregate.batchNo() == null ? "NO_BATCH" : aggregate.batchNo());
+    }
+
+    private String resolveInboundOrderNo(TransferOperationAggregate aggregate) {
+        try {
+            return inboundOrders.findBySource("INVENTORY", aggregate.transferNo(), sourceLineNo(aggregate),
+                "TRANSFER").inboundNo();
+        } catch (BusinessException exception) {
+            return null;
+        }
     }
 
     /**

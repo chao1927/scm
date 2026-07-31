@@ -81,6 +81,12 @@ public class InventoryInboundEventDispatcher implements InventoryInboundEventPro
             }
             case "TransferReceived" -> {
                 requireSource(event, WMS);
+                transfers.validateReceiptFact(
+                        requiredAny(event, "transferNo"),
+                        decimalAny(event, "qty", "receivedQty"));
+            }
+            case "TransferPutawayCompleted" -> {
+                requireSource(event, WMS);
                 transfers.receive(
                         requiredAny(event, "transferNo"),
                         decimalAny(event, "qty", "receivedQty"),

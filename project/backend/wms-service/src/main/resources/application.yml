@@ -19,7 +19,11 @@ server:
 
 scm:
   security:
+    active-kid: ${IAM_JWT_ACTIVE_KID:active}
     hmac-secret: ${IAM_JWT_SECRET:}
+    previous-kid: ${IAM_JWT_PREVIOUS_KID:}
+    previous-hmac-secret: ${IAM_JWT_PREVIOUS_SECRET:}
+    previous-valid-until-epoch-second: ${IAM_JWT_PREVIOUS_VALID_UNTIL_EPOCH_SECOND:0}
     permission-namespace: wms
   rocketmq:
     enabled: ${SCM_ROCKETMQ_ENABLED:true}
