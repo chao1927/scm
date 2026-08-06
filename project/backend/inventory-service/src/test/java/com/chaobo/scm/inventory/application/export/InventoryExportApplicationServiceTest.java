@@ -1,7 +1,7 @@
 package com.chaobo.scm.inventory.application.export;
 
 import com.chaobo.scm.common.security.ScmAccessContext;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

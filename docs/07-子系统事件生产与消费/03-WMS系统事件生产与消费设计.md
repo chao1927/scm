@@ -48,7 +48,7 @@ flowchart LR
 4. 聚合根修改状态、行明细、库位/批次/容器/包裹快照和版本，并返回领域事件。
 5. 应用服务在同一事务中保存业务表、`wms_domain_event` 和 `wms_operation_audit_log`。
 6. 事件发布任务异步扫描 `wms_domain_event`，投递成功后更新发布状态。
-7. 外部事件进入 `/internal/wms/v1/events` 后先写 `wms_event_consume_log`，再由消费应用服务处理。
+7. 外部事件由 RocketMQ Consumer 接收后先写 `wms_event_consume_log`，再由消费应用服务处理；不提供 HTTP 事件入口。
 
 ## 4. 事件标准载荷
 

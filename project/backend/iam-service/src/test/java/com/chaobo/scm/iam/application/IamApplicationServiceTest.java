@@ -2,6 +2,7 @@ package com.chaobo.scm.iam.application;
 
 import com.chaobo.scm.iam.infrastructure.jwt.IamJwtService;
 import com.chaobo.scm.iam.infrastructure.persistence.IamMapper;
+import com.chaobo.scm.iam.application.mfa.MfaApplicationService;
 import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,6 +20,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @since 0.1.0
  */
 class IamApplicationServiceTest {
+
+    private static final String TEST_DEVICE_DIGEST = "DEVICE-1";
 
     /**
      * mapper（类型：{@code MemoryIamMapper}）。
@@ -119,6 +122,64 @@ class IamApplicationServiceTest {
                 .isInstanceOf(com.chaobo.scm.common.error.BusinessException.class)
                 .hasMessageContaining("重放");
         assertThat(tokenCache.sessions.values()).allMatch(session -> !session.active());
+    }
+
+    @Test
+    void mfaUserReceivesOnlyChallengeUntilBoundChallengeIsVerified() {
+        FakeMfaService mfa = new FakeMfaService(tokenCache);
+        IamApplicationService secured = new IamApplicationService(mapper, jwt,
+            userId -> new IamTokenClaimsProvider.PermissionClaims(Set.of(), Map.of()),
+            sessionMapper, tokenCache, mfa);
+        secured.createUser("mfa-user", "123456");
+
+        var pending = secured.login(new IamApplicationService.LoginCommand(
+            "mfa-user", "123456", "SCM_WEB", TEST_DEVICE_DIGEST));
+
+        assertThat(pending.status()).isEqualTo("MFA_REQUIRED");
+        assertThat(pending.accessToken()).isNull();
+        assertThat(sessionMapper.sessions).isEmpty();
+        mfa.verified = true;
+        var authenticated = secured.completeMfaLogin(new IamApplicationService.MfaLoginCommand(
+            pending.challengeNo(), pending.sessionId(), TEST_DEVICE_DIGEST));
+        var duplicate = secured.completeMfaLogin(new IamApplicationService.MfaLoginCommand(
+            pending.challengeNo(), pending.sessionId(), TEST_DEVICE_DIGEST));
+        assertThat(authenticated.status()).isEqualTo("AUTHENTICATED");
+        assertThat(duplicate.accessToken()).isEqualTo(authenticated.accessToken());
+        assertThat(sessionMapper.sessions).hasSize(1);
+    }
+
+    private static final class FakeMfaService extends MfaApplicationService {
+        private long userId;
+        private boolean verified;
+
+        private FakeMfaService(TokenCachePort tokenCache) {
+            super(null, null, null, tokenCache);
+        }
+
+        @Override
+        public boolean requiresMfa(long requestedUserId) {
+            return true;
+        }
+
+        @Override
+        public ChallengeView create(CreateCommand command) {
+            userId = command.userId();
+            return new ChallengeView("MFA-LOGIN-1", command.userId(), command.appCode(),
+                command.sessionId(), command.purpose(), "PENDING", 0, 5,
+                java.time.Instant.now().plusSeconds(300), null, 0, false);
+        }
+
+        @Override
+        public ChallengeView requireVerifiedLoginChallenge(String challengeNo, long sessionId,
+                                                           String deviceDigest) {
+            if (!verified || !TEST_DEVICE_DIGEST.equals(deviceDigest)) {
+                throw new com.chaobo.scm.common.error.BusinessException(
+                    com.chaobo.scm.common.error.ErrorCode.UNAUTHORIZED, "challenge invalid");
+            }
+            return new ChallengeView(challengeNo, userId, "SCM_WEB", sessionId, "LOGIN",
+                "VERIFIED", 0, 5, java.time.Instant.now().plusSeconds(300),
+                java.time.Instant.now(), 1, false);
+        }
     }
 
     /**
@@ -391,6 +452,10 @@ class IamApplicationServiceTest {
         public List<PermissionRow> permissions(int limit) {
             return permissions;
         }
+
+        public List<RoleGrantRow> roleGrants(int limit) { return List.of(); }
+
+        public List<UserRoleRow> userRoles(int limit) { return List.of(); }
 
         /**
          * 处理当前类型职责中的操作 {@code insertDataScope}。

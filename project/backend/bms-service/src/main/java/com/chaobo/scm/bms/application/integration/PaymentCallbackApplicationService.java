@@ -4,6 +4,8 @@ import com.chaobo.scm.bms.application.BmsApplicationService;
 import com.chaobo.scm.bms.infrastructure.persistence.BmsMapper;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+
 /**
  * 支付退款回调应用服务。
  *
@@ -29,11 +31,21 @@ public class PaymentCallbackApplicationService {
         return bms.consumeRefundReceipt(command.refundNo(),
             new BmsApplicationService.RefundReceiptCommand(
                 command.receiptNo(), command.success(), command.failureReason(),
-                command.rawBody()));
+                command.refundAmount(), command.currency(), command.merchantNo(),
+                command.paymentTxnNo(), command.rawBody()));
     }
 
     public record CallbackCommand(String refundNo, String receiptNo, boolean success,
-                                  String failureReason, long timestamp, String nonce,
-                                  String signature, String rawBody) {
+                                  String failureReason, BigDecimal refundAmount, String currency,
+                                  String merchantNo, String paymentTxnNo, long timestamp,
+                                  String nonce, String signature, String rawBody) {
+
+        /** 兼容验签失败等尚未进入业务校验的历史用例。 */
+        public CallbackCommand(String refundNo, String receiptNo, boolean success,
+                               String failureReason, long timestamp, String nonce,
+                               String signature, String rawBody) {
+            this(refundNo, receiptNo, success, failureReason, null, null, null,
+                null, timestamp, nonce, signature, rawBody);
+        }
     }
 }

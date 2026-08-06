@@ -46,7 +46,7 @@ public interface IamPermissionOpenApiMapper {
      * @param userId 业务或技术标识，类型为 {@code long}
      * @return 处理当前类型职责中的操作的结果，类型为 {@code List<DataScopeGrantRow>}
      */
-    @Select("select distinct ds.scope_type scopeType,ds.scope_value scopeValue from iam_user_role ur join iam_data_scope ds on ur.role_id=ds.role_id where ur.user_id=#{userId} order by ds.scope_type,ds.scope_value")
+    @Select("select distinct scopeType,scopeValue from (select ds.scope_type scopeType,ds.scope_value scopeValue from iam_user_role ur join iam_data_scope ds on ur.role_id=ds.role_id where ur.user_id=#{userId} union all select 'SUPPLIER' scopeType,cast(us.supplier_id as char) scopeValue from iam_user_supplier_scope us where us.user_id=#{userId}) scope_union order by scopeType,scopeValue")
     List<DataScopeGrantRow> dataScopeGrants(@Param("userId") long userId);
 
     /**

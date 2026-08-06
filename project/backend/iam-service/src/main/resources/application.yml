@@ -18,6 +18,15 @@ mybatis:
     map-underscore-to-camel-case: true
 server:
   port: ${SERVER_PORT:8097}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
 scm:
   iam:
     jwt:
@@ -32,3 +41,20 @@ scm:
     previous-kid: ${IAM_JWT_PREVIOUS_KID:}
     previous-hmac-secret: ${IAM_JWT_PREVIOUS_SECRET:}
     previous-valid-until-epoch-second: ${IAM_JWT_PREVIOUS_VALID_UNTIL_EPOCH_SECOND:0}
+    permission-namespace: iam
+    public-paths:
+      - /api/iam/v1/auth/login
+      - /api/iam/v1/auth/mfa/complete
+      - /api/iam/v1/auth/refresh
+      - /oauth2/token
+      - /oauth2/revoke
+  rocketmq:
+    endpoints: ${ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
+    iam-topic: ${ROCKETMQ_IAM_TOPIC:iam-domain-event}
+    iam-consumer:
+      topics: ${ROCKETMQ_IAM_CONSUMER_TOPICS:mdm-domain-event,supplier-domain-event,purchase-domain-event,wms-domain-event,inventory-domain-event,oms-domain-event,tms-domain-event,bms-domain-event}
+      group: ${ROCKETMQ_IAM_CONSUMER_GROUP:iam-business-event-consumer}
+  outbox:
+    batch-size: ${OUTBOX_BATCH_SIZE:100}
+    max-retries: ${OUTBOX_MAX_RETRIES:16}
+    fixed-delay: ${OUTBOX_FIXED_DELAY_MS:1000}

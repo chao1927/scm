@@ -57,6 +57,7 @@ export default function CommandDialog({ action, record, open, loading, onCancel,
       cancelText="取消"
       confirmLoading={loading}
       okButtonProps={{ danger: action?.danger }}
+      cancelButtonProps={{ 'aria-label': '取消' }}
       onCancel={() => {
         setSubmitError(null)
         onCancel()

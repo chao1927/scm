@@ -122,9 +122,9 @@ bms-service
 
 ## 4. 费用来源和费用明细接口
 
-### 4.1 采集费用来源事件
+### 4.1 消费费用来源事件
 
-`POST /openapi/bms/v1/source-events/collect`
+`RocketMQ Consumer Group: bms-business-event-consumer`
 
 | 层 | 实现逻辑 |
 | --- | --- |
@@ -388,9 +388,9 @@ bms-service
 | 返回 | 枚举编码、名称、排序、启停状态。 |
 | 异常 | 枚举类型不存在返回空列表。 |
 
-### 7.4 通用事件入口
+### 7.4 RocketMQ 通用事件消费入口
 
-`POST /internal/bms/v1/events`
+`RocketMQ Consumer Group: bms-business-event-consumer`
 
 | 层 | 实现逻辑 |
 | --- | --- |

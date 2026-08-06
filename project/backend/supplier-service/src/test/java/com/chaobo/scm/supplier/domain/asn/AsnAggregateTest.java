@@ -69,6 +69,19 @@ class AsnAggregateTest {
     }
 
     /**
+     * 验证已提交 ASN 不能重复提交，防止重复生成仓储预约与下游协同命令。
+     */
+    @Test
+    void shouldRejectDuplicateAsnSubmission() {
+        AsnAggregate aggregate = createDraft();
+        aggregate.submit(1001L, generator);
+
+        assertThatThrownBy(() -> aggregate.submit(1001L, generator))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.code()).isEqualTo(ErrorCode.STATE_CONFLICT));
+    }
+
+    /**
      * 执行命令 {@code createDraft}。
      *
      * <p>该内部步骤用于收敛重复逻辑或保护局部规则，调用方应通过当前类型公开的业务入口使用该能力。

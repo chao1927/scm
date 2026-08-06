@@ -1,7 +1,11 @@
 package com.chaobo.scm.iam;
 
+import com.chaobo.scm.common.integration.ScmDubboProviderConfiguration;
+import org.springframework.context.annotation.Import;
+
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * IamServiceApplication。
@@ -12,6 +16,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @since 0.1.0
  */
 @SpringBootApplication
+@Import(ScmDubboProviderConfiguration.class)
+@EnableScheduling
 public class IamServiceApplication {
 
     /**

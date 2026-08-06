@@ -31,7 +31,7 @@ OMS 已完成销售履约和 WMS 出库下发，但客户取消、仅退款和�
 | 取消处理 | `POST /api/oms/v1/cancel-requests/{no}/process`、`POST /api/oms/v1/cancel-requests/{no}/complete` |
 | 售后申请 | `POST /api/oms/v1/after-sales`、`POST /api/oms/v1/after-sales/{no}/approve` |
 | 退款处理 | `POST /api/oms/v1/after-sales/{no}/request-refund`、`POST /api/oms/v1/after-sales/{no}/complete` |
-| 外部事件 | 复用 `POST /internal/oms/v1/events`，新增 `WmsOutboundCancelled`、`StockReleased`、`RefundCompleted` |
+| 外部事件 | 复用 RocketMQ `oms-business-event-consumer`，新增 `WmsOutboundCancelled`、`StockReleased`、`RefundCompleted` |
 | 生产事件 | `CancelRequestCreated`、`CancelRequestApproved`、`WmsCancelRequested`、`StockReleaseRequested`、`SalesOrderCanceled`、`AfterSaleCreated`、`AfterSaleApproved`、`RefundRequested`、`AfterSaleCompleted` |
 
 ## 6. 验收标准

@@ -61,12 +61,13 @@ test('navigates from system workbench to a real list and detail', async ({ page 
   })
   await login(page)
 
-  await page.getByLabel('采购管理', { exact: true }).click({ force: true })
-  await expect(page.getByRole('heading', { name: '采购管理工作台' })).toBeVisible()
+  const desktopSystems = page.getByRole('navigation', { name: '供应链子系统导航' })
+  await desktopSystems.getByRole('button', { name: '采购管理', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '采购管理工作台', exact: true })).toBeVisible()
   await page.locator('.ant-menu-item').filter({ hasText: '业务请购单' }).click()
-  await expect(page.getByRole('heading', { name: '请购管理' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '请购管理', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'PR-20260728-0018' }).click()
-  await expect(page.getByRole('heading', { name: 'PR-20260728-0018' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'PR-20260728-0018', exact: true })).toBeVisible()
   await expect(page.getByText('门店补货')).toBeVisible()
   await expect(page.getByRole('tab', { name: '明细信息' })).toBeVisible()
   await expect(page.getByRole('button', { name: '批准' })).toHaveCount(0)
@@ -78,9 +79,10 @@ test('disables systems outside the IAM permission snapshot', async ({ page }) =>
   await page.route('**/api/purchase/v1/**', (route) => route.fulfill({ json: { success: true, data: { pageNo: 1, pageSize: 20, total: 0, records: [] } } }))
   await login(page)
 
-  await expect(page.getByLabel('采购管理', { exact: true })).toBeEnabled()
-  await expect(page.getByLabel('供应商协同', { exact: true })).toBeDisabled()
-  await expect(page.getByLabel('权限中心', { exact: true })).toBeDisabled()
+  const desktopSystems = page.getByRole('navigation', { name: '供应链子系统导航' })
+  await expect(desktopSystems.getByRole('button', { name: '采购管理', exact: true })).toBeEnabled()
+  await expect(desktopSystems.getByRole('button', { name: '供应商协同', exact: true })).toBeDisabled()
+  await expect(desktopSystems.getByRole('button', { name: '权限中心', exact: true })).toBeDisabled()
 })
 
 test('keeps system navigation usable on a 320px viewport', async ({ page }) => {

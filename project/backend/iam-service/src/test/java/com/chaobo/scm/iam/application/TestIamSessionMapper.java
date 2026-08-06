@@ -15,6 +15,18 @@ final class TestIamSessionMapper implements IamSessionMapper {
     }
 
     @Override
+    public SessionSnapshot find(long sessionId) {
+        SessionWrite row = sessions.get(sessionId);
+        return row == null ? null : new SessionSnapshot(row.sessionId(), row.userId(),
+            row.accessToken(), row.refreshToken());
+    }
+
+    @Override
+    public java.util.List<SessionGovernanceRow> list(int limit) {
+        return java.util.List.of();
+    }
+
+    @Override
     public int rotate(long sessionId, String expectedRefreshJti, String accessToken, String refreshToken,
                       String accessJti, String refreshJti, long generation, long accessExpiresAt,
                       long refreshExpiresAt) {

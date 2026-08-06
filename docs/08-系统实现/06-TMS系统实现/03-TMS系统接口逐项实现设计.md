@@ -321,9 +321,9 @@ tms-service
 | 事件 | `TrackingAppended`、`TransportSigned`、`TransportRejected`、`LogisticsExceptionRegistered`。 |
 | 异常 | 解析失败保留原文并进入回调异常页；重复回调幂等返回成功。 |
 
-### 6.2 通用事件入口
+### 6.2 RocketMQ 通用事件消费入口
 
-`POST /internal/tms/v1/events`
+`RocketMQ Consumer Group: tms-business-event-consumer`
 
 | 层 | 实现逻辑 |
 | --- | --- |

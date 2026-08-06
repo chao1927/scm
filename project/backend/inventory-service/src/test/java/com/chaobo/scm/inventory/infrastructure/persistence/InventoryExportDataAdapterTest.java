@@ -2,7 +2,7 @@ package com.chaobo.scm.inventory.infrastructure.persistence;
 
 import com.chaobo.scm.inventory.application.InventoryOperationReadModelPort;
 import com.chaobo.scm.inventory.application.export.InventoryExportTask;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;

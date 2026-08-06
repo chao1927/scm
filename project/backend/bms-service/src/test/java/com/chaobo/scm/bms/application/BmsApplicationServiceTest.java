@@ -31,17 +31,79 @@ class BmsApplicationServiceTest {
     @Test
     void protectsCumulativeRefundAndConsumesPaymentReceiptIdempotently() {
         MemoryBmsMapper mapper = new MemoryBmsMapper();
+        mapper.objects.put("OBJ", new BmsMapper.BillingObjectRow(1L, "OBJ", "测试对象",
+            "CUSTOMER", "PAYABLE", "CNY", 1, 1));
         mapper.bills.put("B-1", new BmsMapper.BillRow(1L, "B-1", "R-1", "OBJ", new BigDecimal("100"), 2, 1));
         BmsApplicationService service = new BmsApplicationService(mapper);
         var first = service.requestRefundSettlement(new BmsApplicationService.RequestRefundCommand("B-1", new BigDecimal("60"), 1L, "refund-1"));
         assertThatThrownBy(() -> service.requestRefundSettlement(new BmsApplicationService.RequestRefundCommand("B-1", new BigDecimal("50"), 1L, "refund-2"))).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("refundable");
-        var failed = service.consumeRefundReceipt(first.refundNo(), new BmsApplicationService.RefundReceiptCommand("PAY-FAIL-1", false, "渠道超时", "{}"));
+        var failed = service.consumeRefundReceipt(first.refundNo(), receipt("PAY-FAIL-1", false, "渠道失败", "60.00"));
         var retried = service.retryRefundSettlement(first.refundNo(), new BmsApplicationService.VersionCommand(failed.version(), 1L, "retry-1"));
-        var finished = service.consumeRefundReceipt(first.refundNo(), new BmsApplicationService.RefundReceiptCommand("PAY-OK-1", true, null, "{}"));
-        var duplicate = service.consumeRefundReceipt(first.refundNo(), new BmsApplicationService.RefundReceiptCommand("PAY-OK-1", true, null, "{}"));
+        var finished = service.consumeRefundReceipt(first.refundNo(), receipt("PAY-OK-1", true, null, "60.00"));
+        var duplicate = service.consumeRefundReceipt(first.refundNo(), receipt("PAY-OK-1", true, null, "60.00"));
         assertThat(retried.status()).isEqualTo(BmsDomain.RefundSettlementAggregate.REQUESTED);
         assertThat(finished.status()).isEqualTo(BmsDomain.RefundSettlementAggregate.FINISHED);
         assertThat(duplicate.version()).isEqualTo(finished.version());
+    }
+
+    @Test
+    void keepsPendingRefundOccupiedAndRequiresTwoPersonEvidenceForManualClose() {
+        MemoryBmsMapper mapper = refundFixture();
+        BmsApplicationService service = new BmsApplicationService(mapper);
+        var refund = service.requestRefundSettlement(new BmsApplicationService.RequestRefundCommand(
+            "B-1", new BigDecimal("60.00"), 1L, "refund-pending"));
+        var pending = service.markRefundConfirmationPending(refund.refundNo(),
+            new BmsApplicationService.ConfirmationPendingCommand(
+                "payment timeout", refund.version(), 1L, "pending-1"));
+
+        assertThatThrownBy(() -> service.requestRefundSettlement(
+            new BmsApplicationService.RequestRefundCommand("B-1", new BigDecimal("50.00"),
+                1L, "refund-over")))
+            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("refundable");
+        assertThatThrownBy(() -> service.closeRefundManually(pending.refundNo(),
+            new BmsApplicationService.ManualRefundResolutionCommand("verified unpaid", "ticket-1",
+                pending.version(), 1L, 1L, "close-1")))
+            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("two different");
+
+        var closed = service.closeRefundManually(pending.refundNo(),
+            new BmsApplicationService.ManualRefundResolutionCommand("verified unpaid", "ticket-1",
+                pending.version(), 1L, 2L, "close-1"));
+        assertThat(closed.status()).isEqualTo(BmsDomain.RefundSettlementAggregate.CLOSED);
+        assertThat(service.requestRefundSettlement(new BmsApplicationService.RequestRefundCommand(
+            "B-1", new BigDecimal("50.00"), 1L, "refund-after-close"))).isNotNull();
+    }
+
+    @Test
+    void rejectsReceiptFactsAndRequestIdempotencyConflicts() {
+        MemoryBmsMapper mapper = refundFixture();
+        BmsApplicationService service = new BmsApplicationService(mapper);
+        var first = service.requestRefundSettlement(new BmsApplicationService.RequestRefundCommand(
+            "B-1", new BigDecimal("40.00"), 1L, "same-key"));
+        assertThat(service.requestRefundSettlement(new BmsApplicationService.RequestRefundCommand(
+            "B-1", new BigDecimal("40.00"), 1L, "same-key")).refundNo()).isEqualTo(first.refundNo());
+        assertThatThrownBy(() -> service.requestRefundSettlement(new BmsApplicationService.RequestRefundCommand(
+            "B-1", new BigDecimal("30.00"), 1L, "same-key")))
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("conflicts");
+
+        var unchanged = service.consumeRefundReceipt(first.refundNo(),
+            receipt("BAD-AMOUNT", true, null, "39.00"));
+        assertThat(unchanged.status()).isEqualTo(BmsDomain.RefundSettlementAggregate.REQUESTED);
+        assertThat(mapper.refundExceptions).hasSize(1);
+    }
+
+    private static BmsApplicationService.RefundReceiptCommand receipt(
+            String receiptNo, boolean success, String reason, String amount) {
+        return new BmsApplicationService.RefundReceiptCommand(receiptNo, success, reason,
+            new BigDecimal(amount), "CNY", "OBJ", "TX-" + receiptNo, "{}");
+    }
+
+    private static MemoryBmsMapper refundFixture() {
+        MemoryBmsMapper mapper = new MemoryBmsMapper();
+        mapper.objects.put("OBJ", new BmsMapper.BillingObjectRow(1L, "OBJ", "测试对象",
+            "CUSTOMER", "PAYABLE", "CNY", 1, 1));
+        mapper.bills.put("B-1", new BmsMapper.BillRow(1L, "B-1", "R-1", "OBJ",
+            new BigDecimal("100.00"), 2, 1));
+        return mapper;
     }
 
     /**
@@ -191,6 +253,10 @@ class BmsApplicationServiceTest {
          * <p>保存当前对象所需的业务处理参数或成员；其具体生命周期由所属对象统一管理。
          */
         final Map<String, String> refundReceipts = new LinkedHashMap<>();
+
+        final Map<String, RefundReceiptRow> refundReceiptRows = new LinkedHashMap<>();
+
+        final List<RefundExceptionRow> refundExceptions = new ArrayList<>();
 
         /**
          * inboxes（类型：{@code Map<String,InboxEventRow>}）。
@@ -661,6 +727,13 @@ class BmsApplicationServiceTest {
             return refunds.get(refundNo);
         }
 
+        @Override
+        public RefundSettlementRow findRefundByIdempotencyKey(String idempotencyKey) {
+            return refunds.values().stream()
+                .filter(row -> idempotencyKey.equals(row.requestIdempotencyKey()))
+                .findFirst().orElse(null);
+        }
+
         /**
          * 处理当前类型职责中的操作 {@code lockBill}。
          *
@@ -682,7 +755,9 @@ class BmsApplicationServiceTest {
          */
         @Override
         public BigDecimal occupiedRefundAmount(String billNo) {
-            return refunds.values().stream().filter(row -> row.billNo().equals(billNo)).filter(row -> row.status() == 1 || row.status() == 2).map(RefundSettlementRow::refundAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            return refunds.values().stream().filter(row -> row.billNo().equals(billNo))
+                .filter(row -> row.status() == 1 || row.status() == 2 || row.status() == 4)
+                .map(RefundSettlementRow::refundAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         }
 
         /**
@@ -692,8 +767,13 @@ class BmsApplicationServiceTest {
          * @param row 业务处理参数或成员，类型为 {@code RefundSettlementRow}
          */
         @Override
-        public void updateRefundSettlement(RefundSettlementRow row) {
+        public int updateRefundSettlement(RefundSettlementRow row) {
+            RefundSettlementRow current = refunds.get(row.refundNo());
+            if (current == null || current.version() + 1 != row.version()) {
+                return 0;
+            }
             refunds.put(row.refundNo(), row);
+            return 1;
         }
 
         /**
@@ -707,8 +787,15 @@ class BmsApplicationServiceTest {
          * @return 处理当前类型职责中的操作的结果，类型为 {@code int}
          */
         @Override
-        public int claimRefundReceipt(String receiptNo, String refundNo, String status, String payload) {
-            return refundReceipts.putIfAbsent(receiptNo, refundNo) == null ? 1 : 0;
+        public int claimRefundReceipt(String receiptNo, String refundNo, String status,
+                                      BigDecimal refundAmount, String currency, String merchantNo,
+                                      String paymentTxnNo, String failureReason, String payload) {
+            if (refundReceipts.putIfAbsent(receiptNo, refundNo) != null) {
+                return 0;
+            }
+            refundReceiptRows.put(receiptNo, new RefundReceiptRow(receiptNo, refundNo, status,
+                refundAmount, currency, merchantNo, paymentTxnNo, failureReason, payload));
+            return 1;
         }
 
         /**
@@ -722,6 +809,16 @@ class BmsApplicationServiceTest {
         @Override
         public int hasRefundReceipt(String receiptNo, String refundNo) {
             return refundNo.equals(refundReceipts.get(receiptNo)) ? 1 : 0;
+        }
+
+        @Override
+        public RefundReceiptRow findRefundReceipt(String receiptNo) {
+            return refundReceiptRows.get(receiptNo);
+        }
+
+        @Override
+        public void insertRefundException(RefundExceptionRow row) {
+            refundExceptions.add(row);
         }
 
         /**

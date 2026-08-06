@@ -72,6 +72,22 @@ class SupplierQualificationAggregateTest {
     }
 
     /**
+     * 验证已超过有效期的有效资质会被定时任务标记为失效，并产生可投递的到期事件。
+     */
+    @Test
+    void shouldExpireQualificationAfterValidTo() {
+        var aggregate = SupplierQualificationAggregate.rehydrate(10, 1, "BUSINESS_LICENSE", "91310000",
+                LocalDate.now().minusYears(1), LocalDate.now().minusDays(1), "https://example/license.pdf",
+                QualificationStatus.VALID.code(), null, 1);
+
+        aggregate.expire(0, ids);
+
+        assertThat(aggregate.status()).isEqualTo(QualificationStatus.EXPIRED);
+        assertThat(aggregate.pullEvents()).extracting(event -> event.eventType())
+                .containsExactly("SupplierQualificationExpired");
+    }
+
+    /**
      * Ids。
      *
      * <p>位于领域层，使用通用语言表达业务状态、行为与不变量，不依赖 HTTP、数据库或消息中间件细节。封装与其名称一致的业务或技术职责，并保持内部实现细节不向调用方泄露。该类型只在所属限界上下文内表达该语义，跨上下文协作应通过已声明的接口或事件完成。

@@ -8,7 +8,13 @@ import org.apache.ibatis.annotations.Update;
 
 import java.time.Instant;
 
-/** OAuth client, authorization-code, audit and outbox persistence boundary. */
+/**
+ * OAuth client, authorization-code, audit and outbox persistence boundary.
+ *
+ * @author chaobo
+ */
+@SuppressWarnings({"PMD.ClassNamingShouldBeCamelRule",
+        "PMD.AbstractMethodOrInterfaceMethodMustUseJavadocRule"})
 @Mapper
 public interface OAuthMapper {
 

@@ -17,23 +17,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 class IamAdminControllerTest {
 
     /**
-     * 处理当前类型职责中的操作 {@code delegatesAppAndEventCommands}。
+     * 处理当前类型职责中的操作 {@code delegatesAppCommands}。
      *
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
      */
     @Test
-    void delegatesAppAndEventCommands() {
+    void delegatesAppCommands() {
         StubAdminService service = new StubAdminService();
         IamAdminController adminController = new IamAdminController(service);
-        IamInternalEventController eventController = new IamInternalEventController(service);
         IamAdminApplicationService.CreateAppCommand createApp = new IamAdminApplicationService.CreateAppCommand("OMS", "订单系统", "/oms", 1001L, "idem-1");
-        IamAdminApplicationService.EventEnvelope event = new IamAdminApplicationService.EventEnvelope("evt-1", "PermissionResourceScanned", "GATEWAY", "API-1", "{}");
         IamAdminMapper.AppRow app = adminController.createApp(createApp);
-        IamAdminApplicationService.ConsumeResult result = eventController.consume(event);
         assertThat(app.appCode()).isEqualTo("OMS");
-        assertThat(result.consumeStatus()).isEqualTo("SUCCESS");
         assertThat(service.lastCreateAppCommand).isEqualTo(createApp);
-        assertThat(service.lastEvent).isEqualTo(event);
     }
 
     /**
@@ -52,13 +47,6 @@ class IamAdminControllerTest {
          * <p>保存当前对象所需的用例输入命令；其具体生命周期由所属对象统一管理。
          */
         IamAdminApplicationService.CreateAppCommand lastCreateAppCommand;
-
-        /**
-         * lastEvent（类型：{@code IamAdminApplicationService.EventEnvelope}）。
-         *
-         * <p>保存当前对象所需的业务处理参数或成员；其具体生命周期由所属对象统一管理。
-         */
-        IamAdminApplicationService.EventEnvelope lastEvent;
 
         /**
          * 创建 StubAdminService。
@@ -93,17 +81,5 @@ class IamAdminControllerTest {
             return List.of();
         }
 
-        /**
-         * 执行命令 {@code consumeEvent}。
-         *
-         * <p>该实现遵守上游端口契约；异常、幂等和返回语义必须与接口约定保持一致。
-         * @param event 业务处理参数或成员，类型为 {@code IamAdminApplicationService.EventEnvelope}
-         * @return 执行命令的结果，类型为 {@code IamAdminApplicationService.ConsumeResult}
-         */
-        @Override
-        public IamAdminApplicationService.ConsumeResult consumeEvent(IamAdminApplicationService.EventEnvelope event) {
-            lastEvent = event;
-            return new IamAdminApplicationService.ConsumeResult(event.eventId(), "SUCCESS", false, "consumed");
-        }
     }
 }

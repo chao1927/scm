@@ -616,11 +616,37 @@ public class BmsApplicationService {
      */
     @Transactional(rollbackFor = Exception.class)
     public BmsMapper.RefundSettlementRow requestRefundSettlement(RequestRefundCommand command) {
+        requireText(command.idempotencyKey(), "refund idempotency key is required");
+        BmsMapper.RefundSettlementRow existing = mapper.findRefundByIdempotencyKey(command.idempotencyKey());
+        String requestDigest = refundRequestDigest(command);
+        if (existing != null) {
+            if (!existing.requestDigest().equals(requestDigest)) {
+                throw new IllegalStateException("refund idempotency key conflicts with another request");
+            }
+            return existing;
+        }
         BmsMapper.BillRow bill = require(mapper.lockBill(command.billNo()), "bill not found");
+        existing = mapper.findRefundByIdempotencyKey(command.idempotencyKey());
+        if (existing != null) {
+            if (!existing.requestDigest().equals(requestDigest)) {
+                throw new IllegalStateException("refund idempotency key conflicts with another request");
+            }
+            return existing;
+        }
+        BmsMapper.BillingObjectRow billingObject = require(mapper.findBillingObject(bill.objectCode()),
+            "billing object not found");
+        String currency = command.currency() == null ? billingObject.currency() : command.currency();
+        if (!billingObject.currency().equals(currency)) {
+            throw new IllegalArgumentException("refund currency must match bill currency");
+        }
+        String merchantNo = command.merchantNo() == null ? bill.objectCode() : command.merchantNo();
         BigDecimal occupied = mapper.occupiedRefundAmount(command.billNo());
         BigDecimal refundable = bill.totalAmount().subtract(occupied == null ? BigDecimal.ZERO : occupied);
         BmsDomain.RefundSettlementAggregate aggregate = BmsDomain.RefundSettlementAggregate.request("RF" + refundSequence.incrementAndGet(), bill.billNo(), command.refundAmount(), refundable);
-        BmsMapper.RefundSettlementRow row = toRow(aggregate);
+        BmsMapper.RefundSettlementRow row = new BmsMapper.RefundSettlementRow(null,
+            aggregate.refundNo(), aggregate.billNo(), command.afterSaleNo(), command.paymentNo(),
+            aggregate.refundAmount(), currency, merchantNo, command.idempotencyKey(), requestDigest,
+            1, aggregate.status(), aggregate.failureReason(), null, null, aggregate.version());
         mapper.insertRefundSettlement(row);
         outbox("RefundSettlementRequested", row.refundNo(), row.billNo(), "{}");
         log("REQUEST_REFUND_SETTLEMENT", row.refundNo(), command.operatorId(), command.idempotencyKey());
@@ -640,7 +666,7 @@ public class BmsApplicationService {
         BmsMapper.RefundSettlementRow row = require(mapper.findRefundSettlement(refundNo), "refund settlement not found");
         BmsDomain.RefundSettlementAggregate aggregate = restoreRefund(row);
         aggregate.finish(command.expectedVersion());
-        mapper.updateRefundSettlement(toRow(aggregate));
+        updateRefund(aggregate, row, row.evidenceRef(), row.reviewerId(), row.attemptNo());
         outbox("RefundSettlementFinished", refundNo, row.billNo(), "{}");
         log("FINISH_REFUND_SETTLEMENT", refundNo, command.operatorId(), command.idempotencyKey());
         return mapper.findRefundSettlement(refundNo);
@@ -659,7 +685,7 @@ public class BmsApplicationService {
         BmsMapper.RefundSettlementRow row = require(mapper.findRefundSettlement(refundNo), "refund settlement not found");
         BmsDomain.RefundSettlementAggregate aggregate = restoreRefund(row);
         aggregate.fail(command.reason(), command.expectedVersion());
-        mapper.updateRefundSettlement(toRow(aggregate));
+        updateRefund(aggregate, row, row.evidenceRef(), row.reviewerId(), row.attemptNo());
         outbox("RefundSettlementFailed", refundNo, row.billNo(), "{}");
         log("FAIL_REFUND_SETTLEMENT", refundNo, command.operatorId(), command.idempotencyKey());
         return mapper.findRefundSettlement(refundNo);
@@ -676,11 +702,35 @@ public class BmsApplicationService {
     @Transactional(rollbackFor = Exception.class)
     public BmsMapper.RefundSettlementRow consumeRefundReceipt(String refundNo, RefundReceiptCommand command) {
         BmsMapper.RefundSettlementRow row = require(mapper.findRefundSettlement(refundNo), "refund settlement not found");
-        if (mapper.hasRefundReceipt(command.receiptNo(), refundNo) > 0) {
+        requireText(command.receiptNo(), "payment receipt no is required");
+        BmsMapper.RefundReceiptRow existingReceipt = mapper.findRefundReceipt(command.receiptNo());
+        if (existingReceipt != null) {
+            if (sameReceipt(existingReceipt, refundNo, command)) {
+                return row;
+            }
+            mapper.insertRefundException(new BmsMapper.RefundExceptionRow(refundNo,
+                command.receiptNo(), "RECEIPT_CONFLICT",
+                "receipt already belongs to another refund or carries different facts", command.payload()));
             return row;
         }
-        if (mapper.claimRefundReceipt(command.receiptNo(), refundNo, command.success() ? SUCCESS : FAILED, command.payload()) == 0) {
-            throw new IllegalStateException("payment receipt belongs to another refund");
+        if (!validateReceipt(row, command)) {
+            return row;
+        }
+        if (row.status() == BmsDomain.RefundSettlementAggregate.FINISHED
+                || row.status() == BmsDomain.RefundSettlementAggregate.FAILED
+                || row.status() == BmsDomain.RefundSettlementAggregate.CLOSED) {
+            mapper.insertRefundException(new BmsMapper.RefundExceptionRow(refundNo,
+                command.receiptNo(), "LATE_RECEIPT", "terminal refund cannot consume a new receipt",
+                command.payload()));
+            return row;
+        }
+        if (mapper.claimRefundReceipt(command.receiptNo(), refundNo,
+                command.success() ? SUCCESS : FAILED, command.refundAmount(), command.currency(),
+                command.merchantNo(), command.paymentTxnNo(), command.failureReason(), command.payload()) == 0) {
+            mapper.insertRefundException(new BmsMapper.RefundExceptionRow(refundNo,
+                command.receiptNo(), "RECEIPT_CONFLICT", "receipt was claimed concurrently",
+                command.payload()));
+            return row;
         }
         BmsDomain.RefundSettlementAggregate aggregate = restoreRefund(row);
         if (command.success()) {
@@ -688,7 +738,7 @@ public class BmsApplicationService {
         } else {
             aggregate.fail(command.failureReason(), row.version());
         }
-        mapper.updateRefundSettlement(toRow(aggregate));
+        updateRefund(aggregate, row, row.evidenceRef(), row.reviewerId(), row.attemptNo());
         outbox(command.success() ? "RefundCompleted" : "RefundFailed", refundNo, row.billNo(), command.payload());
         return mapper.findRefundSettlement(refundNo);
     }
@@ -704,11 +754,64 @@ public class BmsApplicationService {
     @Transactional(rollbackFor = Exception.class)
     public BmsMapper.RefundSettlementRow retryRefundSettlement(String refundNo, VersionCommand command) {
         BmsMapper.RefundSettlementRow row = require(mapper.findRefundSettlement(refundNo), "refund settlement not found");
+        BmsMapper.BillRow bill = require(mapper.lockBill(row.billNo()), "bill not found");
+        BigDecimal occupied = mapper.occupiedRefundAmount(row.billNo());
+        BigDecimal refundable = bill.totalAmount().subtract(occupied == null ? BigDecimal.ZERO : occupied);
+        if (row.refundAmount().compareTo(refundable) > 0) {
+            throw new IllegalArgumentException("refund amount cannot exceed refundable amount when retrying");
+        }
         BmsDomain.RefundSettlementAggregate aggregate = restoreRefund(row);
         aggregate.retry(command.expectedVersion());
-        mapper.updateRefundSettlement(toRow(aggregate));
+        updateRefund(aggregate, row, null, null, row.attemptNo() + 1);
         outbox("RefundRetryRequested", refundNo, row.billNo(), "{}");
         log("RETRY_REFUND_SETTLEMENT", refundNo, command.operatorId(), command.idempotencyKey());
+        return mapper.findRefundSettlement(refundNo);
+    }
+
+    /** 支付超时或返回结果未知时，保留退款额度并进入查单状态。 */
+    @Transactional(rollbackFor = Exception.class)
+    public BmsMapper.RefundSettlementRow markRefundConfirmationPending(
+            String refundNo, ConfirmationPendingCommand command) {
+        BmsMapper.RefundSettlementRow row = require(mapper.findRefundSettlement(refundNo),
+            "refund settlement not found");
+        BmsDomain.RefundSettlementAggregate aggregate = restoreRefund(row);
+        aggregate.markConfirmationPending(command.reason(), command.expectedVersion());
+        updateRefund(aggregate, row, row.evidenceRef(), row.reviewerId(), row.attemptNo());
+        outbox("RefundConfirmationPending", refundNo, row.billNo(), "{}");
+        log("MARK_REFUND_CONFIRMATION_PENDING", refundNo, command.operatorId(), command.idempotencyKey());
+        return mapper.findRefundSettlement(refundNo);
+    }
+
+    /** 人工确认渠道未退款后关闭待确认记录；必须凭证齐全且复核人不同于操作人。 */
+    @Transactional(rollbackFor = Exception.class)
+    public BmsMapper.RefundSettlementRow closeRefundManually(
+            String refundNo, ManualRefundResolutionCommand command) {
+        validateManualResolution(command);
+        BmsMapper.RefundSettlementRow row = require(mapper.findRefundSettlement(refundNo),
+            "refund settlement not found");
+        BmsDomain.RefundSettlementAggregate aggregate = restoreRefund(row);
+        aggregate.closeManually(command.reason(), command.expectedVersion());
+        updateRefund(aggregate, row, command.evidenceRef(), command.reviewerId(), row.attemptNo());
+        outbox("RefundManuallyClosed", refundNo, row.billNo(), "{}");
+        log("CLOSE_REFUND_MANUALLY", refundNo, command.operatorId(), command.idempotencyKey());
+        return mapper.findRefundSettlement(refundNo);
+    }
+
+    /** 人工凭证确认已退款时完成待确认记录。 */
+    @Transactional(rollbackFor = Exception.class)
+    public BmsMapper.RefundSettlementRow completeRefundManually(
+            String refundNo, ManualRefundResolutionCommand command) {
+        validateManualResolution(command);
+        BmsMapper.RefundSettlementRow row = require(mapper.findRefundSettlement(refundNo),
+            "refund settlement not found");
+        if (row.status() != BmsDomain.RefundSettlementAggregate.CONFIRMATION_PENDING) {
+            throw new IllegalStateException("only confirmation pending refund can complete manually");
+        }
+        BmsDomain.RefundSettlementAggregate aggregate = restoreRefund(row);
+        aggregate.finish(command.expectedVersion());
+        updateRefund(aggregate, row, command.evidenceRef(), command.reviewerId(), row.attemptNo());
+        outbox("RefundCompleted", refundNo, row.billNo(), "{}");
+        log("COMPLETE_REFUND_MANUALLY", refundNo, command.operatorId(), command.idempotencyKey());
         return mapper.findRefundSettlement(refundNo);
     }
 
@@ -978,7 +1081,94 @@ public class BmsApplicationService {
      * @return 转换数据模型的结果，类型为 {@code BmsMapper.RefundSettlementRow}
      */
     private BmsMapper.RefundSettlementRow toRow(BmsDomain.RefundSettlementAggregate aggregate) {
-        return new BmsMapper.RefundSettlementRow(null, aggregate.refundNo(), aggregate.billNo(), aggregate.refundAmount(), aggregate.status(), aggregate.failureReason(), aggregate.version());
+        return new BmsMapper.RefundSettlementRow(null, aggregate.refundNo(), aggregate.billNo(),
+            aggregate.refundAmount(), aggregate.status(), aggregate.failureReason(), aggregate.version());
+    }
+
+    /** 按原持久化快照保留不可变退款事实，并使用版本条件更新。 */
+    private void updateRefund(BmsDomain.RefundSettlementAggregate aggregate,
+                              BmsMapper.RefundSettlementRow source, String evidenceRef,
+                              Long reviewerId, int attemptNo) {
+        BmsMapper.RefundSettlementRow target = new BmsMapper.RefundSettlementRow(source.id(),
+            aggregate.refundNo(), aggregate.billNo(), source.afterSaleNo(), source.paymentNo(),
+            aggregate.refundAmount(), source.currency(), source.merchantNo(),
+            source.requestIdempotencyKey(), source.requestDigest(), attemptNo, aggregate.status(),
+            aggregate.failureReason(), evidenceRef, reviewerId, aggregate.version());
+        if (mapper.updateRefundSettlement(target) != 1) {
+            throw new IllegalStateException("refund settlement version conflict");
+        }
+    }
+
+    /** 生成用于识别幂等键误复用的稳定业务摘要。 */
+    private String refundRequestDigest(RequestRefundCommand command) {
+        return command.billNo() + "|" + command.refundAmount().stripTrailingZeros().toPlainString()
+            + "|" + safe(command.currency()) + "|" + safe(command.merchantNo())
+            + "|" + safe(command.afterSaleNo()) + "|" + safe(command.paymentNo());
+    }
+
+    /** 比较回执已持久事实，只有全部一致才视为幂等重放。 */
+    private boolean sameReceipt(BmsMapper.RefundReceiptRow receipt, String refundNo,
+                                RefundReceiptCommand command) {
+        return receipt.refundNo().equals(refundNo)
+            && receipt.status().equals(command.success() ? SUCCESS : FAILED)
+            && equalAmount(receipt.refundAmount(), command.refundAmount())
+            && java.util.Objects.equals(receipt.currency(), command.currency())
+            && java.util.Objects.equals(receipt.merchantNo(), command.merchantNo())
+            && java.util.Objects.equals(receipt.paymentTxnNo(), command.paymentTxnNo())
+            && java.util.Objects.equals(receipt.failureReason(), command.failureReason());
+    }
+
+    /** 回执必须与退款聚合的金额、币种和商户事实一致。 */
+    private boolean validateReceipt(BmsMapper.RefundSettlementRow row, RefundReceiptCommand command) {
+        if (!equalAmount(row.refundAmount(), command.refundAmount())) {
+            return rejectReceipt(row, command, "REFUND_AMOUNT_MISMATCH", "receipt amount mismatch");
+        }
+        if (!java.util.Objects.equals(row.currency(), command.currency())) {
+            return rejectReceipt(row, command, "CURRENCY_MISMATCH", "receipt currency mismatch");
+        }
+        if (!java.util.Objects.equals(row.merchantNo(), command.merchantNo())) {
+            return rejectReceipt(row, command, "MERCHANT_MISMATCH", "receipt merchant mismatch");
+        }
+        if (!command.success() && (command.failureReason() == null
+                || command.failureReason().isBlank())) {
+            return rejectReceipt(row, command, "FAILURE_REASON_MISSING",
+                "failed receipt reason is required");
+        }
+        return true;
+    }
+
+    private boolean rejectReceipt(BmsMapper.RefundSettlementRow row,
+                                  RefundReceiptCommand command, String type, String detail) {
+        mapper.insertRefundException(new BmsMapper.RefundExceptionRow(row.refundNo(),
+            command.receiptNo(), type, detail, command.payload()));
+        return false;
+    }
+
+    private boolean equalAmount(BigDecimal left, BigDecimal right) {
+        return left != null && right != null && left.compareTo(right) == 0;
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value;
+    }
+
+    private String requireText(String value, String message) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(message);
+        }
+        return value;
+    }
+
+    private void validateManualResolution(ManualRefundResolutionCommand command) {
+        requireText(command.reason(), "manual resolution reason is required");
+        requireText(command.evidenceRef(), "manual resolution evidence is required");
+        requireText(command.idempotencyKey(), "manual resolution idempotency key is required");
+        if (command.operatorId() == null || command.reviewerId() == null) {
+            throw new IllegalArgumentException("operator and reviewer are required");
+        }
+        if (command.operatorId().equals(command.reviewerId())) {
+            throw new IllegalArgumentException("manual resolution requires two different persons");
+        }
     }
 
     /**
@@ -1187,7 +1377,15 @@ public class BmsApplicationService {
      * @author SCM Team
      * @since 0.1.0
      */
-    public record RequestRefundCommand(String billNo, BigDecimal refundAmount, Long operatorId, String idempotencyKey) {
+    public record RequestRefundCommand(String billNo, String afterSaleNo, String paymentNo,
+                                       BigDecimal refundAmount, String currency, String merchantNo,
+                                       Long operatorId, String idempotencyKey) {
+
+        /** 兼容已有内部调用；币种和商户号由账单计费对象补全。 */
+        public RequestRefundCommand(String billNo, BigDecimal refundAmount, Long operatorId,
+                                    String idempotencyKey) {
+            this(billNo, null, null, refundAmount, null, null, operatorId, idempotencyKey);
+        }
     }
 
     /**
@@ -1198,7 +1396,20 @@ public class BmsApplicationService {
      * @author SCM Team
      * @since 0.1.0
      */
-    public record RefundReceiptCommand(String receiptNo, boolean success, String failureReason, String payload) {
+    public record RefundReceiptCommand(String receiptNo, boolean success, String failureReason,
+                                       BigDecimal refundAmount, String currency, String merchantNo,
+                                       String paymentTxnNo, String payload) {
+    }
+
+    /** 退款进入结果未知状态的命令。 */
+    public record ConfirmationPendingCommand(String reason, long expectedVersion, Long operatorId,
+                                             String idempotencyKey) {
+    }
+
+    /** 高风险人工退款处置命令，显式携带凭证和第二复核人。 */
+    public record ManualRefundResolutionCommand(String reason, String evidenceRef,
+                                                long expectedVersion, Long operatorId,
+                                                Long reviewerId, String idempotencyKey) {
     }
 
     /**

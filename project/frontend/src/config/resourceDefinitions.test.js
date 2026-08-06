@@ -53,7 +53,7 @@ describe('resource definitions', () => {
       tms: 9,
       bms: 10,
       mdm: 11,
-      iam: 8,
+      iam: 14,
     })
   })
 

@@ -8,10 +8,14 @@ import java.util.Set;
 
 /**
  * OAuth 客户端聚合，保护授权类型、回调地址、Scope 与客户端密钥不变量。
+ *
+ * @author chaobo
  */
+@SuppressWarnings("PMD.ClassNamingShouldBeCamelRule")
 public final class OAuthClientAggregate {
 
     public static final int ENABLED = 1;
+    private static final String PKCE_S256 = "S256";
 
     private final String clientId;
     private final String appCode;
@@ -93,7 +97,7 @@ public final class OAuthClientAggregate {
         if (!redirectUris.contains(redirectUri)) {
             throw new IllegalArgumentException("redirect_uri must exactly match a registered URI");
         }
-        if (!"S256".equals(codeChallengeMethod)) {
+        if (!PKCE_S256.equals(codeChallengeMethod)) {
             throw new IllegalArgumentException("PKCE S256 is required");
         }
         validateScopes(requestedScopes);
@@ -184,7 +188,9 @@ public final class OAuthClientAggregate {
     }
 
     public enum ClientType {
+        /** Public client without a client secret. */
         PUBLIC,
+        /** Confidential client authenticated by a secret. */
         CONFIDENTIAL
     }
 }

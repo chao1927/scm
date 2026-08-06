@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.ResourceAccessException;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -76,13 +77,18 @@ public class SignedHttpFinancialGatewayAdapter
 
     @Override
     public RefundResult refund(RefundRequest request) {
-        var response = call(paymentUrl,
-            new PaymentRefundDto(request.requestId(), request.refundNo(), request.billNo(),
-                request.amount().toPlainString(), request.currency()),
-            request.requestId(), PaymentRefundResponse.class);
-        requireAccepted(response.accepted(), response.message());
-        return new RefundResult(
-            required(response.paymentRequestNo(), "payment request no"));
+        try {
+            var response = call(paymentUrl,
+                new PaymentRefundDto(request.requestId(), request.refundNo(), request.billNo(),
+                    request.amount().toPlainString(), request.currency()),
+                request.requestId(), PaymentRefundResponse.class);
+            requireAccepted(response.accepted(), response.message());
+            return new RefundResult(
+                required(response.paymentRequestNo(), "payment request no"));
+        } catch (ResourceAccessException exception) {
+            throw new PaymentGateway.ResultUnknownException(
+                "payment refund result is unknown", exception);
+        }
     }
 
     private <T> T call(String url, Object dto, String requestId, Class<T> responseType) {

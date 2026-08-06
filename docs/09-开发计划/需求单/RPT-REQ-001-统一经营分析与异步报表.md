@@ -23,7 +23,7 @@
 - `POST /api/report/v1/exports` 创建异步导出，要求幂等键。
 - `GET /api/report/v1/exports/{exportNo}` 查询状态。
 - `GET /api/report/v1/exports/{exportNo}/download` 下载完成的 CSV。
-- `POST /internal/report/v1/events` 消费标准业务事实。
+- 标准业务事实仅由各归属子系统的 RocketMQ Consumer 消费，不提供报表 HTTP 事件入口。
 
 ## 4. 不变量与可靠性
 

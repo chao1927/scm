@@ -18,12 +18,12 @@
 
 | 接口/入口 | 权限/身份 | 验收 |
 | --- | --- | --- |
-| `POST /internal/wms/v1/events` | 库存应用身份、`wms:event:manage` | 预占、在途、取消事件幂等消费并可失败重放 |
+| RocketMQ `wms-business-event-consumer` | 库存上下文生产的可信消息 | 预占、在途、取消事件幂等消费并可失败重放 |
 | `POST /api/wms/v1/transfer-operations/{no}/outbound` | `wms:transfer:write` + 调出仓范围 | 实际出库量必须等于计划量并发布 Outbox |
 | `POST /api/wms/v1/transfer-operations/{no}/receive` | `wms:transfer:write` + 调入仓范围 | 累计收货不超出库量，支持最终短收 |
 | `POST /api/tms/v1/transport-tasks/{no}/start` | `tms:task:manage` | `TRANSFER` 场景发布 `TransferInTransit` |
 | `POST /api/tms/v1/transport-tasks/{no}/deliver` | `tms:task:manage` | 仅在途任务可送达 |
-| `POST /internal/inventory/v1/transfer-events` | WMS/TMS 应用身份 | 出库、在途、收货事件 Inbox 幂等消费 |
+| RocketMQ `inventory-domain-event-consumer` | WMS/TMS 上下文生产的可信消息 | 出库、在途、收货事件 Inbox 幂等消费 |
 | `POST /api/inventory/v1/transfers/{no}/difference/confirm` | `inventory:transfer:manage` + 双仓范围 | 仅差异状态可确认，数量守恒不变 |
 
 ## 4. 不变量与补偿

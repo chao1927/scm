@@ -16,7 +16,11 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Bound MFA challenge and governance API; secret material is never returned by challenge endpoints. */
+/**
+ * Bound MFA challenge and governance API; secret material is never returned by challenge endpoints.
+ *
+ * @author chaobo
+ */
 @RestController
 @RequestMapping("/api/iam/v1/mfa")
 public class MfaController {
@@ -71,6 +75,20 @@ public class MfaController {
     public ApiResponse<MfaApplicationService.ChallengeView> get(@PathVariable @NotBlank String challengeNo,
                                                                  HttpServletRequest request) {
         return ok(service.get(challengeNo), request);
+    }
+
+    @GetMapping("/configurations")
+    public ApiResponse<java.util.List<com.chaobo.scm.iam.infrastructure.persistence.MfaMapper.ConfigurationGovernanceRow>> configurations(
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "50") int limit,
+            HttpServletRequest request) {
+        return ok(service.configurations(limit), request);
+    }
+
+    @GetMapping("/challenges")
+    public ApiResponse<java.util.List<com.chaobo.scm.iam.infrastructure.persistence.MfaMapper.ChallengeGovernanceRow>> challenges(
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "50") int limit,
+            HttpServletRequest request) {
+        return ok(service.challenges(limit), request);
     }
 
     private static <T> ApiResponse<T> ok(T data, HttpServletRequest request) {

@@ -10,6 +10,7 @@ import org.apache.rocketmq.client.apis.consumer.PushConsumer;
 import org.apache.rocketmq.client.apis.message.MessageView;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -37,6 +38,7 @@ public class RocketMqOmsExternalEventConsumer {
     private final OmsEventEnvelopeCodec codec;
     private final OmsExternalEventHandler handler;
 
+    @Autowired
     public RocketMqOmsExternalEventConsumer(
             OmsEventEnvelopeCodec codec,
             OmsExternalEventHandler handler,
@@ -53,9 +55,8 @@ public class RocketMqOmsExternalEventConsumer {
         Map<String, FilterExpression> subscriptions = subscriptions(topics);
         this.consumer = ClientServiceProvider.loadService()
                 .newPushConsumerBuilder()
-                .setClientConfiguration(ClientConfiguration.newBuilder()
-                        .setEndpoints(endpoints)
-                        .build())
+                .setClientConfiguration(
+                        com.chaobo.scm.common.mq.RocketMqClientConfigurations.create(endpoints))
                 .setConsumerGroup(consumerGroup)
                 .setSubscriptionExpressions(subscriptions)
                 .setConsumptionThreadCount(Math.max(1, threadCount))

@@ -79,7 +79,7 @@ flowchart LR
 ```
 
 ## TMS-API-005 承运商回调与通用事件入口
-`POST /carrier-callbacks/{carrier}`、`POST /events`
+`POST /carrier-callbacks/{carrier}`；内部业务事件由 RocketMQ `tms-business-event-consumer` 消费组接收
 
 - 接口层：`CarrierCallbackController` 验签、校验时间戳/重放窗口；`TmsEventOpenApiController` 校验来源系统。
 - 应用层：回调解析服务映射承运商字段到统一事件；事件消费者基于 Inbox 调用运输/运单/轨迹/签收聚合。

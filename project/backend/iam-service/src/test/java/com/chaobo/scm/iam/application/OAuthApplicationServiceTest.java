@@ -14,6 +14,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@SuppressWarnings({"PMD.ClassNamingShouldBeCamelRule", "PMD.UndefineMagicConstantRule"})
 class OAuthApplicationServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-07-30T01:00:00Z");
@@ -141,6 +142,7 @@ class OAuthApplicationServiceTest {
         }
     }
 
+    @SuppressWarnings("PMD.ClassNamingShouldBeCamelRule")
     static class MemoryOAuthMapper implements OAuthMapper {
 
         final Map<String, AuthorizationCodeRow> authorizationCodes = new LinkedHashMap<>();

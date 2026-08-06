@@ -8,7 +8,7 @@
 
 | 类型 | 内容 |
 | --- | --- |
-| 接口 | `POST/GET /api/bms/v1/billing-subjects`、`POST /billing-subjects/{objectCode}/enable|disable`、`POST/GET /billing-rules`、`POST /billing-rules/{ruleNo}/publish`、`POST /openapi/bms/v1/charge-sources`、`GET /charge-sources`、`POST /charge-sources/{sourceNo}/replay` |
+| 接口 | `POST/GET /api/bms/v1/billing-subjects`、`POST /billing-subjects/{objectCode}/enable|disable`、`POST/GET /billing-rules`、`POST /billing-rules/{ruleNo}/publish`、RocketMQ `bms-business-event-consumer` 消费费用来源、`GET /charge-sources`、`POST /charge-sources/{sourceNo}/replay` |
 | 领域 | `BillingObjectAggregate`、`BillingRuleAggregate`、`ChargeSourceAggregate`、`ChargeDetailAggregate` |
 | 不变量 | 停用计费对象不可计费；已发布规则同对象+费用类型+有效期不可重叠；费用来源按来源系统+幂等键只处理一次；费用明细必须保留来源、规则版本、数量、单价、税额和账期 |
 | 事件 | `BillingObjectCreated/Enabled/Disabled`、`BillingRulePublished`、`ChargeSourceAccepted/Failed`、`ChargeCalculated` |

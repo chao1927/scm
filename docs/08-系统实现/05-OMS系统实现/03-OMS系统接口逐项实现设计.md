@@ -425,9 +425,9 @@ oms-service
 | 返回 | 时间线节点、节点类型、节点状态、发生时间、来源系统。 |
 | 异常 | TMS 超时返回本地最后轨迹并标记 `traceFresh=false`。 |
 
-### 7.3 通用事件入口
+### 7.3 RocketMQ 通用事件消费入口
 
-`POST /internal/oms/v1/events`
+`RocketMQ Consumer Group: oms-business-event-consumer`
 
 | 层 | 实现逻辑 |
 | --- | --- |

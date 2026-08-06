@@ -8,7 +8,7 @@
 
 - `GET /openapi/orders/{orderNo}` 查询订单、履约、预占和出库摘要。
 - `GET /fulfillments/{fulfillmentNo}/tracking` 查询履约当前状态和 WMS 处理状态。
-- `POST /internal/oms/v1/events` 统一接收库存、WMS、退款事件，由 Inbox 幂等后路由到对应应用服务。
+- RocketMQ `oms-business-event-consumer` 统一接收库存、WMS、退款事件，由 Inbox 幂等后路由到对应应用服务；不提供 HTTP 事件入口。
 
 ## 3. 验收标准
 

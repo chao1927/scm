@@ -35,7 +35,7 @@ public class RocketMqWmsMessageBrokerAdapter implements WmsMessageBrokerPort {
         this.json = json;
         this.topic = topic;
         this.producer = provider.newProducerBuilder()
-            .setClientConfiguration(ClientConfiguration.newBuilder().setEndpoints(endpoints).build())
+            .setClientConfiguration(com.chaobo.scm.common.mq.RocketMqClientConfigurations.create(endpoints))
             .setTopics(topic).build();
     }
 

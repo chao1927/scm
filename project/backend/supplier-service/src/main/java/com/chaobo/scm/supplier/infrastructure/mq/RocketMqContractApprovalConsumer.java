@@ -67,7 +67,7 @@ public class RocketMqContractApprovalConsumer {
         this.service = service;
         this.json = json;
         var provider = ClientServiceProvider.loadService();
-        consumer = provider.newPushConsumerBuilder().setClientConfiguration(ClientConfiguration.newBuilder().setEndpoints(endpoints).build()).setConsumerGroup(group).setSubscriptionExpressions(Map.of(topic, FilterExpression.SUB_ALL)).setConsumptionThreadCount(4).setMessageListener(this::consume).build();
+        consumer = provider.newPushConsumerBuilder().setClientConfiguration(com.chaobo.scm.common.mq.RocketMqClientConfigurations.create(endpoints)).setConsumerGroup(group).setSubscriptionExpressions(Map.of(topic, FilterExpression.SUB_ALL)).setConsumptionThreadCount(4).setMessageListener(this::consume).build();
     }
 
     /**

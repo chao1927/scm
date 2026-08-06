@@ -55,7 +55,7 @@ public class RocketMqTmsInboundEventConsumer {
         }
         consumer = ClientServiceProvider.loadService().newPushConsumerBuilder()
             .setClientConfiguration(
-                ClientConfiguration.newBuilder().setEndpoints(endpoints).build())
+                com.chaobo.scm.common.mq.RocketMqClientConfigurations.create(endpoints))
             .setConsumerGroup(group)
             .setSubscriptionExpressions(subscriptions)
             .setConsumptionThreadCount(4)

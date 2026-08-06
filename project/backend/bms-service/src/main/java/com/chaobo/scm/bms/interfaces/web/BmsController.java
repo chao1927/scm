@@ -2,15 +2,12 @@ package com.chaobo.scm.bms.interfaces.web;
 
 import com.chaobo.scm.bms.application.BmsApplicationService;
 import com.chaobo.scm.bms.infrastructure.persistence.BmsMapper;
-import com.chaobo.scm.common.security.ScmAccessContexts;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -130,20 +127,6 @@ public class BmsController {
     @GetMapping("/api/bms/v1/billing-rules")
     public List<BmsMapper.BillingRuleRow> billingRules(@RequestParam String objectCode) {
         return service.listBillingRules(objectCode);
-    }
-
-    /**
-     * 处理当前类型职责中的操作 {@code collectChargeSource}。
-     *
-     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
-     * @param command 用例输入命令，类型为 {@code BmsApplicationService.CollectChargeSourceCommand}
-     * @param authentication 业务处理参数或成员，类型为 {@code Authentication}
-     * @return 处理当前类型职责中的操作的结果，类型为 {@code BmsMapper.ChargeSourceRow}
-     */
-    @PostMapping("/openapi/bms/v1/charge-sources")
-    public BmsMapper.ChargeSourceRow collectChargeSource(@RequestBody BmsApplicationService.CollectChargeSourceCommand command, Authentication authentication) {
-        ScmAccessContexts.require(authentication).requireApplication(command.sourceSystem());
-        return service.collectChargeSource(command);
     }
 
     /**
@@ -426,6 +409,34 @@ public class BmsController {
         return service.retryRefundSettlement(refundNo, command);
     }
 
+    /** 将支付结果未知的退款转入待确认，并保留额度占用。 */
+    @PostMapping("/internal/bms/v1/refund-settlements/{refundNo}/confirmation-pending")
+    public BmsMapper.RefundSettlementRow markRefundConfirmationPending(
+            @PathVariable String refundNo,
+            @RequestBody BmsApplicationService.ConfirmationPendingCommand command) {
+        return service.markRefundConfirmationPending(refundNo, command);
+    }
+
+    /** 高风险人工关闭，由应用服务校验凭证和双人复核。 */
+    @PostMapping("/api/bms/v1/refund-settlements/{refundNo}/manual-close")
+    @org.springframework.security.access.prepost.PreAuthorize(
+        "hasAnyAuthority('*','bms:*','bms:refund:manual-resolve')")
+    public BmsMapper.RefundSettlementRow closeRefundManually(
+            @PathVariable String refundNo,
+            @RequestBody BmsApplicationService.ManualRefundResolutionCommand command) {
+        return service.closeRefundManually(refundNo, command);
+    }
+
+    /** 高风险人工确认退款完成。 */
+    @PostMapping("/api/bms/v1/refund-settlements/{refundNo}/manual-complete")
+    @org.springframework.security.access.prepost.PreAuthorize(
+        "hasAnyAuthority('*','bms:*','bms:refund:manual-resolve')")
+    public BmsMapper.RefundSettlementRow completeRefundManually(
+            @PathVariable String refundNo,
+            @RequestBody BmsApplicationService.ManualRefundResolutionCommand command) {
+        return service.completeRefundManually(refundNo, command);
+    }
+
     /**
      * 处理当前类型职责中的操作 {@code settlementSummary}。
      *
@@ -439,25 +450,4 @@ public class BmsController {
         return service.settlementSummary(from, to);
     }
 
-    /**
-     * 执行命令 {@code consumeEvent}。
-     *
-     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
-     * @param command 用例输入命令，类型为 {@code BmsApplicationService.ConsumeEventCommand}
-     * @param authentication 业务处理参数或成员，类型为 {@code Authentication}
-     * @return 执行命令的结果，类型为 {@code BmsMapper.InboxEventRow}
-     */
-    @PostMapping("/internal/bms/v1/events")
-    @org.springframework.security.access.prepost.PreAuthorize(
-        "hasAnyAuthority('*','bms:*','bms:event:manual-consume')")
-    public BmsMapper.InboxEventRow consumeEvent(
-            @RequestBody BmsApplicationService.ConsumeEventCommand command,
-            @RequestHeader("X-Manual-Operation-Reason") String reason,
-            Authentication authentication) {
-        if (reason == null || reason.isBlank()) {
-            throw new IllegalArgumentException("manual event consume reason is required");
-        }
-        ScmAccessContexts.require(authentication).requireApplication(command.sourceSystem());
-        return service.consumeEvent(command);
-    }
 }

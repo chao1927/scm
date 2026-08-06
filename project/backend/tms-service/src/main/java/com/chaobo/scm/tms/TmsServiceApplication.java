@@ -1,5 +1,8 @@
 package com.chaobo.scm.tms;
 
+import com.chaobo.scm.common.integration.ScmDubboProviderConfiguration;
+import org.springframework.context.annotation.Import;
+
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -13,6 +16,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * @since 0.1.0
  */
 @SpringBootApplication
+@Import(ScmDubboProviderConfiguration.class)
 @EnableScheduling
 public class TmsServiceApplication {
 

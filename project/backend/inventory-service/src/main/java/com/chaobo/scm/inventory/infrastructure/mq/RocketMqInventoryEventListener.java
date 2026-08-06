@@ -51,9 +51,8 @@ public class RocketMqInventoryEventListener {
             throws Exception {
         this.codec = codec;
         this.inbound = inbound;
-        ClientConfiguration configuration = ClientConfiguration.newBuilder()
-                .setEndpoints(endpoints)
-                .build();
+        ClientConfiguration configuration =
+                com.chaobo.scm.common.mq.RocketMqClientConfigurations.create(endpoints);
         consumer = provider.newPushConsumerBuilder()
                 .setClientConfiguration(configuration)
                 .setConsumerGroup(consumerGroup)

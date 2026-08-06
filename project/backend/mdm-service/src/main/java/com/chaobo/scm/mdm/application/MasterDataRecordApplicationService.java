@@ -172,6 +172,23 @@ public class MasterDataRecordApplicationService {
     }
 
     /**
+     * 恢复已冻结的主数据，保存版本、事件和操作日志。
+     *
+     * @param recordNo 主数据记录号
+     * @param command 恢复命令
+     * @return 恢复后的记录
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public MasterDataRecordMapper.RecordRow enable(String recordNo, StateCommand command) {
+        MasterDataRecordAggregate aggregate = load(recordNo);
+        aggregate.enable(command.reason(), command.expectedVersion());
+        mapper.updateRecord(toRow(aggregate));
+        saveEvents(aggregate.pullEvents());
+        log("ENABLE_MASTER_DATA_RECORD", recordNo, command.operatorId(), command.idempotencyKey());
+        return mapper.findRecord(recordNo);
+    }
+
+    /**
      * 执行命令 {@code disable}。
      *
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。

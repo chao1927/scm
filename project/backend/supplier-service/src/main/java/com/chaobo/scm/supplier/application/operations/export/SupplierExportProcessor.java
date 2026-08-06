@@ -1,6 +1,7 @@
 package com.chaobo.scm.supplier.application.operations.export;
 
 import com.chaobo.scm.supplier.application.operations.OperationViews;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -27,6 +28,7 @@ public class SupplierExportProcessor {
     private final int maxRows;
     private final int retryDelaySeconds;
 
+    @Autowired
     public SupplierExportProcessor(SupplierExportTaskLifecyclePort lifecycle, SupplierExportDataPort data,
                                    SupplierExportObjectStoragePort storage,
                                    @Value("${scm.supplier.export.max-rows:10000}") int maxRows,

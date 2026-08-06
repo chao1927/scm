@@ -634,12 +634,6 @@ public final class BmsDomain {
          */
         public static final int FAILED = 3;
 
-        /** 支付结果未知，继续占用退款额度并等待查单或人工处置。 */
-        public static final int CONFIRMATION_PENDING = 4;
-
-        /** 已人工确认未退款并关闭，释放退款额度。 */
-        public static final int CLOSED = 5;
-
         /**
          * sourceNo（类型：{@code String}）。
          *
@@ -2463,6 +2457,12 @@ public final class BmsDomain {
          * <p>定义当前类型使用的稳定常量，避免业务含义以魔法值散落。
          */
         public static final int FAILED = 3;
+
+        /** 支付结果未知，继续占用退款额度并等待查单或人工处置。 */
+        public static final int CONFIRMATION_PENDING = 4;
+
+        /** 已人工确认未退款并关闭，释放退款额度。 */
+        public static final int CLOSED = 5;
 
         /**
          * refundNo（类型：{@code String}）。

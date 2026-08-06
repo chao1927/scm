@@ -87,7 +87,7 @@ public class RocketMqMasterDataEventConsumer {
         this.applicationService = applicationService;
         this.failureService = failureService;
         this.json = json;
-        var configuration = ClientConfiguration.newBuilder().setEndpoints(endpoints).build();
+        var configuration = com.chaobo.scm.common.mq.RocketMqClientConfigurations.create(endpoints);
         this.consumer = provider.newPushConsumerBuilder().setClientConfiguration(configuration).setConsumerGroup(group).setSubscriptionExpressions(Map.of(topic, FilterExpression.SUB_ALL)).setConsumptionThreadCount(4).setMessageListener(this::consume).build();
     }
 

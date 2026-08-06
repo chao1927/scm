@@ -20,11 +20,21 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-/** OAuth/OIDC protocol endpoints implemented by the first authorization-service slice. */
+/**
+ * OAuth/OIDC protocol endpoints implemented by the first authorization-service slice.
+ *
+ * @author chaobo
+ */
+@SuppressWarnings("PMD.ClassNamingShouldBeCamelRule")
 @RestController
 @RequestMapping
 public class OAuthController {
 
+    private static final String AUTHORIZATION_CODE_GRANT = "authorization_code";
+    private static final String CLIENT_CREDENTIALS_GRANT = "client_credentials";
+    private static final String REFRESH_TOKEN_GRANT = "refresh_token";
+    private static final String REFRESH_TOKEN_FIELD = "refresh_token";
+    private static final String ID_TOKEN_FIELD = "id_token";
     private final OAuthApplicationService service;
 
     public OAuthController(OAuthApplicationService service) {
@@ -48,13 +58,13 @@ public class OAuthController {
                                      @RequestParam(value = "refresh_token", required = false) String refreshToken,
                                      @RequestParam(value = "scope", required = false) String scope) {
         OAuthApplicationService.TokenResponse response = switch (grantType) {
-            case "authorization_code" -> service.exchangeAuthorizationCode(
+            case AUTHORIZATION_CODE_GRANT -> service.exchangeAuthorizationCode(
                     new OAuthApplicationService.AuthorizationCodeTokenRequest(clientId, clientSecret, code,
                             redirectUri, codeVerifier));
-            case "client_credentials" -> service.issueClientCredentials(
+            case CLIENT_CREDENTIALS_GRANT -> service.issueClientCredentials(
                     new OAuthApplicationService.ClientCredentialsTokenRequest(clientId, clientSecret,
                             parseScopes(scope)));
-            case "refresh_token" -> service.refresh(new OAuthApplicationService.RefreshTokenRequest(
+            case REFRESH_TOKEN_GRANT -> service.refresh(new OAuthApplicationService.RefreshTokenRequest(
                     clientId, clientSecret, refreshToken));
             default -> throw new IllegalArgumentException("unsupported grant_type");
         };
@@ -63,8 +73,8 @@ public class OAuthController {
         result.put("token_type", response.tokenType());
         result.put("expires_in", response.expiresIn());
         result.put("scope", String.join(" ", response.scopes()));
-        if (response.refreshToken() != null) { result.put("refresh_token", response.refreshToken()); }
-        if (response.idToken() != null) { result.put("id_token", response.idToken()); }
+        if (response.refreshToken() != null) { result.put(REFRESH_TOKEN_FIELD, response.refreshToken()); }
+        if (response.idToken() != null) { result.put(ID_TOKEN_FIELD, response.idToken()); }
         return result;
     }
 

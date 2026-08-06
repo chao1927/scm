@@ -3,8 +3,8 @@ package com.chaobo.scm.inventory.application.export;
 import com.chaobo.scm.common.error.BusinessException;
 import com.chaobo.scm.common.error.ErrorCode;
 import com.chaobo.scm.common.security.ScmAccessContext;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -183,7 +183,7 @@ public class InventoryExportApplicationService {
     private String write(Object value) {
         try {
             return json.writeValueAsString(value);
-        } catch (JsonProcessingException exception) {
+        } catch (JacksonException exception) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED, "导出查询条件无法序列化");
         }
     }

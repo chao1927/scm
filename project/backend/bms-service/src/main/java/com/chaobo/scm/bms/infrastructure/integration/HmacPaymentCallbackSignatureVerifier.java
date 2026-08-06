@@ -1,6 +1,7 @@
 package com.chaobo.scm.bms.infrastructure.integration;
 
 import com.chaobo.scm.bms.application.integration.PaymentCallbackSignatureVerifier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +26,7 @@ public class HmacPaymentCallbackSignatureVerifier
     private final long maxClockSkewSeconds;
     private final Clock clock;
 
+    @Autowired
     public HmacPaymentCallbackSignatureVerifier(
             @Value("${scm.bms.external.shared-secret}") String secret,
             @Value("${scm.bms.external.callback-max-clock-skew-seconds:300}")

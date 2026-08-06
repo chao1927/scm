@@ -48,7 +48,22 @@ public class IamController {
      */
     @PostMapping("/api/iam/v1/auth/login")
     public ApiResponse<IamApplicationService.LoginResult> login(@Valid @RequestBody LoginRequest body, HttpServletRequest request) {
-        return ok(service.login(body.username(), body.password()), request);
+        String appCode = body.appCode() == null || body.appCode().isBlank()
+            ? "SCM_WEB" : body.appCode();
+        String deviceDigest = body.deviceDigest() == null || body.deviceDigest().isBlank()
+            ? deviceDigest(request) : body.deviceDigest();
+        return ok(service.login(new IamApplicationService.LoginCommand(
+            body.username(), body.password(), appCode, deviceDigest)), request);
+    }
+
+    /** 仅允许使用已验证且与设备/登录会话绑定的 challengeId 签发 Token。 */
+    @PostMapping("/api/iam/v1/auth/mfa/complete")
+    public ApiResponse<IamApplicationService.LoginResult> completeMfaLogin(
+            @Valid @RequestBody MfaLoginRequest body, HttpServletRequest request) {
+        String deviceDigest = body.deviceDigest() == null || body.deviceDigest().isBlank()
+            ? deviceDigest(request) : body.deviceDigest();
+        return ok(service.completeMfaLogin(new IamApplicationService.MfaLoginCommand(
+            body.challengeNo(), body.sessionId(), deviceDigest)), request);
     }
 
     /**
@@ -141,6 +156,25 @@ public class IamController {
     @GetMapping("/api/iam/v1/roles")
     public ApiResponse<List<IamMapper.RoleRow>> roles(@RequestParam(defaultValue = "50") int limit, HttpServletRequest request) {
         return ok(service.roles(limit), request);
+    }
+
+    /** 查询脱敏会话治理列表。 */
+    @GetMapping("/api/iam/v1/sessions")
+    public ApiResponse<List<com.chaobo.scm.iam.infrastructure.persistence.IamSessionMapper.SessionGovernanceRow>> sessions(
+            @RequestParam(defaultValue = "50") int limit, HttpServletRequest request) {
+        return ok(service.sessions(limit), request);
+    }
+
+    @GetMapping("/api/iam/v1/role-grants")
+    public ApiResponse<List<IamMapper.RoleGrantRow>> roleGrants(
+            @RequestParam(defaultValue = "50") int limit, HttpServletRequest request) {
+        return ok(service.roleGrants(limit), request);
+    }
+
+    @GetMapping("/api/iam/v1/user-roles")
+    public ApiResponse<List<IamMapper.UserRoleRow>> userRoles(
+            @RequestParam(defaultValue = "50") int limit, HttpServletRequest request) {
+        return ok(service.userRoles(limit), request);
     }
 
     /**
@@ -318,6 +352,13 @@ public class IamController {
         return ApiResponse.success(data, request.getHeader("X-Request-Id"), request.getHeader("X-Trace-Id"));
     }
 
+    private static String deviceDigest(HttpServletRequest request) {
+        String userAgent = request.getHeader("User-Agent");
+        String remote = request.getRemoteAddr();
+        return "WEB-" + Integer.toHexString(((userAgent == null ? "" : userAgent)
+            + "|" + (remote == null ? "" : remote)).hashCode());
+    }
+
     /**
      * LoginRequest。
      *
@@ -326,7 +367,18 @@ public class IamController {
      * @author SCM Team
      * @since 0.1.0
      */
-    public record LoginRequest(@NotBlank String username, @NotBlank String password) {
+    public record LoginRequest(@NotBlank String username, @NotBlank String password,
+                               @Size(max = 64) String appCode,
+                               @Size(max = 128) String deviceDigest) {
+
+        public LoginRequest(String username, String password) {
+            this(username, password, null, null);
+        }
+    }
+
+    /** MFA 登录完成请求。 */
+    public record MfaLoginRequest(@NotBlank String challengeNo, @Positive long sessionId,
+                                  @Size(max = 128) String deviceDigest) {
     }
 
     /**

@@ -4,6 +4,8 @@ import com.chaobo.scm.supplier.application.outbox.*;
 import jakarta.annotation.PreDestroy;
 import org.apache.rocketmq.client.apis.*;
 import org.apache.rocketmq.client.apis.producer.Producer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -20,6 +22,9 @@ import java.nio.charset.StandardCharsets;
 @Component
 @ConditionalOnProperty(name = "scm.rocketmq.enabled", havingValue = "true")
 public class RocketMqMessageBrokerAdapter implements MessageBrokerPort {
+
+    private static final Logger LOG =
+            LoggerFactory.getLogger(RocketMqMessageBrokerAdapter.class);
 
     /**
      * provider（类型：{@code ClientServiceProvider}）。
@@ -51,7 +56,9 @@ public class RocketMqMessageBrokerAdapter implements MessageBrokerPort {
      */
     public RocketMqMessageBrokerAdapter(@Value("${scm.rocketmq.endpoints}") String endpoints, @Value("${scm.rocketmq.topic:supplier-domain-event}") String topic) throws ClientException {
         this.topic = topic;
-        var config = ClientConfiguration.newBuilder().setEndpoints(endpoints).build();
+        var config = com.chaobo.scm.common.mq.RocketMqClientConfigurations.create(endpoints);
+        LOG.info("初始化供应商 RocketMQ Producer，endpoints={}, topic={}, sslEnabled={}",
+                endpoints, topic, config.isSslEnabled());
         this.producer = provider.newProducerBuilder().setClientConfiguration(config).setTopics(topic).build();
     }
 

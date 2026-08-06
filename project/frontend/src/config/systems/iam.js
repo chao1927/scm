@@ -18,6 +18,8 @@ export const iamSystem = {
     page('role-grants', '角色授权'),
     page('user-roles', '用户角色'),
     page('sessions', '会话管理'),
+    page('mfa-configurations', 'MFA 配置'),
+    page('mfa-challenges', 'MFA 挑战'),
     page('approvals', '审批实例', { legacy: 'approvals' }),
     page('security-policies', '安全策略', { legacy: 'securityPolicies' }),
     page('apps', '应用管理', { legacy: 'apps' }),

@@ -6,7 +6,11 @@ import java.util.Set;
  * OAuth/OIDC 与现有 JWT/TokenCache 的集成端口。
  *
  * <p>B1 仅稳定授权协议与领域边界；具体签名、会话缓存和密钥轮换由集成阶段适配。
+ *
+ * @author chaobo
  */
+@SuppressWarnings({"PMD.ClassNamingShouldBeCamelRule",
+        "PMD.AbstractMethodOrInterfaceMethodMustUseJavadocRule"})
 public interface OAuthTokenIssuerPort {
 
     IssuedTokens issueAuthorizationCodeTokens(AuthorizationCodeTokenCommand command);

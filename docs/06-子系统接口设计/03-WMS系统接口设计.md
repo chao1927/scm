@@ -32,7 +32,7 @@
 | 前端页面接口 | `/api/wms/v1` |
 | PDA 作业接口 | `/api/wms-pda/v1` |
 | 跨系统开放命令接口 | `/openapi/wms/v1` |
-| 事件回调/事件消费入口 | `/internal/wms/v1/events` |
+| 事件消费通道 | RocketMQ；`wms-business-event-consumer` 订阅上游领域 Topic |
 
 ### 3.2 通用请求头
 
@@ -707,10 +707,11 @@ WMS 不直接修改中央库存余额，也不对外提供库存余额修改接�
 ## 8. WMS 事件消费
 
 ```text
-POST /internal/wms/v1/events
+RocketMQ Topics: 上游 *-domain-event
+Consumer Group: wms-business-event-consumer
 ```
 
-通用请求字段：
+通用消息信封字段：
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |

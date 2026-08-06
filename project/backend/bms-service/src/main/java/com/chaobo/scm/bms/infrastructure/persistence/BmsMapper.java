@@ -386,7 +386,7 @@ public interface BmsMapper {
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
      * @param row 业务处理参数或成员，类型为 {@code RefundSettlementRow}
      */
-    @Insert("insert into bms_refund_settlement(refund_no,bill_no,refund_amount,status,failure_reason,version,created_at,updated_at) values(#{refundNo},#{billNo},#{refundAmount},#{status},#{failureReason},#{version},now(3),now(3))")
+    @Insert("insert into bms_refund_settlement(refund_no,bill_no,after_sale_no,payment_no,refund_amount,currency,merchant_no,request_idempotency_key,request_digest,attempt_no,status,failure_reason,evidence_ref,reviewer_id,version,created_at,updated_at) values(#{refundNo},#{billNo},#{afterSaleNo},#{paymentNo},#{refundAmount},#{currency},#{merchantNo},#{requestIdempotencyKey},#{requestDigest},#{attemptNo},#{status},#{failureReason},#{evidenceRef},#{reviewerId},#{version},now(3),now(3))")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     void insertRefundSettlement(RefundSettlementRow row);
 
@@ -397,8 +397,17 @@ public interface BmsMapper {
      * @param refundNo 可追踪业务编码，类型为 {@code String}
      * @return 查询并返回的结果，类型为 {@code RefundSettlementRow}
      */
-    @Select("select refund_no refundNo,bill_no billNo,refund_amount refundAmount,status,failure_reason failureReason,version from bms_refund_settlement where refund_no=#{refundNo}")
+    @Select("select id,refund_no refundNo,bill_no billNo,after_sale_no afterSaleNo,payment_no paymentNo,refund_amount refundAmount,currency,merchant_no merchantNo,request_idempotency_key requestIdempotencyKey,request_digest requestDigest,attempt_no attemptNo,status,failure_reason failureReason,evidence_ref evidenceRef,reviewer_id reviewerId,version from bms_refund_settlement where refund_no=#{refundNo}")
     RefundSettlementRow findRefundSettlement(@Param("refundNo") String refundNo);
+
+    /**
+     * 按请求幂等键查找已有退款。
+     *
+     * @param idempotencyKey 请求幂等键
+     * @return 已有退款，不存在时返回 {@code null}
+     */
+    @Select("select id,refund_no refundNo,bill_no billNo,after_sale_no afterSaleNo,payment_no paymentNo,refund_amount refundAmount,currency,merchant_no merchantNo,request_idempotency_key requestIdempotencyKey,request_digest requestDigest,attempt_no attemptNo,status,failure_reason failureReason,evidence_ref evidenceRef,reviewer_id reviewerId,version from bms_refund_settlement where request_idempotency_key=#{idempotencyKey}")
+    RefundSettlementRow findRefundByIdempotencyKey(@Param("idempotencyKey") String idempotencyKey);
 
     /**
      * 处理当前类型职责中的操作 {@code lockBill}。
@@ -417,7 +426,7 @@ public interface BmsMapper {
      * @param billNo 可追踪业务编码，类型为 {@code String}
      * @return 处理当前类型职责中的操作的结果，类型为 {@code BigDecimal}
      */
-    @Select("select coalesce(sum(refund_amount),0) from bms_refund_settlement where bill_no=#{billNo} and status in (1,2)")
+    @Select("select coalesce(sum(refund_amount),0) from bms_refund_settlement where bill_no=#{billNo} and status in (1,2,4)")
     BigDecimal occupiedRefundAmount(@Param("billNo") String billNo);
 
     /**
@@ -425,9 +434,10 @@ public interface BmsMapper {
      *
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
      * @param row 业务处理参数或成员，类型为 {@code RefundSettlementRow}
+     * @return 更新行数，为零表示版本冲突
      */
-    @Update("update bms_refund_settlement set status=#{status},failure_reason=#{failureReason},version=#{version},updated_at=now(3) where refund_no=#{refundNo}")
-    void updateRefundSettlement(RefundSettlementRow row);
+    @Update("update bms_refund_settlement set status=#{status},failure_reason=#{failureReason},attempt_no=#{attemptNo},evidence_ref=#{evidenceRef},reviewer_id=#{reviewerId},version=#{version},updated_at=now(3) where refund_no=#{refundNo} and version = #{version} - 1")
+    int updateRefundSettlement(RefundSettlementRow row);
 
     /**
      * 处理当前类型职责中的操作 {@code claimRefundReceipt}。
@@ -436,11 +446,20 @@ public interface BmsMapper {
      * @param receiptNo 可追踪业务编码，类型为 {@code String}
      * @param refundNo 可追踪业务编码，类型为 {@code String}
      * @param status 生命周期状态，类型为 {@code String}
+     * @param refundAmount 回执退款金额
+     * @param currency 币种
+     * @param merchantNo 商户号
+     * @param paymentTxnNo 支付交易号
+     * @param failureReason 失败原因
      * @param payload 业务处理参数或成员，类型为 {@code String}
      * @return 处理当前类型职责中的操作的结果，类型为 {@code int}
      */
-    @Insert("insert ignore into bms_refund_receipt(receipt_no,refund_no,receipt_status,payload,created_at) values(#{receiptNo},#{refundNo},#{status},#{payload},now(3))")
-    int claimRefundReceipt(@Param("receiptNo") String receiptNo, @Param("refundNo") String refundNo, @Param("status") String status, @Param("payload") String payload);
+    @Insert("insert ignore into bms_refund_receipt(receipt_no,refund_no,receipt_status,refund_amount,currency,merchant_no,payment_txn_no,failure_reason,payload,created_at) values(#{receiptNo},#{refundNo},#{status},#{refundAmount},#{currency},#{merchantNo},#{paymentTxnNo},#{failureReason},#{payload},now(3))")
+    int claimRefundReceipt(@Param("receiptNo") String receiptNo, @Param("refundNo") String refundNo,
+                           @Param("status") String status, @Param("refundAmount") BigDecimal refundAmount,
+                           @Param("currency") String currency, @Param("merchantNo") String merchantNo,
+                           @Param("paymentTxnNo") String paymentTxnNo, @Param("failureReason") String failureReason,
+                           @Param("payload") String payload);
 
     /**
      * 处理当前类型职责中的操作 {@code hasRefundReceipt}。
@@ -452,6 +471,23 @@ public interface BmsMapper {
      */
     @Select("select count(1) from bms_refund_receipt where receipt_no=#{receiptNo} and refund_no=#{refundNo}")
     int hasRefundReceipt(@Param("receiptNo") String receiptNo, @Param("refundNo") String refundNo);
+
+    /**
+     * 查询全局唯一的支付回执。
+     *
+     * @param receiptNo 回执号
+     * @return 回执快照，不存在时返回 {@code null}
+     */
+    @Select("select receipt_no receiptNo,refund_no refundNo,receipt_status status,refund_amount refundAmount,currency,merchant_no merchantNo,payment_txn_no paymentTxnNo,failure_reason failureReason,payload from bms_refund_receipt where receipt_no=#{receiptNo}")
+    RefundReceiptRow findRefundReceipt(@Param("receiptNo") String receiptNo);
+
+    /**
+     * 保存跨退款、业务字段冲突或终态乱序回执，供人工核查。
+     *
+     * @param row 异常回执快照
+     */
+    @Insert("insert into bms_refund_exception(refund_no,receipt_no,exception_type,detail,payload,status,created_at) values(#{refundNo},#{receiptNo},#{exceptionType},#{detail},#{payload},1,now(3))")
+    void insertRefundException(RefundExceptionRow row);
 
     /**
      * 处理当前类型职责中的操作 {@code insertOutboxEvent}。
@@ -627,7 +663,30 @@ public interface BmsMapper {
      * @author SCM Team
      * @since 0.1.0
      */
-    record RefundSettlementRow(Long id, String refundNo, String billNo, BigDecimal refundAmount, int status, String failureReason, long version) {
+    record RefundSettlementRow(Long id, String refundNo, String billNo, String afterSaleNo,
+                               String paymentNo, BigDecimal refundAmount, String currency,
+                               String merchantNo, String requestIdempotencyKey, String requestDigest,
+                               int attemptNo, int status, String failureReason, String evidenceRef,
+                               Long reviewerId, long version) {
+
+        /** 兼容历史调用的最小退款快照。 */
+        public RefundSettlementRow(Long id, String refundNo, String billNo, BigDecimal refundAmount,
+                                   int status, String failureReason, long version) {
+            this(id, refundNo, billNo, null, null, refundAmount, "CNY", "DEFAULT",
+                "legacy:" + refundNo, billNo + "|" + refundAmount, 1, status, failureReason,
+                null, null, version);
+        }
+    }
+
+    /** 支付渠道退款回执快照。 */
+    record RefundReceiptRow(String receiptNo, String refundNo, String status,
+                            BigDecimal refundAmount, String currency, String merchantNo,
+                            String paymentTxnNo, String failureReason, String payload) {
+    }
+
+    /** 需要人工处置的回执异常。 */
+    record RefundExceptionRow(String refundNo, String receiptNo, String exceptionType,
+                              String detail, String payload) {
     }
 
     /**

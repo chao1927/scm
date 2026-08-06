@@ -20,6 +20,16 @@ mybatis:
 server:
   port: ${SERVER_PORT:8104}
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
 scm:
   security:
     active-kid: ${IAM_JWT_ACTIVE_KID:active}
@@ -28,3 +38,8 @@ scm:
     previous-hmac-secret: ${IAM_JWT_PREVIOUS_SECRET:}
     previous-valid-until-epoch-second: ${IAM_JWT_PREVIOUS_VALID_UNTIL_EPOCH_SECOND:0}
     permission-namespace: inventory
+  rocketmq:
+    endpoints: ${ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
+    inventory-topic: ${ROCKETMQ_INVENTORY_TOPIC:inventory-domain-event}
+    inbound-topics: ${ROCKETMQ_INVENTORY_INBOUND_TOPICS:wms-domain-event,oms-domain-event,purchase-domain-event,supplier-domain-event}
+    consumer-group: ${ROCKETMQ_INVENTORY_CONSUMER_GROUP:inventory-domain-event-consumer}

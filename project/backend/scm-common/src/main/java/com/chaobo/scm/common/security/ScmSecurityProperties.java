@@ -4,6 +4,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -50,6 +51,11 @@ public class ScmSecurityProperties {
      * <p>保存当前对象所需的业务处理参数或成员；其具体生命周期由所属对象统一管理。
      */
     private String permissionNamespace = "";
+
+    /**
+     * 无需 Bearer Token 的精确 HTTP 路径。默认为空，由拥有登录或换令牌语义的服务显式声明。
+     */
+    private List<String> publicPaths = List.of();
 
     /**
      * 处理当前类型职责中的操作 {@code isEnabled}。
@@ -127,6 +133,16 @@ public class ScmSecurityProperties {
      */
     public void setPermissionNamespace(String permissionNamespace) {
         this.permissionNamespace = permissionNamespace == null ? "" : permissionNamespace.trim();
+    }
+
+    public List<String> getPublicPaths() {
+        return publicPaths;
+    }
+
+    public void setPublicPaths(List<String> publicPaths) {
+        this.publicPaths = publicPaths == null
+                ? List.of()
+                : publicPaths.stream().filter(path -> path != null && !path.isBlank()).toList();
     }
 
     /**

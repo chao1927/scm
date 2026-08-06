@@ -38,7 +38,7 @@ public class RocketMqSupplierBusinessEventConsumer {
         this.codec = codec;
         this.dispatcher = dispatcher;
         consumer = ClientServiceProvider.loadService().newPushConsumerBuilder()
-                .setClientConfiguration(ClientConfiguration.newBuilder().setEndpoints(endpoints).build())
+                .setClientConfiguration(com.chaobo.scm.common.mq.RocketMqClientConfigurations.create(endpoints))
                 .setConsumerGroup(group)
                 .setSubscriptionExpressions(subscriptions(topics))
                 .setConsumptionThreadCount(threads)

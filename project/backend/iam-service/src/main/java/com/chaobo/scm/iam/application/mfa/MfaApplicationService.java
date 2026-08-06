@@ -19,12 +19,22 @@ import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
-/** MFA enrollment, bound challenge, recovery-code and administrative reset use cases. */
+/**
+ * MFA enrollment, bound challenge, recovery-code and administrative reset use cases.
+ *
+ * @author chaobo
+ */
 @Service
 public class MfaApplicationService {
 
     private static final int MAX_ATTEMPTS = 5;
     private static final int RECOVERY_CODE_COUNT = 8;
+    private static final int MAX_GOVERNANCE_ROWS = 200;
+    private static final int RECOVERY_CODE_BYTES = 9;
+    private static final String VERIFIED = "VERIFIED";
+    private static final String LOGIN_PURPOSE = "LOGIN";
+    private static final String INVALID_VERIFICATION_REQUEST = "MFA验证请求不合法";
+    private static final String CHALLENGE_NOT_FOUND = "MFA挑战不存在";
     private static final Duration CHALLENGE_TTL = Duration.ofMinutes(5);
     private static final SecureRandom RANDOM = new SecureRandom();
     private final MfaMapper mapper;
@@ -109,7 +119,7 @@ public class MfaApplicationService {
 
     @Transactional(rollbackFor = Exception.class, noRollbackFor = BusinessException.class)
     public VerificationResult verify(String challengeNo, VerifyCommand command) {
-        if (command == null || blank(command.code())) { throw invalid("MFA验证请求不合法"); }
+        if (command == null || blank(command.code())) { throw invalid(INVALID_VERIFICATION_REQUEST); }
         MfaMapper.ChallengeRow row = required(challengeNo);
         MfaChallengeAggregate challenge = restore(row);
         challenge.assertContext(command.sessionId(), command.purpose(), command.deviceDigest());
@@ -142,7 +152,7 @@ public class MfaApplicationService {
     @Transactional(rollbackFor = Exception.class)
     public RecoveryCodesView regenerateRecoveryCodes(long userId, String verifiedChallengeNo) {
         MfaMapper.ChallengeRow challenge = required(verifiedChallengeNo);
-        if (challenge.userId() != userId || !"VERIFIED".equals(challenge.challengeStatus())) {
+        if (challenge.userId() != userId || !VERIFIED.equals(challenge.challengeStatus())) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "必须使用已验证的本人MFA挑战");
         }
         mapper.invalidateRecoveryCodes(userId, "REGENERATED");
@@ -175,6 +185,33 @@ public class MfaApplicationService {
 
     public ChallengeView get(String challengeNo) { return view(required(challengeNo), false); }
 
+    public List<MfaMapper.ConfigurationGovernanceRow> configurations(int limit) {
+        return mapper.listConfigurations(Math.max(1, Math.min(limit, MAX_GOVERNANCE_ROWS)));
+    }
+
+    public List<MfaMapper.ChallengeGovernanceRow> challenges(int limit) {
+        return mapper.listChallenges(Math.max(1, Math.min(limit, MAX_GOVERNANCE_ROWS)));
+    }
+
+    /** 返回用户是否已启用 MFA，用于密码验证后的登录编排。 */
+    public boolean requiresMfa(long userId) {
+        return mapper.findActiveConfiguration(userId) != null;
+    }
+
+    /**
+     * 校验已完成的登录挑战与会话、用途和设备摘要一致。
+     * 该方法不再次消费挑战，后续会话以 sessionId 保证只签发一次。
+     */
+    public ChallengeView requireVerifiedLoginChallenge(String challengeNo, long sessionId,
+                                                       String deviceDigest) {
+        MfaMapper.ChallengeRow row = required(challengeNo);
+        if (!VERIFIED.equals(row.challengeStatus()) || row.sessionId() != sessionId
+                || !LOGIN_PURPOSE.equals(row.purpose()) || !row.deviceDigest().equals(deviceDigest)) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "MFA登录挑战上下文无效");
+        }
+        return view(row, false);
+    }
+
     private void persist(MfaChallengeAggregate challenge, int oldVersion) {
         if (mapper.updateChallenge(challenge.id(), challenge.status().name(), challenge.failedAttempts(),
                 challenge.verifiedAt(), challenge.version(), oldVersion) != 1) {
@@ -184,7 +221,7 @@ public class MfaApplicationService {
 
     private MfaMapper.ChallengeRow required(String challengeNo) {
         MfaMapper.ChallengeRow row = mapper.findByChallengeNo(challengeNo);
-        if (row == null) { throw new BusinessException(ErrorCode.NOT_FOUND, "MFA挑战不存在"); }
+        if (row == null) { throw new BusinessException(ErrorCode.NOT_FOUND, CHALLENGE_NOT_FOUND); }
         return row;
     }
 
@@ -227,7 +264,7 @@ public class MfaApplicationService {
     }
 
     private static String recoveryCode() {
-        byte[] bytes = new byte[9];
+        byte[] bytes = new byte[RECOVERY_CODE_BYTES];
         RANDOM.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes).toUpperCase();
     }
@@ -244,7 +281,12 @@ public class MfaApplicationService {
                                 String deviceDigest, String idempotencyKey) { }
     public record VerifyCommand(VerificationMethod method, String code, long sessionId,
                                 String purpose, String deviceDigest) { }
-    public enum VerificationMethod { TOTP, RECOVERY_CODE }
+    public enum VerificationMethod {
+        /** Time-based one-time password. */
+        TOTP,
+        /** Single-use offline recovery code. */
+        RECOVERY_CODE
+    }
     public record ChallengeView(String challengeNo, long userId, String appCode, long sessionId,
                                 String purpose, String status, int failedAttempts, int maxAttempts,
                                 Instant expiresAt, Instant verifiedAt, int version, boolean idempotentHit) { }

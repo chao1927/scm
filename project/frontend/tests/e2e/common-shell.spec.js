@@ -34,7 +34,7 @@ test('navigates all nine system workbenches through the shared desktop rail', as
 
   for (const [systemName, workbenchTitle] of systems) {
     await page.getByRole('button', { name: systemName, exact: true }).click()
-    await expect(page.getByRole('heading', { name: workbenchTitle })).toBeVisible()
+    await expect(page.getByRole('heading', { name: workbenchTitle, exact: true })).toBeVisible()
   }
 })
 
@@ -70,9 +70,13 @@ test('keeps the shared shell usable at 320, 768, 1024 and 1440 widths', async ({
 })
 
 async function mockAuthenticatedShell(page) {
-  await page.route('**/api/**', (route) => route.fulfill({
-    json: { success: true, data: { pageNo: 1, pageSize: 20, total: 0, records: [] } },
-  }))
+  await page.route('**/api/**', (route) => {
+    const pathname = new URL(route.request().url()).pathname
+    if (!pathname.startsWith('/api/')) return route.continue()
+    return route.fulfill({
+      json: { success: true, data: { pageNo: 1, pageSize: 20, total: 0, records: [] } },
+    })
+  })
   await page.route('**/api/iam/v1/auth/login', (route) => route.fulfill({
     json: { success: true, data: { accessToken: 'shell-token', refreshToken: 'shell-refresh' } },
   }))

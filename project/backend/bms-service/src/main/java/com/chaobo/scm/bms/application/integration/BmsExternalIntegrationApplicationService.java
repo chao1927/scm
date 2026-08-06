@@ -107,6 +107,12 @@ public class BmsExternalIntegrationApplicationService {
                 String externalRef = execute(claimed);
                 tasks.markSucceeded(claimed.taskNo(), externalRef);
                 succeeded++;
+            } catch (PaymentGateway.ResultUnknownException exception) {
+                boolean terminal = claimed.attemptCount() >= claimed.maxAttempts();
+                markRefundResultUnknown(claimed, message(exception));
+                tasks.markFailed(claimed.taskNo(),
+                    terminal ? FINAL_FAILED : RETRY_WAITING, message(exception));
+                failed++;
             } catch (RuntimeException exception) {
                 boolean terminal = claimed.attemptCount() >= claimed.maxAttempts();
                 if (terminal) {
@@ -209,8 +215,21 @@ public class BmsExternalIntegrationApplicationService {
             "refund not found");
         var result = payment.refund(new PaymentGateway.RefundRequest(
             task.taskNo(), refund.refundNo(), refund.billNo(),
-            refund.refundAmount(), "CNY"));
+            refund.refundAmount(), refund.currency()));
         return result.paymentRequestNo();
+    }
+
+    private void markRefundResultUnknown(BmsExternalTaskMapper.ExternalTaskRow task,
+                                         String reason) {
+        if (!PAYMENT_REFUND.equals(task.taskType())) {
+            return;
+        }
+        var row = bmsMapper.findRefundSettlement(task.businessNo());
+        if (row != null && row.status() == BmsDomain.RefundSettlementAggregate.REQUESTED) {
+            bms.markRefundConfirmationPending(row.refundNo(),
+                new BmsApplicationService.ConfirmationPendingCommand(
+                    reason, row.version(), null, task.taskNo() + ":unknown"));
+        }
     }
 
     private void markBusinessFailure(BmsExternalTaskMapper.ExternalTaskRow task,

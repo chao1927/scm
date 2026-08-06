@@ -2,8 +2,6 @@ package com.chaobo.scm.bms.interfaces.web;
 
 import com.chaobo.scm.bms.application.BmsApplicationService;
 import com.chaobo.scm.bms.infrastructure.persistence.BmsMapper;
-import com.chaobo.scm.common.security.ScmAccessContext;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -21,28 +19,35 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BmsControllerTest {
 
     /**
-     * 处理当前类型职责中的操作 {@code delegatesBillingObjectRuleAndChargeSourceEndpoints}。
+     * 处理当前类型职责中的操作 {@code delegatesBillingObjectAndRuleEndpoints}。
      *
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
      */
     @Test
-    void delegatesBillingObjectRuleAndChargeSourceEndpoints() {
+    void delegatesBillingObjectAndRuleEndpoints() {
         StubBmsService service = new StubBmsService();
         BmsController controller = new BmsController(service);
         BmsApplicationService.CreateBillingObjectCommand objectCommand = new BmsApplicationService.CreateBillingObjectCommand("BO1", "承运商A", "CARRIER", "PAYABLE", "CNY", 1001L, "bo-1");
         BmsApplicationService.CreateBillingRuleCommand ruleCommand = new BmsApplicationService.CreateBillingRuleCommand("BO1", "FREIGHT", BigDecimal.TEN, BigDecimal.ZERO, LocalDate.parse("2026-01-01"), LocalDate.parse("2026-12-31"), 1001L, "rule-1");
-        BmsApplicationService.CollectChargeSourceCommand sourceCommand = new BmsApplicationService.CollectChargeSourceCommand("TMS", "EVT1", "src-1", "BO1", "FREIGHT", BigDecimal.ONE, "2026-07", "{}", 1001L);
         BmsMapper.BillingObjectRow object = controller.createBillingObject(objectCommand);
         BmsMapper.BillingRuleRow rule = controller.createBillingRule(ruleCommand);
-        var tms = UsernamePasswordAuthenticationToken.authenticated("tms-service", "n/a", List.of());
-        tms.setDetails(new ScmAccessContext(1, "tms-service", "TMS", java.util.Set.of("bms:finance:manage"), java.util.Map.of()));
-        BmsMapper.ChargeSourceRow source = controller.collectChargeSource(sourceCommand, tms);
         assertThat(object.objectCode()).isEqualTo("BO1");
         assertThat(rule.ruleNo()).isEqualTo("BR1");
-        assertThat(source.sourceNo()).isEqualTo("CS1");
         assertThat(service.lastObjectCommand).isEqualTo(objectCommand);
         assertThat(service.lastRuleCommand).isEqualTo(ruleCommand);
-        assertThat(service.lastSourceCommand).isEqualTo(sourceCommand);
+    }
+
+    @Test
+    void delegatesHighRiskRefundResolutionEndpoint() {
+        StubBmsService service = new StubBmsService();
+        BmsController controller = new BmsController(service);
+        var command = new BmsApplicationService.ManualRefundResolutionCommand(
+            "verified unpaid", "ticket-1", 2, 1001L, 1002L, "manual-1");
+
+        var result = controller.closeRefundManually("RF-1", command);
+
+        assertThat(result.status()).isEqualTo(5);
+        assertThat(service.lastManualCommand).isEqualTo(command);
     }
 
     /**
@@ -69,12 +74,7 @@ class BmsControllerTest {
          */
         BmsApplicationService.CreateBillingRuleCommand lastRuleCommand;
 
-        /**
-         * lastSourceCommand（类型：{@code BmsApplicationService.CollectChargeSourceCommand}）。
-         *
-         * <p>保存当前对象所需的用例输入命令；其具体生命周期由所属对象统一管理。
-         */
-        BmsApplicationService.CollectChargeSourceCommand lastSourceCommand;
+        BmsApplicationService.ManualRefundResolutionCommand lastManualCommand;
 
         /**
          * 创建 StubBmsService。
@@ -112,19 +112,6 @@ class BmsControllerTest {
         }
 
         /**
-         * 处理当前类型职责中的操作 {@code collectChargeSource}。
-         *
-         * <p>该实现遵守上游端口契约；异常、幂等和返回语义必须与接口约定保持一致。
-         * @param command 用例输入命令，类型为 {@code BmsApplicationService.CollectChargeSourceCommand}
-         * @return 处理当前类型职责中的操作的结果，类型为 {@code BmsMapper.ChargeSourceRow}
-         */
-        @Override
-        public BmsMapper.ChargeSourceRow collectChargeSource(BmsApplicationService.CollectChargeSourceCommand command) {
-            lastSourceCommand = command;
-            return new BmsMapper.ChargeSourceRow(null, "CS1", command.sourceSystem(), command.sourceEventId(), command.idempotencyKey(), command.billingObjectCode(), command.feeType(), command.quantity(), command.billingPeriod(), command.payload(), 2, null, 1);
-        }
-
-        /**
          * 查询并返回 {@code listBillingObjects}。
          *
          * <p>该方法只读取或转换当前上下文数据，不应绕过数据权限，也不应产生业务状态副作用。
@@ -134,6 +121,15 @@ class BmsControllerTest {
         @Override
         public List<BmsMapper.BillingObjectRow> listBillingObjects(Integer status) {
             return List.of();
+        }
+
+        @Override
+        public BmsMapper.RefundSettlementRow closeRefundManually(
+                String refundNo,
+                BmsApplicationService.ManualRefundResolutionCommand command) {
+            lastManualCommand = command;
+            return new BmsMapper.RefundSettlementRow(1L, refundNo, "B-1", BigDecimal.TEN,
+                5, command.reason(), command.expectedVersion() + 1);
         }
     }
 }

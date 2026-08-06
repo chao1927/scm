@@ -49,7 +49,7 @@ flowchart LR
 5. 聚合根修改状态、行明细、预占引用、WMS 状态快照、退款/补发记录和版本，并返回领域事件。
 6. 应用服务在同一事务中保存业务表、`oms_domain_event` 和 `oms_operation_audit_log`。
 7. 事件发布任务异步扫描 `oms_domain_event`，投递成功后更新发布状态。
-8. 外部事件进入 `/internal/oms/v1/events` 后先写 `oms_event_consume_log`，再由消费应用服务处理。
+8. 外部事件由 RocketMQ Consumer 接收后先写 `oms_event_consume_log`，再由消费应用服务处理；不提供 HTTP 事件入口。
 
 ## 4. 事件标准载荷
 

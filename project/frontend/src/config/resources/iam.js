@@ -7,6 +7,12 @@ import {
   queryIamSecurityPolicies,
   queryIamSsoClients,
   queryIamUsers,
+  queryIamMenus,
+  queryIamRoleGrants,
+  queryIamUserRoles,
+  queryIamSessions,
+  queryIamMfaConfigurations,
+  queryIamMfaChallenges,
 } from '../../api/mdmIam'
 import { simpleResource } from './helpers'
 
@@ -19,4 +25,10 @@ export const iamResources = {
   'iam.security-policies': simpleResource(queryIamSecurityPolicies, ['policyCode', 'id'], [['policyCode', '策略编码'], ['policyName', '策略名称'], ['policyType', '策略类型'], ['statusName', '状态', 'status'], ['updatedAt', '更新时间', 'date']]),
   'iam.apps': simpleResource(queryIamApps, ['appCode', 'id'], [['appCode', '应用编码'], ['appName', '应用名称'], ['clientType', '客户端类型'], ['statusName', '状态', 'status']]),
   'iam.sso-clients': simpleResource(queryIamSsoClients, ['clientId', 'id'], [['clientId', '客户端 ID'], ['clientName', '客户端名称'], ['grantTypes', '授权类型'], ['redirectUris', '回调地址'], ['statusName', '状态', 'status']]),
+  'iam.menus': simpleResource(queryIamMenus, ['menuCode', 'id'], [['menuCode', '菜单编码'], ['menuName', '菜单名称'], ['appCode', '应用'], ['parentCode', '上级菜单'], ['path', '路由'], ['status', '状态', 'status']]),
+  'iam.role-grants': simpleResource(queryIamRoleGrants, ['roleId', 'permissionCode'], [['roleCode', '角色编码'], ['roleName', '角色名称'], ['permissionCode', '权限编码'], ['permissionName', '权限名称']]),
+  'iam.user-roles': simpleResource(queryIamUserRoles, ['userId', 'roleId'], [['username', '用户名'], ['roleCode', '角色编码'], ['roleName', '角色名称']]),
+  'iam.sessions': simpleResource(queryIamSessions, ['sessionId'], [['sessionId', '会话 ID'], ['userId', '用户 ID'], ['generation', '刷新代次', 'number'], ['status', '状态', 'status'], ['accessExpiresAt', '访问令牌到期', 'date'], ['refreshExpiresAt', '刷新令牌到期', 'date'], ['revocationReason', '撤销原因']]),
+  'iam.mfa-configurations': simpleResource(queryIamMfaConfigurations, ['configId', 'userId'], [['userId', '用户 ID'], ['status', 'MFA 状态', 'status'], ['version', '版本', 'number']]),
+  'iam.mfa-challenges': simpleResource(queryIamMfaChallenges, ['challengeNo'], [['challengeNo', '挑战编号'], ['userId', '用户 ID'], ['appCode', '应用'], ['purpose', '用途'], ['status', '状态', 'status'], ['failedAttempts', '失败次数', 'number'], ['expiresAt', '到期时间', 'date']]),
 }

@@ -49,7 +49,7 @@ flowchart LR
 5. 聚合根修改状态、金额、税额、账期、来源引用、确认人、开票信息、凭证信息和版本，并返回领域事件。
 6. 应用服务在同一事务中保存业务表、`bms_domain_event` 和 `bms_operation_audit_log`。
 7. 事件发布任务异步扫描 `bms_domain_event`，投递成功后更新发布状态。
-8. 外部事件进入 `/internal/bms/v1/events` 后先写 `bms_event_consume_log`，再由消费应用服务处理。
+8. 外部事件由 RocketMQ Consumer 接收后先写 `bms_event_consume_log`，再由消费应用服务处理；不提供 HTTP 事件入口。
 
 ## 4. 事件标准载荷
 

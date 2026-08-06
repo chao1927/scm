@@ -4,6 +4,7 @@ import com.chaobo.scm.common.error.BusinessException;
 import com.chaobo.scm.common.error.ErrorCode;
 import com.chaobo.scm.iam.domain.UserAggregate;
 import com.chaobo.scm.iam.domain.SessionTokenPolicy;
+import com.chaobo.scm.iam.application.mfa.MfaApplicationService;
 import com.chaobo.scm.iam.infrastructure.jwt.IamJwtService;
 import com.chaobo.scm.iam.infrastructure.persistence.IamMapper;
 import com.chaobo.scm.iam.infrastructure.persistence.IamSessionMapper;
@@ -52,6 +53,8 @@ public class IamApplicationService {
 
     private final TokenCachePort tokenCache;
 
+    private final MfaApplicationService mfa;
+
     /**
      * ids（类型：{@code AtomicLong}）。
      *
@@ -73,15 +76,23 @@ public class IamApplicationService {
      * @param jwtService 应用或外部协作依赖，类型为 {@code IamJwtService}
      * @param tokenClaimsProvider 业务或技术标识，类型为 {@code IamTokenClaimsProvider}
      */
-    @Autowired
     public IamApplicationService(IamMapper mapper, IamJwtService jwtService,
                                  IamTokenClaimsProvider tokenClaimsProvider,
                                  IamSessionMapper sessionMapper, TokenCachePort tokenCache) {
+        this(mapper, jwtService, tokenClaimsProvider, sessionMapper, tokenCache, null);
+    }
+
+    @Autowired
+    public IamApplicationService(IamMapper mapper, IamJwtService jwtService,
+                                 IamTokenClaimsProvider tokenClaimsProvider,
+                                 IamSessionMapper sessionMapper, TokenCachePort tokenCache,
+                                 MfaApplicationService mfa) {
         this.mapper = mapper;
         this.jwtService = jwtService;
         this.tokenClaimsProvider = tokenClaimsProvider;
         this.sessionMapper = sessionMapper;
         this.tokenCache = tokenCache;
+        this.mfa = mfa;
     }
 
     /**
@@ -112,6 +123,25 @@ public class IamApplicationService {
      */
     @Transactional(rollbackFor = Exception.class)
     public LoginResult login(String username, String password) {
+        return login(new LoginCommand(username, password, "SCM_WEB", "UNKNOWN_DEVICE"));
+    }
+
+    /**
+     * 验证密码后根据用户 MFA 状态决定是返回挑战，还是直接签发会话。
+     *
+     * @param command 登录命令
+     * @return 登录结果或仅包含 challengeId 的 MFA 挑战结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public LoginResult login(LoginCommand command) {
+        if (command == null || command.username() == null || command.username().isBlank()
+                || command.password() == null || command.password().isBlank()
+                || command.appCode() == null || command.appCode().isBlank()
+                || command.deviceDigest() == null || command.deviceDigest().isBlank()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "登录参数不完整");
+        }
+        String username = command.username();
+        String password = command.password();
         var row = mapper.findUserByUsername(username);
         if (row == null) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "用户名或密码错误");
@@ -121,14 +151,59 @@ public class IamApplicationService {
         user.authenticate(hash(password));
         mapper.updateUser(user.id(), user.passwordHash(), user.status(), user.failedAttempts(), user.version(), oldVersion);
         long sessionId = ids.incrementAndGet();
-        IssuedToken access = issueToken(user.id(), username, "IAM", "AT-" + sessionId, "ACCESS", 3600, true);
-        IssuedToken refresh = issueToken(user.id(), username, "IAM", "RT-" + sessionId, "REFRESH", 86400, false);
-        sessionMapper.insert(new IamSessionMapper.SessionWrite(sessionId, user.id(), access.value(), refresh.value(),
+        if (mfa != null && mfa.requiresMfa(user.id())) {
+            var challenge = mfa.create(new MfaApplicationService.CreateCommand(user.id(),
+                command.appCode(), sessionId, "LOGIN", command.deviceDigest(),
+                "LOGIN:" + sessionId));
+            mapper.insertOperationLog(ids.incrementAndGet(), "LOGIN_MFA_REQUIRED", username);
+            return LoginResult.mfaRequired(user.id(), username, challenge.challengeNo(), sessionId);
+        }
+        return issueSession(user.id(), username, command.appCode(), sessionId);
+    }
+
+    /**
+     * 完成已验证的 MFA 登录挑战，同一挑战只能得到同一个会话。
+     *
+     * @param command MFA 登录完成命令
+     * @return 已认证会话
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public LoginResult completeMfaLogin(MfaLoginCommand command) {
+        if (command == null || command.challengeNo() == null || command.challengeNo().isBlank()
+                || command.sessionId() <= 0 || command.deviceDigest() == null
+                || command.deviceDigest().isBlank()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "MFA登录参数不完整");
+        }
+        if (mfa == null) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT, "MFA服务未配置");
+        }
+        var challenge = mfa.requireVerifiedLoginChallenge(command.challengeNo(),
+            command.sessionId(), command.deviceDigest());
+        IamSessionMapper.SessionSnapshot existing = sessionMapper.find(command.sessionId());
+        var user = mapper.findUserById(challenge.userId());
+        if (user == null || user.status() != 1) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "用户不可登录");
+        }
+        if (existing != null) {
+            if (existing.userId() != user.id()) {
+                throw new BusinessException(ErrorCode.IDEMPOTENCY_CONFLICT, "MFA会话已属于其他用户");
+            }
+            return new LoginResult(existing.accessToken(), existing.refreshToken(), user.id(),
+                user.username(), "AUTHENTICATED", null, existing.sessionId());
+        }
+        return issueSession(user.id(), user.username(), challenge.appCode(), command.sessionId());
+    }
+
+    private LoginResult issueSession(long userId, String username, String appCode, long sessionId) {
+        IssuedToken access = issueToken(userId, username, appCode, "AT-" + sessionId, "ACCESS", 3600, true);
+        IssuedToken refresh = issueToken(userId, username, appCode, "RT-" + sessionId, "REFRESH", 86400, false);
+        sessionMapper.insert(new IamSessionMapper.SessionWrite(sessionId, userId, access.value(), refresh.value(),
                 access.jti(), refresh.jti(), 0, access.expiresAt(), refresh.expiresAt()));
-        tokenCache.store(new TokenCachePort.OnlineSession(sessionId, user.id(), access.jti(), refresh.jti(), 0,
+        tokenCache.store(new TokenCachePort.OnlineSession(sessionId, userId, access.jti(), refresh.jti(), 0,
                 access.expiresAt(), refresh.expiresAt(), true));
         mapper.insertOperationLog(ids.incrementAndGet(), "LOGIN", username);
-        return new LoginResult(access.value(), refresh.value(), user.id(), username);
+        return new LoginResult(access.value(), refresh.value(), userId, username,
+            "AUTHENTICATED", null, sessionId);
     }
 
     /**
@@ -237,6 +312,19 @@ public class IamApplicationService {
      */
     public List<IamMapper.RoleRow> roles(int limit) {
         return mapper.roles(limit <= 0 ? 50 : Math.min(limit, 200));
+    }
+
+    /** 返回脱敏的会话治理读模型。 */
+    public List<IamSessionMapper.SessionGovernanceRow> sessions(int limit) {
+        return sessionMapper.list(limit <= 0 ? 50 : Math.min(limit, 200));
+    }
+
+    public List<IamMapper.RoleGrantRow> roleGrants(int limit) {
+        return mapper.roleGrants(limit <= 0 ? 50 : Math.min(limit, 200));
+    }
+
+    public List<IamMapper.UserRoleRow> userRoles(int limit) {
+        return mapper.userRoles(limit <= 0 ? 50 : Math.min(limit, 200));
     }
 
     /**
@@ -489,7 +577,27 @@ public class IamApplicationService {
      * @author SCM Team
      * @since 0.1.0
      */
-    public record LoginResult(String accessToken, String refreshToken, long userId, String username) {
+    public record LoginResult(String accessToken, String refreshToken, long userId, String username,
+                              String status, String challengeNo, Long sessionId) {
+
+        public LoginResult(String accessToken, String refreshToken, long userId, String username) {
+            this(accessToken, refreshToken, userId, username, "AUTHENTICATED", null, null);
+        }
+
+        public static LoginResult mfaRequired(long userId, String username,
+                                              String challengeNo, long sessionId) {
+            return new LoginResult(null, null, userId, username, "MFA_REQUIRED",
+                challengeNo, sessionId);
+        }
+    }
+
+    /** 密码登录命令，设备摘要用于绑定 MFA 挑战。 */
+    public record LoginCommand(String username, String password, String appCode,
+                               String deviceDigest) {
+    }
+
+    /** 已验证 MFA 挑战的会话签发命令。 */
+    public record MfaLoginCommand(String challengeNo, long sessionId, String deviceDigest) {
     }
 
     /**

@@ -52,6 +52,22 @@ class SupplierQualityIssueAggregateTest {
     }
 
     /**
+     * 验证整改截止时间已过且仍未提交方案时，质量问题会进入逾期风险状态。
+     */
+    @Test
+    void shouldMarkRectificationOverdue() {
+        var aggregate = SupplierQualityIssueAggregate.rehydrate(10, "QI-10", 1, "WMS", "QC-1",
+                "PERFORMANCE", 3, "性能不合格", QualityIssueStatus.RECTIFYING.code(),
+                OffsetDateTime.now().minusMinutes(1), null, null, 1);
+
+        aggregate.markOverdue(0, ids);
+
+        assertThat(aggregate.status()).isEqualTo(QualityIssueStatus.OVERDUE);
+        assertThat(aggregate.pullEvents()).extracting(event -> event.eventType())
+                .containsExactly("SupplierRectificationOverdue");
+    }
+
+    /**
      * Ids。
      *
      * <p>位于领域层，使用通用语言表达业务状态、行为与不变量，不依赖 HTTP、数据库或消息中间件细节。封装与其名称一致的业务或技术职责，并保持内部实现细节不向调用方泄露。该类型只在所属限界上下文内表达该语义，跨上下文协作应通过已声明的接口或事件完成。

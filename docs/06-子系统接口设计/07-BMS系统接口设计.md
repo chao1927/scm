@@ -32,7 +32,7 @@
 | 前端页面接口 | `/api/bms/v1` |
 | 外部协同/开放接口 | `/openapi/bms/v1` |
 | 内部跨系统接口 | `/internal/bms/v1` |
-| 事件消费入口 | `/internal/bms/v1/events` |
+| 事件消费通道 | RocketMQ；`bms-business-event-consumer` 订阅上游领域 Topic |
 
 ### 3.2 通用请求头
 
@@ -706,7 +706,7 @@
 
 | 接口 | 发起方 | 调用时机 | BMS 处理 | 返回 |
 | --- | --- | --- | --- | --- |
-| `POST /openapi/bms/v1/source-events/collect` | WMS、OMS、中央库存、TMS | 作业、库存、订单、物流事实发生后 | 采集费用来源事件，识别可计费事实 | 受理结果 |
+| RocketMQ 费用来源事件 | WMS、OMS、中央库存、TMS | 作业、库存、订单、物流事实发生后 | Consumer 幂等采集费用来源，识别可计费事实 | Inbox/费用来源事实 |
 | `POST /openapi/bms/v1/refund-requests` | OMS | 售后审核通过或退款完成前需要结算侧记录 | 记录退款结算事实，必要时生成负向费用或交财务 | 退款结算受理结果 |
 | `POST /openapi/bms/v1/reconciliations/{reconciliationNo}/confirm` | 客户、供应商、物流商门户 | 外部对账确认 | 推进对账单状态 | 对账确认结果 |
 | `POST /openapi/bms/v1/reconciliations/{reconciliationNo}/differences` | 客户、供应商、物流商门户 | 外部对账存在差异 | 记录差异，进入差异处理 | 差异受理结果 |
@@ -714,9 +714,9 @@
 | `POST /internal/bms/v1/invoices/{invoiceNo}/issued` | 发票系统/财务系统 | 开票完成回调 | 回填发票号和附件 | 回填结果 |
 | `POST /internal/bms/v1/finance-handovers/{handoverNo}/posted` | 财务系统 | 入账完成回调 | 回填凭证并关闭交接 | 入账结果 |
 
-### 6.2 采集费用来源事件
+### 6.2 消费费用来源事件
 
-#### `POST /openapi/bms/v1/source-events/collect`
+#### RocketMQ `bms-business-event-consumer`
 
 | 项 | 说明 |
 | --- | --- |
@@ -792,9 +792,9 @@
 
 ## 7. 事件接口
 
-### 7.1 事件接收接口
+### 7.1 事件消费契约
 
-#### `POST /internal/bms/v1/events`
+#### RocketMQ `bms-business-event-consumer`
 
 | 项 | 说明 |
 | --- | --- |

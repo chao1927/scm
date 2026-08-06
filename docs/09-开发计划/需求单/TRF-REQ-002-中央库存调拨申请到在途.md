@@ -17,7 +17,7 @@
 - `POST/GET /api/inventory/v1/transfers`
 - `GET /api/inventory/v1/transfers/{transferNo}`
 - `POST /{transferNo}/submit|approve|reserve|outbound|in-transit|cancel`
-- `POST /internal/inventory/v1/transfer-events`
+- RocketMQ `inventory-domain-event-consumer` 消费调拨事件
 
 ## 事件
 

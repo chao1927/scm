@@ -18,20 +18,20 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('shows a retryable error outside the table and never disguises it as empty data', async ({ page }) => {
-  let attempts = 0
+  let backendAvailable = false
   await page.route('**/api/purchase/v1/requisitions?*', (route) => {
-    attempts += 1
-    if (attempts === 1) return route.fulfill({ status: 503, json: { message: '请购读模型暂不可用' } })
+    if (!backendAvailable) return route.fulfill({ status: 503, json: { message: '请购读模型暂不可用' } })
     return route.fulfill({ json: emptyPage() })
   })
   await login(page)
 
   await page.goto('/purchase/requisitions')
   const alert = page.getByRole('alert')
-  await expect(alert).toContainText('数据加载失败')
+  await expect(alert).toContainText('数据加载失败', { timeout: 10000 })
   await expect(alert).toContainText('请购读模型暂不可用')
   await expect(page.getByText('暂无业务数据')).toHaveCount(0)
 
+  backendAvailable = true
   await alert.getByRole('button', { name: '重新加载' }).click()
   await expect(alert).toHaveCount(0)
   await expect(page.getByText('暂无业务数据')).toBeVisible()

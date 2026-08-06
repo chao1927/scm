@@ -472,9 +472,9 @@ wms-service
 
 ## 8. 事件消费接口与监听器
 
-### 8.1 通用事件入口
+### 8.1 RocketMQ 通用事件消费入口
 
-`POST /internal/wms/v1/events`
+`RocketMQ Consumer Group: wms-business-event-consumer`
 
 | 层 | 实现逻辑 |
 | --- | --- |
@@ -492,7 +492,7 @@ wms-service
 | 层 | 实现逻辑 |
 | --- | --- |
 | 接口层 | Listener 接收采购、供应商、OMS、主数据、中央库存、TMS 事件。 |
-| 应用层 | 调用同一套 `WmsEventDispatchService`，保证 MQ 和 HTTP 事件入口逻辑一致。 |
+| 应用层 | 调用 `WmsEventDispatchService`，由 RocketMQ 消费入口统一分派业务事件。 |
 | 领域层 | 聚合按事件事实推进状态，不允许事件处理器直接改表。 |
 | 基础设施层 | Inbox 幂等、失败重试、死信告警。 |
 | 返回 | MQ ack 或重试。 |

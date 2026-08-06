@@ -1,0 +1,73 @@
+groups:
+  - name: scm-user-symptoms
+    rules:
+      - alert: ScmServiceUnavailable
+        expr: min_over_time(up{job=~"scm-.*-service"}[2m]) == 0
+        for: 2m
+        labels:
+          severity: page
+          owner_role: platform-oncall
+        annotations:
+          summary: "SCM 服务连续不可用"
+          impact: "对应子系统请求无法处理或被上游快速失败。"
+          runbook: "project/deploy/runbooks/alert-response.md#scmserviceunavailable"
+      - alert: ScmHttpErrorRateHigh
+        expr: sum by (service) (rate(http_server_requests_seconds_count{status=~"5.."}[5m])) / clamp_min(sum by (service) (rate(http_server_requests_seconds_count[5m])), 1) > 0.01
+        for: 5m
+        labels:
+          severity: page
+          owner_role: application-oncall
+        annotations:
+          summary: "SCM 服务 5xx 比例超过 1%"
+          impact: "用户命令或查询出现持续失败。"
+          runbook: "project/deploy/runbooks/alert-response.md#scmhttperrorratehigh"
+      - alert: ScmHttpP99LatencyHigh
+        expr: histogram_quantile(0.99, sum by (le, service) (rate(http_server_requests_seconds_bucket[5m]))) > 2
+        for: 10m
+        labels:
+          severity: ticket
+          owner_role: application-oncall
+        annotations:
+          summary: "SCM 服务 p99 延迟超过 2 秒"
+          impact: "用户操作明显变慢，可能引发上游超时和重试。"
+          runbook: "project/deploy/runbooks/alert-response.md#scmhttpp99latencyhigh"
+      - alert: ScmOutboxOldestPending
+        expr: max by (service) (scm_event_oldest_seconds{ledger="outbox",status="pending"}) > 300
+        for: 5m
+        labels:
+          severity: page
+          owner_role: integration-oncall
+        annotations:
+          summary: "Outbox 最老待投递事件超过 5 分钟"
+          impact: "跨子系统业务事实传播延迟。"
+          runbook: "project/deploy/runbooks/alert-response.md#scmoutboxoldestpending"
+      - alert: ScmRocketMqConsumerLagHigh
+        expr: max by (consumer_group, topic) (rocketmq_consumer_offset_diff) > 1000
+        for: 10m
+        labels:
+          severity: ticket
+          owner_role: integration-oncall
+        annotations:
+          summary: "RocketMQ 消费积压超过占位阈值"
+          impact: "下游读模型和业务状态不能及时推进。"
+          runbook: "project/deploy/runbooks/alert-response.md#scmrocketmqconsumerlaghigh"
+      - alert: ScmDatabasePoolSaturated
+        expr: max by (service) (hikaricp_connections_active / clamp_min(hikaricp_connections_max, 1)) > 0.9
+        for: 10m
+        labels:
+          severity: ticket
+          owner_role: database-oncall
+        annotations:
+          summary: "数据库连接池使用率超过 90%"
+          impact: "新请求可能排队或超时。"
+          runbook: "project/deploy/runbooks/alert-response.md#scmdatabasepoolsaturated"
+      - alert: ScmDubboNoProvider
+        expr: increase(scm_dubbo_no_provider_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: page
+          owner_role: platform-oncall
+        annotations:
+          summary: "Dubbo 调用发现不到 Provider"
+          impact: "供应商协同同步命令快速失败，未产生虚假成功。"
+          runbook: "project/deploy/runbooks/alert-response.md#scmdubbonoprovider"

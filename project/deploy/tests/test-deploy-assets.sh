@@ -51,4 +51,32 @@ if SCM_FAKE_UNREADY_PORT=8103 SCM_CURL_BIN="${TMP_DIR}/curl" \
 fi
 grep -q 'wms-service.*PASS.*FAIL' "${failure_output}" || fail "失败矩阵未定位 WMS readiness"
 
+for script in "${DEPLOY_DIR}"/bin/*.sh; do
+  bash -n "${script}" || fail "Shell 语法失败：${script}"
+done
+
+for required in \
+  alerts/scm-alert-rules.yml \
+  metrics/observability-catalog.md \
+  runbooks/alert-response.md \
+  runbooks/backup-and-recovery.md \
+  runbooks/release-and-rollback.md \
+  drills/failure-drills.md; do
+  [[ -s "${DEPLOY_DIR}/${required}" ]] || fail "缺少运维资产：${required}"
+done
+
+grep -q 'severity: page' "${DEPLOY_DIR}/alerts/scm-alert-rules.yml" || fail "告警缺 page 等级"
+grep -q 'severity: ticket' "${DEPLOY_DIR}/alerts/scm-alert-rules.yml" || fail "告警缺 ticket 等级"
+if grep -q 'severity: warning\|severity: critical' "${DEPLOY_DIR}/alerts/scm-alert-rules.yml"; then
+  fail "告警只允许 page/ticket 两级"
+fi
+alert_count="$(grep -c '^      - alert:' "${DEPLOY_DIR}/alerts/scm-alert-rules.yml")"
+runbook_count="$(grep -c 'runbook:' "${DEPLOY_DIR}/alerts/scm-alert-rules.yml")"
+[[ "${alert_count}" == "${runbook_count}" ]] || fail "每条告警必须配置 runbook"
+
+backup_plan="${TMP_DIR}/backup-plan.out"
+"${DEPLOY_DIR}/bin/backup-mysql.sh" --output-dir "${TMP_DIR}/backup" >"${backup_plan}"
+grep -q 'DRY-RUN' "${backup_plan}" || fail "备份默认必须为预览"
+[[ ! -e "${TMP_DIR}/backup" ]] || fail "备份预览不得创建目录"
+
 echo "deploy asset tests passed"

@@ -4,6 +4,7 @@ import com.chaobo.scm.iam.domain.oauth.AuthorizationCodeAggregate;
 import com.chaobo.scm.iam.domain.oauth.OAuthClientAggregate;
 import com.chaobo.scm.iam.infrastructure.persistence.OAuthMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
@@ -18,12 +19,19 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
-/** OAuth 2.0 authorization-code/PKCE and client-credentials application use cases. */
+/**
+ * OAuth 2.0 authorization-code/PKCE and client-credentials application use cases.
+ *
+ * @author chaobo
+ */
+@SuppressWarnings("PMD.ClassNamingShouldBeCamelRule")
 @Service
 public class OAuthApplicationService {
 
     private static final int AUTHORIZATION_CODE_TTL_SECONDS = 120;
     private static final int REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
+    private static final int RANDOM_TOKEN_BYTES = 32;
+    private static final String OPENID_SCOPE = "openid";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final OAuthMapper mapper;
@@ -31,6 +39,7 @@ public class OAuthApplicationService {
     private final Clock clock;
     private final AtomicLong ids = new AtomicLong(System.currentTimeMillis());
 
+    @Autowired
     public OAuthApplicationService(OAuthMapper mapper, OAuthTokenIssuerPort tokenIssuer) {
         this(mapper, tokenIssuer, Clock.systemUTC());
     }
@@ -235,7 +244,7 @@ public class OAuthApplicationService {
     }
 
     private static String randomToken() {
-        byte[] bytes = new byte[32];
+        byte[] bytes = new byte[RANDOM_TOKEN_BYTES];
         SECURE_RANDOM.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
@@ -255,7 +264,7 @@ public class OAuthApplicationService {
                 || blank(request.codeChallengeMethod()) || blank(request.state()) || blank(request.requestId())) {
             throw new IllegalArgumentException("authorization request is invalid");
         }
-        if (request.scopes().contains("openid") && blank(request.nonce())) {
+        if (request.scopes().contains(OPENID_SCOPE) && blank(request.nonce())) {
             throw new IllegalArgumentException("OIDC nonce is required for openid scope");
         }
     }

@@ -1,8 +1,6 @@
 package com.chaobo.scm.mdm.interfaces.web;
 
 import com.chaobo.scm.mdm.application.MdmOpenApiApplicationService;
-import com.chaobo.scm.common.security.ScmAccessContext;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.junit.jupiter.api.Test;
 import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -18,23 +16,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MdmOpenApiControllerTest {
 
     /**
-     * 处理当前类型职责中的操作 {@code delegatesOpenApiQueryAndInternalEvents}。
+     * 处理当前类型职责中的操作 {@code delegatesOpenApiQuery}。
      *
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
      */
     @Test
-    void delegatesOpenApiQueryAndInternalEvents() {
+    void delegatesOpenApiQuery() {
         StubOpenApiService service = new StubOpenApiService();
         MdmMasterDataOpenApiController openApiController = new MdmMasterDataOpenApiController(service);
-        MdmInternalEventController eventController = new MdmInternalEventController(service);
         MdmOpenApiApplicationService.QueryRequest query = new MdmOpenApiApplicationService.QueryRequest(List.of(new MdmOpenApiApplicationService.QueryItem("SKU", "SKU-001")));
-        MdmOpenApiApplicationService.EventEnvelope event = new MdmOpenApiApplicationService.EventEnvelope("evt-1", "PermissionDataScopeChanged", "IAM", "scope-1", "idem-1", "{}", null, null, null, null, null);
         assertThat(openApiController.query(query).items()).hasSize(1);
-        var auth = UsernamePasswordAuthenticationToken.authenticated("iam-service", "n/a", List.of());
-        auth.setDetails(new ScmAccessContext(1, "iam-service", "IAM", java.util.Set.of("mdm:event:consume"), java.util.Map.of()));
-        assertThat(eventController.consume(event, auth).consumeStatus()).isEqualTo("SUCCESS");
         assertThat(service.lastQueryRequest).isEqualTo(query);
-        assertThat(service.lastEvent).isEqualTo(event);
     }
 
     /**
@@ -53,13 +45,6 @@ class MdmOpenApiControllerTest {
          * <p>保存当前对象所需的接口请求参数；其具体生命周期由所属对象统一管理。
          */
         MdmOpenApiApplicationService.QueryRequest lastQueryRequest;
-
-        /**
-         * lastEvent（类型：{@code MdmOpenApiApplicationService.EventEnvelope}）。
-         *
-         * <p>保存当前对象所需的业务处理参数或成员；其具体生命周期由所属对象统一管理。
-         */
-        MdmOpenApiApplicationService.EventEnvelope lastEvent;
 
         /**
          * 创建 StubOpenApiService。
@@ -83,17 +68,5 @@ class MdmOpenApiControllerTest {
             return new MdmOpenApiApplicationService.QueryResponse(List.of(new MdmOpenApiApplicationService.Snapshot("MDR200001", "SKU", "SKU-001", "测试商品", "{}", 3, 1, 3)));
         }
 
-        /**
-         * 执行命令 {@code consumeEvent}。
-         *
-         * <p>该实现遵守上游端口契约；异常、幂等和返回语义必须与接口约定保持一致。
-         * @param event 业务处理参数或成员，类型为 {@code MdmOpenApiApplicationService.EventEnvelope}
-         * @return 执行命令的结果，类型为 {@code MdmOpenApiApplicationService.ConsumeResult}
-         */
-        @Override
-        public MdmOpenApiApplicationService.ConsumeResult consumeEvent(MdmOpenApiApplicationService.EventEnvelope event) {
-            lastEvent = event;
-            return new MdmOpenApiApplicationService.ConsumeResult(event.eventId(), "SUCCESS", false, "consumed");
-        }
     }
 }

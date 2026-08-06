@@ -17,6 +17,16 @@ spring:
 server:
   port: ${SERVER_PORT:8103}
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
 scm:
   security:
     active-kid: ${IAM_JWT_ACTIVE_KID:active}

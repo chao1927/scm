@@ -116,3 +116,11 @@ flowchart LR
   P[盘点差异] --> I[中央库存调整]
   E[仓内异常] --> A[责任与补偿]
 ```
+
+## WMS-NEXT-002 交付证据（2026-08-06）
+
+- `V12__wms_multitype_inbound.sql` 将历史来源类型归一为 `PURCHASE/TRANSFER/SALES_RETURN`，唯一键收敛为 `sourceSystem + sourceOrderNo + sourceLineNo + inboundType`。
+- `InboundType` ACL 防止 OMS 伪造采购入库、调拨来源越界；重复命令仅在来源快照完全一致时幂等命中。
+- `TransferOperationApplicationService` 创建统一调拨入库单，最终回执携带调出、累计实收和差异数量；`ReturnOperationApplicationService` 关联统一售后入库单并保护五类处置数量守恒。
+- 生产事件由 WMS Outbox 投递到真实 RocketMQ，入站命令经 Inbox 幂等消费；不使用 HTTP/日志模拟消费。
+- JDK 17 下 `scm-common 9/9 + WMS 50/50` 通过。真实 MySQL/Flyway/RocketMQ 链路归入 `QA-NEXT-001`，WMS 存量 Ali Check 63 项纳入代码注释治理债务。

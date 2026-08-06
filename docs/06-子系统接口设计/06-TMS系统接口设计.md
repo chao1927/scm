@@ -33,7 +33,7 @@
 | 前端页面接口 | `/api/tms/v1` |
 | 内部跨系统接口 | `/internal/tms/v1` |
 | 开放/承运商回调接口 | `/openapi/tms/v1` |
-| 事件消费入口 | `/internal/tms/v1/events` |
+| 事件消费通道 | RocketMQ；`tms-business-event-consumer` 订阅上游领域 Topic |
 
 ### 3.2 通用请求头
 
@@ -518,8 +518,8 @@ TMS 推送 BMS 使用 BMS 内部接口，TMS 本侧需要定义调用契约和�
 
 | 项 | 设计 |
 | --- | --- |
-| BMS接口 | `POST /internal/bms/v1/fee-source-events` |
-| 调用时机 | 费用来源生成后自动推送，或费用来源页人工重推 |
+| BMS通道 | RocketMQ；TMS Outbox 发布到 `tms-domain-event`，BMS Consumer 消费 |
+| 调用时机 | 费用来源生成后自动投递；人工重试重新调度 Outbox，不调用 HTTP 事件接口 |
 | 幂等键 | `feeSourceNo + waybillNo + feeSourceVersion` |
 | TMS数据变化 | 推送成功：`feeSourceStatus=3 已推送`，写入 `bmsReceiveNo`；失败：`feeSourceStatus=4 推送失败`，保留失败原因 |
 
@@ -531,7 +531,7 @@ TMS 推送 BMS 使用 BMS 内部接口，TMS 本侧需要定义调用契约和�
 
 | 接口 | 方法 | 路径 | 来源系统 | 用途 |
 | --- | --- | --- | --- | --- |
-| 消费领域事件 | `POST` | `/internal/tms/v1/events` | OMS、WMS、采购、供应商、主数据 | 接收销售配送请求、包装完成、发货交接、ASN、物流商启停用等事件 |
+| 消费领域事件 | RocketMQ | `tms-business-event-consumer` | OMS、WMS、采购、供应商、主数据 | 接收销售配送请求、包装完成、发货交接、ASN、物流商启停用等事件 |
 
 请求字段：
 

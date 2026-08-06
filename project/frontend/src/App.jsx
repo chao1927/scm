@@ -1,7 +1,7 @@
 import { Result, Spin } from 'antd'
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
-import { login, logout, queryCurrentUser, queryMenus, queryPermissionSnapshot } from './api/auth'
+import { completeMfaLogin, login, logout, queryCurrentUser, queryMenus, queryPermissionSnapshot, verifyMfaChallenge } from './api/auth'
 import { hasPermission } from './auth/menuAccess'
 import { clearTokens, permissionCodesFromSnapshot, storeTokens } from './auth/session'
 import { systemsById } from './config/systemCatalog'
@@ -34,11 +34,34 @@ export default function App() {
   const handleLogin = async ({ username, password }) => {
     setSession((current) => ({ ...current, status: 'authenticating', error: '' }))
     try {
-      storeTokens(await login(username, password))
+      const deviceDigest = sessionStorage.getItem('iam_device_digest') || crypto.randomUUID()
+      sessionStorage.setItem('iam_device_digest', deviceDigest)
+      const result = await login(username, password, deviceDigest)
+      if (result?.data?.status === 'MFA_REQUIRED') {
+        setSession({
+          status: 'mfa-required', user: null, permissions: [], menus: [], error: '',
+          mfa: { challengeNo: result.data.challengeNo, sessionId: result.data.sessionId, deviceDigest },
+        })
+        return
+      }
+      storeTokens(result)
       await loadSession()
     } catch (error) {
       clearTokens()
       setSession({ status: 'anonymous', user: null, permissions: [], menus: [], error: error?.message || '登录失败' })
+    }
+  }
+
+  const handleMfa = async ({ method, code }) => {
+    setSession((current) => ({ ...current, status: 'mfa-verifying', error: '' }))
+    try {
+      const { challengeNo, sessionId, deviceDigest } = session.mfa
+      await verifyMfaChallenge(challengeNo, sessionId, deviceDigest, method, code)
+      storeTokens(await completeMfaLogin(challengeNo, sessionId, deviceDigest))
+      await loadSession()
+    } catch (error) {
+      clearTokens()
+      setSession((current) => ({ ...current, status: 'mfa-required', error: error?.message || 'MFA 验证失败' }))
     }
   }
 
@@ -52,8 +75,8 @@ export default function App() {
     }
   }
 
-  if (session.status === 'anonymous' || session.status === 'authenticating') {
-    return <Suspense fallback={<div className="auth-loading"><Spin /></div>}><LoginPage loading={session.status === 'authenticating'} error={session.error} onLogin={handleLogin} /></Suspense>
+  if (['anonymous', 'authenticating', 'mfa-required', 'mfa-verifying'].includes(session.status)) {
+    return <Suspense fallback={<div className="auth-loading"><Spin /></div>}><LoginPage loading={['authenticating', 'mfa-verifying'].includes(session.status)} error={session.error} mfa={session.status.startsWith('mfa-') ? session.mfa : null} onLogin={handleLogin} onMfa={handleMfa} /></Suspense>
   }
   if (session.status === 'loading') {
     return <div className="auth-loading"><Spin size="large" description="正在加载 IAM 权限" /></div>

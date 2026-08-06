@@ -7,8 +7,14 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import java.time.Instant;
+import java.util.List;
 
-/** MFA challenge persistence and atomic recovery-code consumption. */
+/**
+ * MFA challenge persistence and atomic recovery-code consumption.
+ *
+ * @author chaobo
+ */
+@SuppressWarnings("PMD.AbstractMethodOrInterfaceMethodMustUseJavadocRule")
 @Mapper
 public interface MfaMapper {
 
@@ -48,6 +54,18 @@ public interface MfaMapper {
 
     @Select("select * from iam_mfa_configuration where user_id=#{userId}")
     ConfigurationRow findConfiguration(long userId);
+
+    /** @param limit 数量上限 @return MFA 配置治理读模型 */
+    @Select("select config_id configId,user_id userId,config_status status,version "
+        + "from iam_mfa_configuration order by updated_at desc limit #{limit}")
+    List<ConfigurationGovernanceRow> listConfigurations(@Param("limit") int limit);
+
+    /** @param limit 数量上限 @return MFA 挑战治理读模型 */
+    @Select("select challenge_no challengeNo,user_id userId,app_code appCode,session_id sessionId,"
+        + "purpose,challenge_status status,failed_attempts failedAttempts,max_attempts maxAttempts,"
+        + "expires_at expiresAt,verified_at verifiedAt,version from iam_mfa_challenge "
+        + "order by updated_at desc limit #{limit}")
+    List<ChallengeGovernanceRow> listChallenges(@Param("limit") int limit);
 
     @Insert("""
             insert into iam_mfa_configuration(config_id,user_id,secret_ciphertext,config_status,version,created_at,updated_at)
@@ -93,6 +111,10 @@ public interface MfaMapper {
     }
 
     record ConfigurationRow(long configId, long userId, String secretCiphertext, int status, int version) { }
+    record ConfigurationGovernanceRow(long configId, long userId, int status, int version) { }
+    record ChallengeGovernanceRow(String challengeNo, long userId, String appCode, long sessionId,
+                                  String purpose, String status, int failedAttempts, int maxAttempts,
+                                  Instant expiresAt, Instant verifiedAt, int version) { }
     record AuditRow(long auditId, long userId, String action, String challengeNo, Long operatorId,
                     String reason, Instant occurredAt) { }
     record OutboxRow(long eventId, String eventType, String businessNo, String payload, Instant occurredAt) { }

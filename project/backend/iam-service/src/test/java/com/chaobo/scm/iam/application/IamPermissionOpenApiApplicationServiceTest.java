@@ -456,6 +456,16 @@ class IamPermissionOpenApiApplicationServiceTest {
             return List.of();
         }
 
+        @Override
+        public List<RoleGrantRow> roleGrants(int limit) {
+            return List.of();
+        }
+
+        @Override
+        public List<UserRoleRow> userRoles(int limit) {
+            return List.of();
+        }
+
         /**
          * 处理当前类型职责中的操作 {@code insertDataScope}。
          *

@@ -39,7 +39,7 @@ public class RocketMqBmsMessageBrokerAdapter implements BmsMessageBrokerPort {
         this.topic = topic;
         producer = provider.newProducerBuilder()
             .setClientConfiguration(
-                ClientConfiguration.newBuilder().setEndpoints(endpoints).build())
+                com.chaobo.scm.common.mq.RocketMqClientConfigurations.create(endpoints))
             .setTopics(topic).build();
     }
 

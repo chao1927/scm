@@ -3,9 +3,9 @@ package com.chaobo.scm.inventory.infrastructure.persistence;
 import com.chaobo.scm.inventory.application.InventoryOperationReadModelPort;
 import com.chaobo.scm.inventory.application.export.InventoryExportDataPort;
 import com.chaobo.scm.inventory.application.export.InventoryExportTask;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -89,7 +89,7 @@ public class InventoryExportDataAdapter implements InventoryExportDataPort {
     private List<String> strings(String value) {
         try {
             return json.readValue(value, STRING_LIST);
-        } catch (JsonProcessingException exception) {
+        } catch (JacksonException exception) {
             throw new IllegalStateException("导出数据范围快照损坏", exception);
         }
     }
@@ -97,7 +97,7 @@ public class InventoryExportDataAdapter implements InventoryExportDataPort {
     private Map<String, Object> map(String value) {
         try {
             return json.readValue(value, OBJECT_MAP);
-        } catch (JsonProcessingException exception) {
+        } catch (JacksonException exception) {
             throw new IllegalStateException("导出查询条件损坏", exception);
         }
     }

@@ -1,5 +1,6 @@
 package com.chaobo.scm.supplier.infrastructure.integration;
 
+import com.chaobo.scm.common.integration.ScmDubboContract;
 import org.apache.dubbo.config.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -83,6 +84,8 @@ public class DubboReferenceFactory {
         reference.setRegistry(registry);
         reference.setInterface(type);
         reference.setProtocol("tri");
+        reference.setGroup(ScmDubboContract.GROUP);
+        reference.setVersion(ScmDubboContract.VERSION);
         reference.setCheck(false);
         reference.setLazy(true);
         reference.setTimeout(timeout);

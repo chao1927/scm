@@ -19,7 +19,16 @@ mybatis:
   configuration:
     map-underscore-to-camel-case: true
 server:
-  port: 8098
+  port: ${SERVER_PORT:8098}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
 scm:
   mdm:
     file-storage:
@@ -40,3 +49,15 @@ scm:
     previous-hmac-secret: ${IAM_JWT_PREVIOUS_SECRET:}
     previous-valid-until-epoch-second: ${IAM_JWT_PREVIOUS_VALID_UNTIL_EPOCH_SECOND:0}
     permission-namespace: mdm
+  rocketmq:
+    endpoints: ${ROCKETMQ_ENDPOINTS:localhost:8081}
+    mdm-producer:
+      default-topic: ${MDM_ROCKETMQ_DEFAULT_TOPIC:mdm-domain-event}
+      topics: ${MDM_ROCKETMQ_PRODUCER_TOPICS:mdm-domain-event}
+    mdm-consumer:
+      topics: ${MDM_ROCKETMQ_CONSUMER_TOPICS:supplier-domain-event,tms-domain-event,mdm-publication-receipt}
+      group: ${MDM_ROCKETMQ_CONSUMER_GROUP:mdm-business-event-consumer}
+  outbox:
+    batch-size: ${MDM_OUTBOX_BATCH_SIZE:100}
+    fixed-delay: ${MDM_OUTBOX_FIXED_DELAY_MS:1000}
+    max-retries: ${MDM_OUTBOX_MAX_RETRIES:16}

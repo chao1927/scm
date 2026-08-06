@@ -1,5 +1,8 @@
 package com.chaobo.scm.wms;
 
+import com.chaobo.scm.common.integration.ScmDubboProviderConfiguration;
+import org.springframework.context.annotation.Import;
+
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -13,6 +16,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @since 0.1.0
  */
 @SpringBootApplication
+@Import(ScmDubboProviderConfiguration.class)
 @MapperScan("com.chaobo.scm.wms.infrastructure.persistence")
 public class WmsServiceApplication {
 

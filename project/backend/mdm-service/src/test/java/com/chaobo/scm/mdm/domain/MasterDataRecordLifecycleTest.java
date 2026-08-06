@@ -60,4 +60,21 @@ class MasterDataRecordLifecycleTest {
         record.disable("停用", 4);
         assertThat(record.status()).isEqualTo(MasterDataRecordAggregate.DISABLED);
     }
+
+    /** 冻结中的主数据允许被明确启用，并生成可审计领域事件。 */
+    @Test
+    void frozenRecordCanBeEnabledAgain() {
+        MasterDataRecordAggregate record = MasterDataRecordAggregate.create("MDR200001", "SKU",
+                "SKU-001", "测试商品", "{\"name\":\"测试商品\"}");
+        record.submitReview("提交审核", 1);
+        record.approve("审核通过", 2);
+        record.freeze("质量冻结", 3);
+
+        record.enable("复核通过", 4);
+
+        assertThat(record.status()).isEqualTo(MasterDataRecordAggregate.ENABLED);
+        assertThat(record.version()).isEqualTo(5);
+        assertThat(record.pullEvents()).extracting(MdmEvent::eventType)
+                .contains("MasterDataEnabled");
+    }
 }

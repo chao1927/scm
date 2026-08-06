@@ -69,6 +69,26 @@ class BmsExternalIntegrationApplicationServiceTest {
     }
 
     @Test
+    void unknownPaymentResultKeepsRefundPendingInsteadOfReleasingAmount() {
+        var mapper = new BmsApplicationServiceTest.MemoryBmsMapper();
+        mapper.refunds.put("RF-UNKNOWN", new BmsMapper.RefundSettlementRow(
+            1L, "RF-UNKNOWN", "B-1", BigDecimal.TEN,
+            BmsDomain.RefundSettlementAggregate.REQUESTED, null, 1));
+        var taskMapper = new MemoryTaskMapper();
+        var service = integration(mapper, taskMapper,
+            request -> new ErpFinanceGateway.PostingResult("VOUCHER-1"),
+            request -> new TaxInvoiceGateway.IssueResult("TAX-1"),
+            request -> { throw new PaymentGateway.ResultUnknownException("timeout", null); });
+
+        service.enqueueRefund("RF-UNKNOWN", "refund-unknown-1");
+        service.dispatch(10);
+
+        assertThat(mapper.refunds.get("RF-UNKNOWN").status())
+            .isEqualTo(BmsDomain.RefundSettlementAggregate.CONFIRMATION_PENDING);
+        assertThat(mapper.occupiedRefundAmount("B-1")).isEqualByComparingTo("10.00");
+    }
+
+    @Test
     void manualRetryRequiresBillingObjectScopeAndWritesAudit() {
         var mapper = new BmsApplicationServiceTest.MemoryBmsMapper();
         mapper.bills.put("B-1", new BmsMapper.BillRow(

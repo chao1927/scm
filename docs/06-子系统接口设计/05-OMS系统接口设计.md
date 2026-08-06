@@ -32,7 +32,7 @@
 | 前端页面接口        | `/api/oms/v1`             |
 | 渠道/外部订单接入接口   | `/openapi/oms/v1`         |
 | OMS 内部跨系统调用接口 | `/internal/oms/v1`        |
-| 事件回调/事件消费入口   | `/internal/oms/v1/events` |
+| 事件消费通道           | RocketMQ；`oms-business-event-consumer` 订阅上游领域 Topic |
 
 ### 3.2 通用请求头
 
@@ -884,9 +884,9 @@
 
 | 项 | 设计 |
 | --- | --- |
-| 方法 | `POST` |
-| 路径 | `/internal/oms/v1/events` |
-| 调用方 | 消息网关、事件总线、上游系统补偿任务 |
+| 协议 | RocketMQ Push Consumer |
+| 消费组 | `oms-business-event-consumer` |
+| 调用方 | 上游系统 Outbox Producer；补偿通过 RocketMQ 重投或 Inbox 人工重放 |
 | 调用场景 | OMS 消费库存、WMS、BMS、主数据、物流事件 |
 | 数据变化 | 先写 `oms_event_consume_log`；再按事件类型调用应用服务；成功后更新消费状态，失败可重试 |
 

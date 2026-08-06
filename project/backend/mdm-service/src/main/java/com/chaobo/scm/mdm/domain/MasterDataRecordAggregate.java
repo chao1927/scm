@@ -295,6 +295,26 @@ public class MasterDataRecordAggregate {
     }
 
     /**
+     * 将已冻结主数据恢复为启用状态。
+     *
+     * @param reason 恢复原因
+     * @param expectedVersion 预期版本
+     */
+    public void enable(String reason, long expectedVersion) {
+        ensureVersion(expectedVersion);
+        if (status != FROZEN) {
+            throw new IllegalStateException("only frozen master data can be enabled");
+        }
+        if (blank(reason)) {
+            throw new IllegalArgumentException("enable reason is required");
+        }
+        status = ENABLED;
+        this.reason = reason;
+        version++;
+        events.add(MdmEvent.of("MasterDataEnabled", recordNo, reason));
+    }
+
+    /**
      * 执行命令 {@code disable}。
      *
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。

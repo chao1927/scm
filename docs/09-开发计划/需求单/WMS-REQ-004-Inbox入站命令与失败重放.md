@@ -22,7 +22,7 @@ WMS 需要接收采购、OMS、供应商系统发来的入库/出库命令。入
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| `POST` | `/internal/wms/v1/events` | 接收标准入站事件 |
+| `RocketMQ` | `wms-business-event-consumer` | 接收标准入站事件 |
 | `GET` | `/api/wms/v1/operations/inbox/failed-events` | 查询失败入站事件 |
 | `POST` | `/api/wms/v1/operations/inbox/failed-events/{inboxId}/replay` | 人工重放失败事件 |
 

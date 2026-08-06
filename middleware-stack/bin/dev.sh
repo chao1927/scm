@@ -148,15 +148,35 @@ initialize_rocketmq_topics() {
   for topic in \
     supplier-domain-event \
     purchase-domain-event \
+    wms-domain-event \
+    inventory-domain-event \
+    iam-domain-event \
+    mdm-domain-event \
+    oms-domain-event \
+    tms-domain-event \
+    bms-domain-event \
     master-data-domain-event \
-    iam-approval-domain-event; do
+    iam-approval-domain-event \
+    mdm-publication-receipt \
+    supplier-operations-event; do
     compose exec -T rocketmq-broker sh mqadmin updateTopic \
       -n rocketmq-namesrv:9876 \
       -c DefaultCluster \
       -t "${topic}" >/dev/null
     echo "  ✓ RocketMQ Topic ${topic}"
   done
-  for consumer_group in supplier-master-data-snapshot supplier-contract-approval; do
+  for consumer_group in \
+    supplier-master-data-snapshot \
+    supplier-contract-approval \
+    supplier-business-event-v1 \
+    purchase-business-event-consumer \
+    wms-business-event-consumer \
+    inventory-domain-event-consumer \
+    iam-business-event-consumer \
+    mdm-business-event-consumer \
+    oms-business-event-consumer \
+    tms-business-event-consumer \
+    bms-business-event-consumer; do
     compose exec -T rocketmq-broker sh mqadmin updateSubGroup \
       -n rocketmq-namesrv:9876 \
       -c DefaultCluster \

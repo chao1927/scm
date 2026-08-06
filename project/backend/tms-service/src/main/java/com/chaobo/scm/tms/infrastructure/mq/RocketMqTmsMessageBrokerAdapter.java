@@ -41,7 +41,7 @@ public class RocketMqTmsMessageBrokerAdapter implements TmsMessageBrokerPort {
         this.topic = topic;
         this.producer = provider.newProducerBuilder()
             .setClientConfiguration(
-                ClientConfiguration.newBuilder().setEndpoints(endpoints).build())
+                com.chaobo.scm.common.mq.RocketMqClientConfigurations.create(endpoints))
             .setTopics(topic)
             .build();
     }

@@ -22,10 +22,10 @@ flowchart LR
   V --> E[BillingRulePublished]
 ```
 
-## BMS-API-002 采集/查询/重放费用来源
-`POST /openapi/charge-sources`、`GET /charge-sources`、`POST /charge-sources/{id}/replay`
+## BMS-API-002 消费/查询/重放费用来源
+费用来源由 RocketMQ `bms-business-event-consumer` 消费组接收；`GET /charge-sources`、`POST /charge-sources/{id}/replay`
 
-- 接口层：`ChargeSourceOpenApiController` 校验来源系统、业务单号、费用维度和事件编码；查询 Controller 提供分页/范围。
+- 消费层：RocketMQ Listener 校验来源系统、业务单号、费用维度和事件编码；查询 Controller 提供分页/范围。
 - 应用层：`ChargeSourceApplicationService` 先 Inbox 幂等再标准化来源；重放服务读取失败载荷。
 - 领域层：`ChargeSourceAggregate` 保证同来源事件只形成一次费用事实，状态包含待计算/已计算/失败。
 - 基础设施层：来源资源库、Inbox、失败表、Outbox。
@@ -81,9 +81,9 @@ flowchart LR
 ```
 
 ## BMS-API-005 退款结算、报表与通用事件
-`POST /refund-settlements`、`GET /refund-settlements/{refundNo}`、`POST /refund-settlements/{refundNo}/retry|close`、`GET /reports/settlement-summary`、`POST /events`
+`POST /refund-settlements`、`POST /refund-settlements/{refundNo}/retry`、`POST /refund-settlements/{refundNo}/manual-close|manual-complete`、`POST /internal/bms/v1/refund-settlements/{refundNo}/confirmation-pending`、`GET /reports/settlement-summary`；内部业务事件由 RocketMQ `bms-business-event-consumer` 消费组接收
 
-- 接口层：`RefundSettlementController` 校验原支付/账单、售后单、退款金额、币种、幂等键和版本；重试/人工关闭需要高风险权限和原因。`BmsReportController` 和事件入口只操作读模型或 Inbox。
+- 接口层：`RefundSettlementController` 校验原支付/账单、售后单、退款金额、币种、幂等键和版本；重试/人工关闭需要高风险权限和原因。`BmsReportController` 只操作读模型，RocketMQ Consumer 负责写入 Inbox。
 - 应用层：退款结算服务加载 OMS 售后快照和原账单/支付事实，执行创建、提交支付、消费回执、失败重试和人工补偿；报表查询服务使用读模型。
 - 领域层：`RefundSettlementAggregate` 保护累计退款不超过可退金额、币种一致、终态不可重提、支付回执只应用一次。状态为 `REQUESTED/CONFIRMATION_PENDING/FINISHED/FAILED/CLOSED`。
 - 基础设施层：退款资源库、退款累计投影、OMS/支付/ERP ACL、回执 Inbox、Outbox、失败记录和审计。
@@ -99,3 +99,11 @@ flowchart LR
   ERP --> I[财务回执Inbox]
   I --> R
 ```
+
+### BMS-NEXT-002 交付证据（2026-08-06）
+
+- 聚合和金额占用：固化 `REQUESTED/CONFIRMATION_PENDING/FINISHED/FAILED/CLOSED`，`REQUESTED`、`CONFIRMATION_PENDING`、`FINISHED` 继续占用可退额度；失败重试在账单行锁内重新校验额度。
+- 请求幂等和并发：`V6__bms_refund_settlement_hardening.sql` 增加幂等键唯一索引、请求摘要和尝试次数；服务在 `FOR UPDATE` 后二次检查幂等事实，状态更新使用 CAS。
+- 支付回执：全局回执号去重，并校验金额、币种、商户号和支付交易号；跨退款、字段冲突和终态乱序回执记录到 `bms_refund_exception`，不改写聚合。
+- 超时和人工处置：支付 HTTP 结果未知与明确失败分流；前者进入待确认。人工完成/关闭必须有凭证、原因和不同的操作人/复核人，同步产生 Outbox 和操作日志。
+- 验证：JDK 17 下 `scm-common` 9/9、BMS 24/24 测试通过，`git diff --check` 通过。Ali Check 仍会报告 BMS 存量报表/外部任务 Javadoc 与魔法值问题，纳入最终全量规范门禁处理。

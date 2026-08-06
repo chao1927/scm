@@ -10,6 +10,8 @@ import java.util.regex.Pattern;
 
 /**
  * 一次性授权码聚合。授权码绑定客户端、用户、回调地址、Scope、PKCE 与 nonce。
+ *
+ * @author chaobo
  */
 public final class AuthorizationCodeAggregate {
 

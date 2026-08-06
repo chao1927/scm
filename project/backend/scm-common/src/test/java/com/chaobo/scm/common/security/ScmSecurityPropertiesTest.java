@@ -1,6 +1,7 @@
 package com.chaobo.scm.common.security;
 
 import org.junit.jupiter.api.Test;
+import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -65,6 +66,14 @@ class ScmSecurityPropertiesTest {
         assertThatThrownBy(windowless::previousSecretKey)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("valid-until");
+    }
+
+    @Test
+    void keepsOnlyExplicitNonBlankPublicPaths() {
+        var properties = new ScmSecurityProperties();
+        properties.setPublicPaths(List.of("/api/iam/v1/auth/login", " "));
+
+        assertThat(properties.getPublicPaths()).containsExactly("/api/iam/v1/auth/login");
     }
 
     private static ScmSecurityProperties configuredActive() {

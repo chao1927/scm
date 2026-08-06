@@ -10,6 +10,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.SpringBootConfiguration;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.context.annotation.Import;
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -27,7 +31,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author SCM Team
  * @since 0.1.0
  */
-@SpringBootTest(properties = "scm.security.hmac-secret=01234567890123456789012345678901")
+@SpringBootTest(classes = InventoryMySqlIntegrationTest.TestApplication.class,
+        properties = {
+                "spring.config.import=",
+                "spring.cloud.nacos.config.enabled=false",
+                "spring.flyway.enabled=true",
+                "spring.flyway.locations=classpath:db/migration"
+        })
 @EnabledIfSystemProperty(named = "run.mysql.it", matches = "true")
 class InventoryMySqlIntegrationTest {
 
@@ -162,5 +172,14 @@ class InventoryMySqlIntegrationTest {
         assertThat(replay.replayId()).isPositive();
         assertThat(duplicateReplay.newlyRegistered()).isFalse();
         assertThat(duplicateReplay.replayId()).isEqualTo(replay.replayId());
+    }
+
+    /** 仅装配真实数据源、Flyway、MyBatis 和失败事件存储，不启动 HTTP/Nacos/MQ。 */
+    @SpringBootConfiguration
+    @EnableAutoConfiguration
+    @MapperScan("com.chaobo.scm.inventory.infrastructure.persistence")
+    @Import({com.chaobo.scm.inventory.infrastructure.persistence.InventoryFlywayConfiguration.class,
+            com.chaobo.scm.inventory.infrastructure.persistence.MyBatisInventoryEventFailureStore.class})
+    static class TestApplication {
     }
 }

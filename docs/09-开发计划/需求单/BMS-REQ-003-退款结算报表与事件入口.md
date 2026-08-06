@@ -8,7 +8,7 @@
 
 | 类型 | 内容 |
 | --- | --- |
-| 接口 | `POST /api/bms/v1/refund-settlements`、`POST /refund-settlements/{refundNo}/finish|fail`、`GET /reports/settlement-summary`、`POST /internal/bms/v1/events` |
+| 接口 | `POST /api/bms/v1/refund-settlements`、`POST /refund-settlements/{refundNo}/finish|fail`、`GET /reports/settlement-summary`、RocketMQ `bms-business-event-consumer` 消费内部业务事件 |
 | 领域 | `RefundSettlementAggregate`、结算汇总读模型、BMS Inbox |
 | 不变量 | 退款金额不得超过可退账单金额；退款结果只能从请求中进入成功或失败；内部事件以来源系统+事件 ID 幂等 |
 | 事件 | `RefundSettlementRequested/Finished/Failed`、`BmsExternalEventConsumed` |

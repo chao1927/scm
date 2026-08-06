@@ -32,9 +32,8 @@ public class RocketMqOmsMessageBroker implements OmsMessageBroker {
             throws ClientException {
         this.codec = codec;
         this.topic = topic;
-        ClientConfiguration configuration = ClientConfiguration.newBuilder()
-                .setEndpoints(endpoints)
-                .build();
+        ClientConfiguration configuration =
+                com.chaobo.scm.common.mq.RocketMqClientConfigurations.create(endpoints);
         this.producer = provider.newProducerBuilder()
                 .setClientConfiguration(configuration)
                 .setTopics(topic)

@@ -1,6 +1,7 @@
 package com.chaobo.scm.common.security;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authorization.AuthorizationDecision;
@@ -23,6 +24,20 @@ import java.util.Map;
 @EnableWebSecurity
 @EnableConfigurationProperties(ScmSecurityProperties.class)
 public class ScmSecurityConfiguration {
+
+    /**
+     * 为存量 RocketMQ 信封编解码器提供 Jackson 2 兼容实例。
+     *
+     * <p>Spring Boot 4 默认自动装配 Jackson 3，但已发布的消息适配器仍使用
+     * {@code com.fasterxml.jackson.databind.ObjectMapper}。两种类型包名不同，可并存且不改变消息契约。
+     *
+     * @return 已自动发现 Java Time 等模块的 Jackson 2 对象映射器
+     */
+    @Bean
+    @ConditionalOnMissingBean(com.fasterxml.jackson.databind.ObjectMapper.class)
+    com.fasterxml.jackson.databind.ObjectMapper scmLegacyJacksonObjectMapper() {
+        return new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+    }
 
     /**
      * 处理当前类型职责中的操作 {@code scmJwtDecoder}。
@@ -54,18 +69,27 @@ public class ScmSecurityConfiguration {
      */
     @Bean
     SecurityFilterChain scmSecurityFilterChain(HttpSecurity http, ScmSecurityProperties properties) throws Exception {
-        return http.csrf(csrf -> csrf.disable()).authorizeHttpRequests(authorize -> authorize.requestMatchers("/actuator/health", "/actuator/info").permitAll().anyRequest().access((authentication, context) -> {
-            var auth = authentication.get();
-            if (auth == null || !auth.isAuthenticated()) {
-                return new AuthorizationDecision(false);
+        return http.csrf(csrf -> csrf.disable()).authorizeHttpRequests(authorize -> {
+            authorize.requestMatchers("/actuator/health", "/actuator/info").permitAll();
+            if (!properties.getPublicPaths().isEmpty()) {
+                authorize.requestMatchers(properties.getPublicPaths().toArray(String[]::new)).permitAll();
             }
-            String namespace = properties.getPermissionNamespace();
-            if (namespace.isBlank()) {
-                return new AuthorizationDecision(true);
-            }
-            String prefix = namespace + ":";
-            boolean allowed = auth.getAuthorities().stream().map(authority -> authority.getAuthority()).anyMatch(value -> "*".equals(value) || value.startsWith(prefix));
-            return new AuthorizationDecision(allowed);
-        })).oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt.jwtAuthenticationConverter(new ScmJwtAuthenticationConverter()))).build();
+            authorize.anyRequest().access((authentication, context) -> {
+                var auth = authentication.get();
+                if (auth == null || !auth.isAuthenticated()) {
+                    return new AuthorizationDecision(false);
+                }
+                String namespace = properties.getPermissionNamespace();
+                if (namespace.isBlank()) {
+                    return new AuthorizationDecision(true);
+                }
+                String prefix = namespace + ":";
+                boolean allowed = auth.getAuthorities().stream()
+                        .map(authority -> authority.getAuthority())
+                        .anyMatch(value -> "*".equals(value) || value.startsWith(prefix));
+                return new AuthorizationDecision(allowed);
+            });
+        }).oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt ->
+                jwt.jwtAuthenticationConverter(new ScmJwtAuthenticationConverter()))).build();
     }
 }

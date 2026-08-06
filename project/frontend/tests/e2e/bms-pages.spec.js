@@ -57,7 +57,7 @@ test('opens all eight BMS finance pages on real resource definitions', async ({ 
   ]
   for (const [pageId, title] of pages) {
     await page.goto(`/bms/${pageId}`)
-    await expect(page.getByRole('heading', { name: title })).toBeVisible()
+    await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible()
     await expect(page.locator('.ant-table-row')).toHaveCount(1)
   }
 

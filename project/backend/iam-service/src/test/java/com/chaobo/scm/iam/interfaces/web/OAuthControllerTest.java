@@ -7,6 +7,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@SuppressWarnings("PMD.ClassNamingShouldBeCamelRule")
 class OAuthControllerTest {
 
     @Test
@@ -22,6 +23,7 @@ class OAuthControllerTest {
                 .doesNotContainKeys("refresh_token", "id_token");
     }
 
+    @SuppressWarnings("PMD.ClassNamingShouldBeCamelRule")
     private static final class StubOAuthService extends OAuthApplicationService {
         private StubOAuthService() { super(null, null); }
 

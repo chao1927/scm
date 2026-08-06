@@ -64,7 +64,8 @@ public class RocketMqMessageBrokerAdapter implements MessageBrokerPort {
             throws ClientException {
         this.codec = codec;
         this.topic = topic;
-        var configuration = ClientConfiguration.newBuilder().setEndpoints(endpoints).build();
+        var configuration =
+                com.chaobo.scm.common.mq.RocketMqClientConfigurations.create(endpoints);
         this.producer = provider.newProducerBuilder().setClientConfiguration(configuration).setTopics(topic).build();
     }
 

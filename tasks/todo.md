@@ -43,27 +43,27 @@
 
 | 状态 | 编号 | Agent | 依赖 | 任务 |
 | --- | --- | --- | --- | --- |
-| [-] | IAM-NEXT-001A | iam_oauth_completion | 无 | Redis TokenCache 与密钥轮换 |
+| [x] | IAM-NEXT-001A | root-coordinator | 无 | Redis TokenCache 与密钥轮换 |
 | [x] | IAM-NEXT-001B | iam_oauth_completion | IAM-NEXT-001A | OAuth/OIDC 授权服务 |
-| [ ] | IAM-NEXT-001C | 未领取 | PAR-NEXT-001、IAM-NEXT-001A | MFA 挑战与治理页面 |
+| [x] | IAM-NEXT-001C | root-coordinator | PAR-NEXT-001、IAM-NEXT-001A | MFA 挑战与治理页面 |
 
 ## P1：需求基线与 DDD 设计收口
 
 | 状态 | 编号 | Agent | 依赖 | 任务 |
 | --- | --- | --- | --- | --- |
 | [x] | DOC-NEXT-001 | ddd_design_closure | 无 | 调拨、退款与多类型入库 DDD 设计收口 |
-| [ ] | SUP-NEXT-002 | 未领取 | SUP-NEXT-001B、DOC-NEXT-001 | 供应商核心需求追踪与异常回归 |
+| [x] | SUP-NEXT-002 | root | SUP-NEXT-001B、DOC-NEXT-001 | 供应商核心需求追踪与异常回归 |
 | [x] | PUR-NEXT-002 | purchase_core_regression | PUR-NEXT-001B | 采购核心需求追踪与异常回归 |
-| [-] | WMS-NEXT-002 | wms_multitype_closure | WMS-NEXT-001C、DOC-NEXT-001 | 多类型入库收口 |
+| [x] | WMS-NEXT-002 | root-coordinator | WMS-NEXT-001C、DOC-NEXT-001 | 多类型入库收口 |
 | [x] | INV-NEXT-002 | inventory_transfer_hardening | INV-NEXT-001C、DOC-NEXT-001 | 调拨数量守恒回归 |
-| [-] | BMS-NEXT-002 | supplier_core_regression | BMS-NEXT-001A、DOC-NEXT-001 | 退款聚合与回执回归 |
+| [x] | BMS-NEXT-002 | root-coordinator | BMS-NEXT-001A、DOC-NEXT-001 | 退款聚合与回执回归 |
 
 ## P2：仓库生产准备与路线图
 
 | 状态 | 编号 | Agent | 依赖 | 任务 |
 | --- | --- | --- | --- | --- |
-| [ ] | INT-NEXT-002 | 未领取 | P0/P1 共享契约冻结 | 九服务 Dubbo Provider 仓库闭环 |
-| [ ] | OPS-NEXT-001A | 未领取 | P0/P1 核心链路冻结 | 生产运维仓库资产 |
+| [x] | INT-NEXT-002 | root | P0/P1 共享契约冻结 | Provider/测试及真实 Nacos/MySQL/RocketMQ 跨 JVM 冒烟完成 |
+| [x] | OPS-NEXT-001A | root | P0/P1 核心链路冻结 | 生产运维仓库资产 |
 
 `PLAN-ROADMAP-001` 为延后路线图，不可领取，不计入当前代码任务。
 
@@ -73,8 +73,8 @@
 | --- | --- | --- | --- | --- |
 | [x] | WMS-NEXT-001B | root-coordinator | WMS-NEXT-001A | WMS 出库作业读模型 |
 | [x] | WMS-NEXT-001C | root-coordinator | WMS-NEXT-001B | WMS 退货、盘点与异常读模型 |
-| [ ] | FE-NEXT-001 | 未领取 | IAM-NEXT-001C、九子系统页面任务 | 统一交互与可访问性回归 |
-| [ ] | QA-NEXT-001 | 未领取 | P0/P1/P2 可领取任务、FE-NEXT-001 | 九服务真实 API 与数据库回归 |
+| [x] | FE-NEXT-001 | root | IAM-NEXT-001C、九子系统页面任务 | 统一交互与可访问性回归 |
+| [x] | QA-NEXT-001 | root | P0/P1/P2 可领取任务、FE-NEXT-001 | 九服务真实 API、数据库、中间件与安全基线回归完成 |
 
 ## 外部阻塞
 
@@ -89,4 +89,4 @@
 - `INT-REQ-001~005A`、`FE-REQ-002`、`RPT-REQ-001` 已迁移或撤销，不得重新领取。
 - 2026-07-13、2026-07-16 任务表仅作历史记录。
 
-下一项：按 P0→P2 执行。先完成 `IAM-NEXT-001A/B/C`，再推进剩余 P1 与 P2 任务。
+下一项：仓库内 P0/P1/P2/P3 任务已全部完成；等待 `INT-REQ-005B` 外部系统资料或 `OPS-REQ-001` 生产预演条件后继续。

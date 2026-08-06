@@ -53,7 +53,7 @@ public class RocketMqWmsInboundEventConsumer {
             throw new IllegalArgumentException("WMS RocketMQ 消费 Topic 不能为空");
         }
         this.consumer = ClientServiceProvider.loadService().newPushConsumerBuilder()
-            .setClientConfiguration(ClientConfiguration.newBuilder().setEndpoints(endpoints).build())
+            .setClientConfiguration(com.chaobo.scm.common.mq.RocketMqClientConfigurations.create(endpoints))
             .setConsumerGroup(group).setSubscriptionExpressions(subscriptions)
             .setConsumptionThreadCount(4).setMessageListener(this::consume).build();
     }

@@ -5,7 +5,11 @@ import com.chaobo.scm.common.error.ErrorCode;
 
 import java.time.Instant;
 
-/** MFA challenge aggregate; secrets are always represented as ciphertext. */
+/**
+ * MFA challenge aggregate; secrets are always represented as ciphertext.
+ *
+ * @author chaobo
+ */
 public final class MfaChallengeAggregate {
 
     private final long id;
@@ -130,5 +134,14 @@ public final class MfaChallengeAggregate {
     public Instant verifiedAt() { return verifiedAt; }
     public int version() { return version; }
 
-    public enum Status { PENDING, VERIFIED, LOCKED, EXPIRED }
+    public enum Status {
+        /** Challenge is waiting for verification. */
+        PENDING,
+        /** Challenge was verified for its bound context. */
+        VERIFIED,
+        /** Too many failures locked the challenge. */
+        LOCKED,
+        /** Verification window elapsed. */
+        EXPIRED
+    }
 }

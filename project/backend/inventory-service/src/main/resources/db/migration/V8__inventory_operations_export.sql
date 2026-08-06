@@ -38,7 +38,7 @@ create table inv_export_task (
 ) comment '库存异步导出任务';
 
 alter table inv_reservation
-    add key idx_inv_reservation_scope(owner_id, warehouse_id, reservation_status, updated_at);
+    add key idx_inv_reservation_scope(stock_id, reservation_status, updated_at);
 
 alter table inv_freeze
     add key idx_inv_freeze_scope(owner_id, warehouse_id, freeze_status, updated_at);

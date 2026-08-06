@@ -65,6 +65,24 @@ class PoConfirmAggregateTest {
     }
 
     /**
+     * 验证供应商可以登记行级数量和交期差异，且差异事实保留原因并进入待处理状态。
+     */
+    @Test
+    void shouldReportPurchaseOrderLineDifference() {
+        var aggregate = order();
+        var line = aggregate.lines().get(0);
+
+        aggregate.feedbackDifference(1, List.of(new PoConfirmAggregate.LineDifference(
+                line.lineId(), new BigDecimal("8"), LocalDate.now().plusDays(7), "产能受限")),
+                "请采购确认变更", 1, ids);
+
+        assertThat(aggregate.status()).isEqualTo(PoConfirmStatus.DIFFERENCE_PENDING);
+        assertThat(aggregate.lines().get(0).confirmedQty()).isEqualByComparingTo("8");
+        assertThat(aggregate.pullEvents()).extracting(event -> event.eventType())
+                .contains("PurchaseOrderDifferenceReportedBySupplier");
+    }
+
+    /**
      * 处理当前类型职责中的操作 {@code order}。
      *
      * <p>该内部步骤用于收敛重复逻辑或保护局部规则，调用方应通过当前类型公开的业务入口使用该能力。

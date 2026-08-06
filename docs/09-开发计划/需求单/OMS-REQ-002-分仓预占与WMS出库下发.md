@@ -42,7 +42,7 @@ OMS 已完成渠道订单接入和销售订单审核，但审核通过后尚未�
 | 拆分 | `POST /api/oms/v1/fulfillments/{fulfillmentNo}/split` |
 | 预占/释放 | `POST /api/oms/v1/fulfillments/{fulfillmentNo}/reserve`、`POST /api/oms/v1/reservations/{reservationRefNo}/release` |
 | 出库 | `POST /api/oms/v1/fulfillments/{fulfillmentNo}/outbound`、`POST /api/oms/v1/outbounds/{outboundNo}/dispatch|cancel|retry` |
-| 外部事件 | `POST /internal/oms/v1/events`，消费 `StockReserved`、`StockReservationFailed`、`StockReleased`、`WmsOutboundAccepted`、`WmsOutboundShipped`、`WmsOutboundCancelled` |
+| 外部事件 | RocketMQ `oms-business-event-consumer` 消费 `StockReserved`、`StockReservationFailed`、`StockReleased`、`WmsOutboundAccepted`、`WmsOutboundShipped`、`WmsOutboundCancelled` |
 | 生产事件 | `FulfillmentOrderCreated`、`FulfillmentWarehouseChanged`、`FulfillmentSplit`、`StockReservationRequested`、`StockReservationReleaseRequested`、`OutboundOrderCreated`、`OutboundInstructionIssued`、`OutboundCancelRequested` |
 
 ## 6. 验收标准

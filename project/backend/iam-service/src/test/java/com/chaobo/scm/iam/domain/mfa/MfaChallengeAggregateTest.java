@@ -12,7 +12,8 @@ class MfaChallengeAggregateTest {
     void locksAfterMaximumFailuresAndRejectsExpiredOrReplayedChallenge() {
         Instant now = Instant.parse("2026-07-30T00:00:00Z");
         MfaChallengeAggregate challenge = MfaChallengeAggregate.create(
-                1, "MFA-1", 10, "IAM", "cipher", "idem", 3, now.plusSeconds(60));
+                1, "MFA-1", 10, "IAM", 101, "LOGIN", "DEVICE-1",
+                "cipher", "idem", 3, now.plusSeconds(60));
 
         challenge.recordFailure(now);
         challenge.recordFailure(now);
@@ -22,12 +23,14 @@ class MfaChallengeAggregateTest {
         assertThat(challenge.canVerify(now)).isFalse();
 
         MfaChallengeAggregate verified = MfaChallengeAggregate.create(
-                2, "MFA-2", 10, "IAM", "cipher", "idem-2", 3, now.plusSeconds(60));
+                2, "MFA-2", 10, "IAM", 101, "LOGIN", "DEVICE-1",
+                "cipher", "idem-2", 3, now.plusSeconds(60));
         verified.verify(now);
         assertThat(verified.canVerify(now.plusSeconds(1))).isFalse();
 
         MfaChallengeAggregate expired = MfaChallengeAggregate.create(
-                3, "MFA-3", 10, "IAM", "cipher", "idem-3", 3, now.minusSeconds(1));
+                3, "MFA-3", 10, "IAM", 101, "LOGIN", "DEVICE-1",
+                "cipher", "idem-3", 3, now.minusSeconds(1));
         assertThat(expired.canVerify(now)).isFalse();
         assertThat(expired.status()).isEqualTo(MfaChallengeAggregate.Status.EXPIRED);
     }

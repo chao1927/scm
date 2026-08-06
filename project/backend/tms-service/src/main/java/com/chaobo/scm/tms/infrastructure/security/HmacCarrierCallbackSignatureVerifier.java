@@ -1,6 +1,7 @@
 package com.chaobo.scm.tms.infrastructure.security;
 
 import com.chaobo.scm.tms.application.CarrierCallbackSignatureVerifier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
@@ -27,6 +28,7 @@ public class HmacCarrierCallbackSignatureVerifier implements CarrierCallbackSign
     private final Environment environment;
     private final Clock clock;
 
+    @Autowired
     public HmacCarrierCallbackSignatureVerifier(Environment environment) {
         this(environment, Clock.systemUTC());
     }

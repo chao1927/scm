@@ -58,6 +58,16 @@ public interface IamMapper {
     record PermissionRow(long id, String appCode, String permissionCode, String permissionName) {
     }
 
+    /** 角色授权治理读模型。 */
+    record RoleGrantRow(long roleId, String roleCode, String roleName,
+                        String permissionCode, String permissionName) {
+    }
+
+    /** 用户角色治理读模型。 */
+    record UserRoleRow(long userId, String username, long roleId,
+                       String roleCode, String roleName) {
+    }
+
     /**
      * DataScopeRow。
      *
@@ -282,6 +292,31 @@ public interface IamMapper {
      */
     @Select("select * from iam_permission order by permission_id desc limit #{limit}")
     List<PermissionRow> permissions(int limit);
+
+    /**
+     * 查询角色与权限的治理视图。
+     *
+     * @param limit 数量上限
+     * @return 角色权限关系
+     */
+    @Select("select r.role_id roleId,r.role_code roleCode,r.role_name roleName,"
+        + "rp.permission_code permissionCode,p.permission_name permissionName "
+        + "from iam_role_permission rp join iam_role r on r.role_id=rp.role_id "
+        + "left join iam_permission p on p.permission_code=rp.permission_code "
+        + "order by r.role_id,rp.permission_code limit #{limit}")
+    List<RoleGrantRow> roleGrants(int limit);
+
+    /**
+     * 查询用户与角色的治理视图。
+     *
+     * @param limit 数量上限
+     * @return 用户角色关系
+     */
+    @Select("select u.user_id userId,u.username,r.role_id roleId,r.role_code roleCode,"
+        + "r.role_name roleName from iam_user_role ur "
+        + "join iam_user u on u.user_id=ur.user_id join iam_role r on r.role_id=ur.role_id "
+        + "order by u.user_id,r.role_id limit #{limit}")
+    List<UserRoleRow> userRoles(int limit);
 
     /**
      * 处理当前类型职责中的操作 {@code insertDataScope}。

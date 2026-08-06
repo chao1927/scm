@@ -15,5 +15,5 @@
 
 | 方法 | 路径 |
 | --- | --- |
-| `POST` | `/internal/inventory/v1/events` |
+| `RocketMQ` | `inventory-domain-event-consumer` 消费组接收入站业务事件 |
 | `POST` | `/api/inventory/v1/operations/outbox/dispatch` |

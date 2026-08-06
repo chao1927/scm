@@ -4,10 +4,7 @@ import com.chaobo.scm.common.api.ApiResponse;
 import com.chaobo.scm.inventory.application.InventoryEventApplicationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
-import com.chaobo.scm.common.security.ScmAccessContexts;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -41,21 +38,6 @@ public class InventoryEventController {
     }
 
     /**
-     * 执行命令 {@code consume}。
-     *
-     * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
-     * @param body 业务处理参数或成员，类型为 {@code EventRequest}
-     * @param request 接口请求参数，类型为 {@code HttpServletRequest}
-     * @param authentication 业务处理参数或成员，类型为 {@code Authentication}
-     * @return 执行命令的结果，类型为 {@code ApiResponse<InventoryEventApplicationService.ConsumeResult>}
-     */
-    @PostMapping("/internal/inventory/v1/events")
-    public ApiResponse<InventoryEventApplicationService.ConsumeResult> consume(@Valid @RequestBody EventRequest body, HttpServletRequest request, Authentication authentication) {
-        ScmAccessContexts.require(authentication).requireApplication(body.sourceSystem());
-        return ok(service.consumeWmsEvent(new InventoryEventApplicationService.EventEnvelope(body.sourceSystem(), body.eventCode(), body.eventType(), body.payload())), request);
-    }
-
-    /**
      * 执行命令 {@code dispatch}。
      *
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
@@ -78,17 +60,6 @@ public class InventoryEventController {
      */
     private static <T> ApiResponse<T> ok(T data, HttpServletRequest request) {
         return ApiResponse.success(data, request.getHeader("X-Request-Id"), request.getHeader("X-Trace-Id"));
-    }
-
-    /**
-     * EventRequest。
-     *
-     * <p>位于接口层，负责协议转换、输入校验、身份上下文提取和响应封装，不承载领域规则。作为不可变数据载体集中表达一组相关业务参数或查询结果。该类型只在所属限界上下文内表达该语义，跨上下文协作应通过已声明的接口或事件完成。
-     *
-     * @author SCM Team
-     * @since 0.1.0
-     */
-    public record EventRequest(@NotBlank String sourceSystem, @NotBlank String eventCode, @NotBlank String eventType, @NotBlank String payload) {
     }
 
     /**

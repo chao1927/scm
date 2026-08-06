@@ -86,7 +86,7 @@ flowchart LR
 ```
 
 ## OMS-API-005 外部订单状态、履约轨迹与事件入口
-`GET /openapi/orders/{no}`、`GET /fulfillments/{id}/tracking`、`POST /events`
+`GET /openapi/orders/{no}`、`GET /fulfillments/{id}/tracking`；外部事件由 RocketMQ `oms-business-event-consumer` 消费组接收
 
 - 接口层：`OmsOpenApiController` 验证调用方应用、签名和数据范围；MQ Listener 处理领域事件。
 - 应用层：查询服务汇总订单、履约、WMS、TMS 投影；事件消费者维护状态投影和异常。

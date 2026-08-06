@@ -32,9 +32,8 @@ public class RocketMqInventoryMessageBroker implements InventoryMessageBroker {
             @Value("${scm.rocketmq.inventory-topic:inventory-domain-event}") String topic)
             throws ClientException {
         this.topic = topic;
-        ClientConfiguration configuration = ClientConfiguration.newBuilder()
-                .setEndpoints(endpoints)
-                .build();
+        ClientConfiguration configuration =
+                com.chaobo.scm.common.mq.RocketMqClientConfigurations.create(endpoints);
         producer = provider.newProducerBuilder()
                 .setClientConfiguration(configuration)
                 .setTopics(topic)

@@ -11,7 +11,7 @@
 | 聚合 | `ReverseAfterSaleAggregate`：申请、审核、收货、质检、退款、补寄和完成状态机 |
 | 持久化 | `oms_reverse_after_sale`，RMA 唯一，订单+SKU、状态索引，乐观锁 |
 | 接口 | `/api/oms/v1/reverse-after-sales` 创建、审核、退款、补寄、查询 |
-| 内部事件 | `/internal/oms/v1/reverse-after-sale-events` 消费 WMS/BMS/OMS 事实，Inbox 幂等 |
+| 内部事件 | RocketMQ `oms-business-event-consumer` 消费 WMS/BMS/OMS 事实，Inbox 幂等 |
 | 命令 | 审核退货生成 TMS 退货运输和 WMS 退货入库命令；质检后生成 BMS 退款或 OMS 补寄命令 |
 
 ## 3. 验收规则

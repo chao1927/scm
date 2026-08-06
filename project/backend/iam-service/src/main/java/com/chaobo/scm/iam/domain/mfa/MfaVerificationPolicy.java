@@ -14,7 +14,11 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 
-/** Cryptographic policy and ports for MFA. */
+/**
+ * Cryptographic policy and ports for MFA.
+ *
+ * @author chaobo
+ */
 public final class MfaVerificationPolicy {
 
     private MfaVerificationPolicy() {
@@ -33,23 +37,45 @@ public final class MfaVerificationPolicy {
     }
 
     public interface SecretProtector {
+        /**
+         * Encrypts an MFA secret with authenticated encryption.
+         *
+         * @param plaintext plaintext secret
+         * @return authenticated ciphertext
+         */
         String encrypt(String plaintext);
+        /**
+         * Decrypts and authenticates an MFA secret.
+         *
+         * @param ciphertext authenticated ciphertext
+         * @return plaintext secret
+         */
         String decrypt(String ciphertext);
     }
 
     public interface TotpVerifier {
+        /**
+         * Verifies a TOTP in the accepted clock window.
+         *
+         * @param base32Secret Base32 seed
+         * @param code six-digit one-time code
+         * @param now verification time
+         * @return whether the code is valid
+         */
         boolean verify(String base32Secret, String code, Instant now);
     }
 
     @Component
     public static final class AesGcmSecretProtector implements SecretProtector {
         private static final int IV_BYTES = 12;
+        private static final int AES_KEY_BYTES = 32;
+        private static final int GCM_TAG_BITS = 128;
         private final byte[] key;
         private final SecureRandom random = new SecureRandom();
 
         public AesGcmSecretProtector(@Value("${scm.iam.mfa.master-key:${IAM_MFA_MASTER_KEY:}}") String masterKey) {
             byte[] raw = masterKey == null ? new byte[0] : masterKey.getBytes(StandardCharsets.UTF_8);
-            if (raw.length != 32) {
+            if (raw.length != AES_KEY_BYTES) {
                 throw new IllegalStateException("IAM MFA master key must contain exactly 32 bytes");
             }
             this.key = raw.clone();
@@ -64,7 +90,8 @@ public final class MfaVerificationPolicy {
                 byte[] iv = new byte[IV_BYTES];
                 random.nextBytes(iv);
                 Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-                cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(128, iv));
+                cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"),
+                        new GCMParameterSpec(GCM_TAG_BITS, iv));
                 byte[] encrypted = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
                 return Base64.getEncoder().encodeToString(ByteBuffer.allocate(iv.length + encrypted.length)
                         .put(iv).put(encrypted).array());
@@ -80,7 +107,8 @@ public final class MfaVerificationPolicy {
                 byte[] iv = java.util.Arrays.copyOfRange(value, 0, IV_BYTES);
                 byte[] encrypted = java.util.Arrays.copyOfRange(value, IV_BYTES, value.length);
                 Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-                cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(128, iv));
+                cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"),
+                        new GCMParameterSpec(GCM_TAG_BITS, iv));
                 return new String(cipher.doFinal(encrypted), StandardCharsets.UTF_8);
             } catch (Exception exception) {
                 throw new IllegalStateException("MFA secret decryption failed", exception);
@@ -91,10 +119,15 @@ public final class MfaVerificationPolicy {
     @Component
     public static final class StandardTotpVerifier implements TotpVerifier {
         private static final long STEP_SECONDS = 30;
+        private static final int BASE32_RADIX_BITS = 5;
+        private static final int BYTE_BITS = 8;
+        private static final String SIX_DIGIT_PATTERN = "\\d{6}";
+        private static final String BASE32_PADDING = "=";
+        private static final String SPACE = " ";
 
         @Override
         public boolean verify(String base32Secret, String code, Instant now) {
-            if (base32Secret == null || code == null || !code.matches("\\d{6}")) {
+            if (base32Secret == null || code == null || !code.matches(SIX_DIGIT_PATTERN)) {
                 return false;
             }
             byte[] secret = decodeBase32(base32Secret);
@@ -126,14 +159,15 @@ public final class MfaVerificationPolicy {
             int buffer = 0;
             int bitsLeft = 0;
             java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
-            for (char character : input.replace("=", "").replace(" ", "").toUpperCase().toCharArray()) {
+            for (char character : input.replace(BASE32_PADDING, "").replace(SPACE, "")
+                    .toUpperCase().toCharArray()) {
                 int value = alphabet.indexOf(character);
                 if (value < 0) { throw new IllegalArgumentException("invalid Base32 secret"); }
-                buffer = (buffer << 5) | value;
-                bitsLeft += 5;
-                if (bitsLeft >= 8) {
-                    output.write((buffer >> (bitsLeft - 8)) & 0xff);
-                    bitsLeft -= 8;
+                buffer = (buffer << BASE32_RADIX_BITS) | value;
+                bitsLeft += BASE32_RADIX_BITS;
+                if (bitsLeft >= BYTE_BITS) {
+                    output.write((buffer >> (bitsLeft - BYTE_BITS)) & 0xff);
+                    bitsLeft -= BYTE_BITS;
                 }
             }
             return output.toByteArray();
