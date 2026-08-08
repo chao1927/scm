@@ -64,6 +64,19 @@ public interface MdmOpenApiMapper {
     @Insert("insert into mdm_outbox_event(event_type,business_no,payload,event_status,occurred_at,created_at) values(#{eventType},#{businessNo},#{payload},1,#{occurredAt},now())")
     void insertOutbox(MdmMapper.OutboxRow row);
 
+    /** 保存外部编码、主数据引用或数据权限刷新投影。 */
+    @Insert("""
+        insert into mdm_inbound_business_projection(
+            projection_type,object_key,source_system,event_id,event_type,
+            projection_status,payload,created_at,updated_at)
+        values(#{projectionType},#{objectKey},#{sourceSystem},#{eventId},#{eventType},
+            #{status},#{payload},now(3),now(3))
+        on duplicate key update source_system=values(source_system),event_id=values(event_id),
+            event_type=values(event_type),projection_status=values(projection_status),
+            payload=values(payload),updated_at=now(3)
+        """)
+    void upsertBusinessProjection(InboundBusinessProjectionRow row);
+
     /**
      * 查询并返回 {@code listOutbox}。
      *
@@ -79,5 +92,10 @@ public interface MdmOpenApiMapper {
 
     record OpenApiSnapshotRow(String recordNo, String typeCode, String dataCode, String dataName,
                               String dataPayload, int status, int currentVersionNo, long version) {
+    }
+
+    record InboundBusinessProjectionRow(String projectionType, String objectKey,
+                                        String sourceSystem, String eventId,
+                                        String eventType, String status, String payload) {
     }
 }

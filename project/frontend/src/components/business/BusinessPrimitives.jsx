@@ -1,4 +1,4 @@
-import { Alert, Button, Empty, Result, Skeleton, Space, Tag, Typography } from 'antd'
+import { Alert, Button, Result, Skeleton, Space, Tag, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 
 const statusColors = {
@@ -66,10 +66,6 @@ export function InlineQueryError({ error, onRetry, retrying = false }) {
       action={<Button icon={<ReloadOutlined />} loading={retrying} onClick={onRetry}>重新加载</Button>}
     />
   )
-}
-
-export function EmptyBusinessData({ description = '暂无业务数据' }) {
-  return <div className="content-state"><Empty description={description} /></div>
 }
 
 export function CapabilityPending({ system, page }) {

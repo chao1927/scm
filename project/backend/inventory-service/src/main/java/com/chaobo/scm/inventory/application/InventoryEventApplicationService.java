@@ -2,7 +2,6 @@ package com.chaobo.scm.inventory.application;
 
 import com.chaobo.scm.common.error.BusinessException;
 import com.chaobo.scm.common.error.ErrorCode;
-import java.util.Map;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
@@ -18,18 +17,12 @@ import org.springframework.stereotype.Service;
 public class InventoryEventApplicationService {
 
     private final InventoryEventPublisher outbox;
-    private final InventoryInboundEventApplicationService inbound;
-    private final InventoryEventEnvelopeCodec codec;
     private final ObjectProvider<InventoryOutboxDispatchApplicationService> dispatcher;
 
     public InventoryEventApplicationService(
             InventoryEventPublisher outbox,
-            InventoryInboundEventApplicationService inbound,
-            InventoryEventEnvelopeCodec codec,
             ObjectProvider<InventoryOutboxDispatchApplicationService> dispatcher) {
         this.outbox = outbox;
-        this.inbound = inbound;
-        this.codec = codec;
         this.dispatcher = dispatcher;
     }
 
@@ -65,69 +58,6 @@ public class InventoryEventApplicationService {
         InventoryOutboxDispatchApplicationService.DispatchResult result =
                 service.dispatch(limit, 16);
         return new DispatchResult(result.published(), result.failed());
-    }
-
-    /**
-     * 兼容内部 HTTP 入口，将旧请求立即提升为版本化标准信封后走统一 Inbox。
-     *
-     * @param envelope 兼容事件请求
-     * @return 消费结果
-     */
-    public ConsumeResult consumeWmsEvent(EventEnvelope envelope) {
-        Map<String, Object> payload = codec.decodePayload(envelope.payload());
-        InventoryEventEnvelope event = new InventoryEventEnvelope(
-                envelope.eventCode(),
-                envelope.eventType(),
-                envelope.eventVersion(),
-                envelope.sourceSystem(),
-                envelope.sourceSystem(),
-                envelope.aggregateType(),
-                envelope.aggregateId(),
-                envelope.aggregateVersion(),
-                envelope.eventCode(),
-                envelope.sourceSystem() + ":" + envelope.eventCode(),
-                java.time.OffsetDateTime.now().toString(),
-                null,
-                payload);
-        InventoryInboundEventApplicationService.ConsumeResult result =
-                inbound.consume(event, codec.encode(event));
-        return new ConsumeResult(result.duplicated(), result.message());
-    }
-
-    /**
-     * 兼容事件请求。
-     */
-    public record EventEnvelope(
-            String sourceSystem,
-            String eventCode,
-            String eventType,
-            String eventVersion,
-            String aggregateType,
-            String aggregateId,
-            long aggregateVersion,
-            String payload) {
-
-        public EventEnvelope(
-                String sourceSystem,
-                String eventCode,
-                String eventType,
-                String payload) {
-            this(
-                    sourceSystem,
-                    eventCode,
-                    eventType,
-                    InventoryEventEnvelope.CURRENT_VERSION,
-                    eventType,
-                    eventCode,
-                    1L,
-                    payload);
-        }
-    }
-
-    /**
-     * 兼容消费结果。
-     */
-    public record ConsumeResult(boolean duplicated, String message) {
     }
 
     /**

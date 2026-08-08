@@ -2,8 +2,10 @@ package com.chaobo.scm.tms.application;
 
 import com.chaobo.scm.tms.domain.TransportTaskAggregate;
 import com.chaobo.scm.tms.infrastructure.persistence.TrackingMapper;
+import com.chaobo.scm.tms.infrastructure.persistence.TmsInboundProjectionMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,20 +25,37 @@ public class TmsInboundEventApplicationService {
 
     private static final Set<String> TASK_REQUEST_EVENTS = Set.of(
         "SalesDeliveryRequested", "ReturnPickupRequested", "AsnSubmitted",
-        "SupplierAsnSubmitted", "SupplierReturnApproved", "TransferOutboundShipped");
+        "SupplierAsnSubmitted", "SupplierReturnApproved",
+        "SupplierReturnOutboundShipped", "TransferOutboundShipped");
     private static final int INBOX_PROCESSING = 1;
     private static final int INBOX_SUCCEEDED = 2;
     private static final int INBOX_FAILED = 3;
     private final TrackingMapper inbox;
     private final TransportTaskApplicationService taskService;
     private final ObjectMapper objectMapper;
+    private final ShippingLabelApplicationService labelService;
+    private final LogisticsFeeSourceApplicationService feeSourceService;
+    private final TmsInboundProjectionMapper projectionMapper;
 
     public TmsInboundEventApplicationService(TrackingMapper inbox,
                                              TransportTaskApplicationService taskService,
                                              ObjectMapper objectMapper) {
+        this(inbox, taskService, objectMapper, null, null, null);
+    }
+
+    @Autowired
+    public TmsInboundEventApplicationService(TrackingMapper inbox,
+                                             TransportTaskApplicationService taskService,
+                                             ObjectMapper objectMapper,
+                                             ShippingLabelApplicationService labelService,
+                                             LogisticsFeeSourceApplicationService feeSourceService,
+                                             TmsInboundProjectionMapper projectionMapper) {
         this.inbox = inbox;
         this.taskService = taskService;
         this.objectMapper = objectMapper;
+        this.labelService = labelService;
+        this.feeSourceService = feeSourceService;
+        this.projectionMapper = projectionMapper;
     }
 
     /**
@@ -70,10 +89,37 @@ public class TmsInboundEventApplicationService {
     }
 
     private void dispatch(EventEnvelope event) {
-        if (!TASK_REQUEST_EVENTS.contains(event.eventType())) {
-            throw new IllegalArgumentException(
+        if (TASK_REQUEST_EVENTS.contains(event.eventType())) {
+            createTask(event);
+            return;
+        }
+        JsonNode data = event.data();
+        switch (event.eventType()) {
+            case "PackageCompleted" -> labelService.generate(
+                text(data, "waybillNo", event.aggregateNo()),
+                new ShippingLabelApplicationService.GenerateCommand(
+                    text(data, "packageNo", null),
+                    text(data, "templateVersion", "DEFAULT"),
+                    text(data, "labelUrl", null), null, event.eventCode()));
+            case "BmsFeeSourceCollected" -> feeSourceService.pushBms(
+                text(data, "feeSourceNo", event.aggregateNo()),
+                new LogisticsFeeSourceApplicationService.PushCommand(
+                    text(data, "bmsReceiveNo", null), null, event.eventCode()));
+            case "BmsReconciliationDifferenceCreated" ->
+                feeSourceService.markDifference(
+                    text(data, "feeSourceNo", event.aggregateNo()),
+                    text(data, "differenceReason", "BMS reconciliation difference"),
+                    event.eventCode());
+            case "OutboundOrderShipped", "CarrierEnabled",
+                    "LogisticsProductEnabled", "AddressRegionChanged",
+                    "RestrictedRuleChanged", "ApprovalApproved",
+                    "ApprovalRejected" -> project(event);
+            default -> throw new IllegalArgumentException(
                 "unsupported TMS inbound event: " + event.eventType());
         }
+    }
+
+    private void createTask(EventEnvelope event) {
         JsonNode data = event.data();
         String sourceOrderNo = text(data, "sourceOrderNo", event.aggregateNo());
         var origin = objectMapper.convertValue(
@@ -92,6 +138,38 @@ public class TmsInboundEventApplicationService {
             text(data, "logisticsProductCode", "STANDARD"),
             text(data, "feeResponsibility", "SHIPPER"),
             null, event.eventCode()));
+    }
+
+    private void project(EventEnvelope event) {
+        if (projectionMapper == null) {
+            throw new IllegalStateException("TMS inbound projection mapper is required");
+        }
+        String projectionType;
+        String status;
+        switch (event.eventType()) {
+            case "CarrierEnabled", "LogisticsProductEnabled",
+                    "AddressRegionChanged", "RestrictedRuleChanged" -> {
+                projectionType = "MASTER_DATA_SNAPSHOT";
+                status = "ACTIVE";
+            }
+            case "ApprovalApproved" -> {
+                projectionType = "SENSITIVE_OPERATION_APPROVAL";
+                status = "APPROVED";
+            }
+            case "ApprovalRejected" -> {
+                projectionType = "SENSITIVE_OPERATION_APPROVAL";
+                status = "REJECTED";
+            }
+            case "OutboundOrderShipped" -> {
+                projectionType = "SHIPMENT_FACT";
+                status = "SHIPPED";
+            }
+            default -> throw new IllegalArgumentException(
+                "unsupported TMS projection event: " + event.eventType());
+        }
+        projectionMapper.upsert(new TmsInboundProjectionMapper.ProjectionRow(
+            projectionType, event.aggregateNo(), event.sourceSystem(),
+            event.eventCode(), event.eventType(), status, event.data().toString()));
     }
 
     private static JsonNode required(JsonNode data, String name) {
@@ -124,7 +202,8 @@ public class TmsInboundEventApplicationService {
             case "SalesDeliveryRequested" -> "SALES_DELIVERY";
             case "ReturnPickupRequested" -> "SALES_RETURN";
             case "AsnSubmitted", "SupplierAsnSubmitted" -> "PURCHASE_INBOUND";
-            case "SupplierReturnApproved" -> "SUPPLIER_RETURN";
+            case "SupplierReturnApproved", "SupplierReturnOutboundShipped" ->
+                "SUPPLIER_RETURN";
             case "TransferOutboundShipped" -> "TRANSFER";
             default -> throw new IllegalArgumentException(
                 "unsupported TMS task request event: " + eventType);

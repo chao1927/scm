@@ -164,6 +164,24 @@ public interface IamAdminMapper {
     void updateEvent(EventInboxRow row);
 
     /**
+     * 保存外部事件形成的授权对象快照、账号待办、安全风险或补偿任务。
+     * 同一业务对象重复变更时更新当前投影，Inbox 仍负责事件级幂等。
+     *
+     * @param row 入站事件业务投影
+     */
+    @Insert("""
+        insert into iam_inbound_business_projection(
+            projection_type,object_code,source_system,event_id,event_type,
+            projection_status,payload,created_at,updated_at)
+        values(#{projectionType},#{objectCode},#{sourceSystem},#{eventId},#{eventType},
+            #{status},#{payload},now(3),now(3))
+        on duplicate key update source_system=values(source_system),event_id=values(event_id),
+            event_type=values(event_type),projection_status=values(projection_status),
+            payload=values(payload),updated_at=now(3)
+        """)
+    void upsertBusinessProjection(EventBusinessProjectionRow row);
+
+    /**
      * 查询并返回 {@code listInbox}。
      *
      * <p>该方法只读取或转换当前上下文数据，不应绕过数据权限，也不应产生业务状态副作用。
@@ -214,5 +232,11 @@ public interface IamAdminMapper {
      * @since 0.1.0
      */
     record EventInboxRow(String eventId, String eventType, String businessNo, String payload, int status, String errorMessage) {
+    }
+
+    /** 外部事件在 IAM 内形成的真实业务读模型或待办。 */
+    record EventBusinessProjectionRow(String projectionType, String objectCode,
+                                      String sourceSystem, String eventId,
+                                      String eventType, String status, String payload) {
     }
 }

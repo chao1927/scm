@@ -6,7 +6,6 @@ import com.chaobo.scm.supplier.infrastructure.persistence.operations.SupplierOpe
 import com.chaobo.scm.supplier.infrastructure.persistence.order.PoConfirmMapper;
 import com.chaobo.scm.supplier.infrastructure.persistence.profile.SupplierAdmissionMapper;
 import com.chaobo.scm.supplier.infrastructure.persistence.quality.SupplierQualityIssueMapper;
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -18,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.jdbc.Sql;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 在真实 MySQL 8 上验证供应商准入、PO 确认、ASN、质量整改和导出任务的持久化契约。
  *
  * <p>执行前需通过系统属性提供测试库连接并设置 {@code -Drun.mysql.it=true}。测试使用独立数据库，
- * Flyway 会从 V1 连续迁移到 V26；测试不会以 H2 或内存仓储替代 MySQL 方言和并发语义。
+ * 测试会先导入当前服务的完整 schema，不会以 H2 或内存仓储替代 MySQL 方言和并发语义。
  *
  * @author SCM Team
  * @since 0.1.0
@@ -42,11 +42,10 @@ import static org.assertj.core.api.Assertions.assertThat;
         classes = SupplierMySqlContractIntegrationTest.TestApplication.class,
         properties = {
                 "spring.cloud.nacos.config.enabled=false",
-                "spring.data.redis.repositories.enabled=false",
-                "spring.flyway.enabled=true",
-                "spring.flyway.locations=classpath:db/migration"
+                "spring.data.redis.repositories.enabled=false"
         })
 @EnabledIfSystemProperty(named = "run.mysql.it", matches = "true")
+@Sql(scripts = "/db/schema.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class SupplierMySqlContractIntegrationTest {
 
     private static final long OPERATOR_ID = 7001L;
@@ -57,9 +56,6 @@ class SupplierMySqlContractIntegrationTest {
         registry.add("spring.datasource.username", () -> System.getProperty("mysql.it.username", "root"));
         registry.add("spring.datasource.password", () -> System.getProperty("mysql.it.password", "root"));
     }
-
-    @Autowired
-    Flyway flyway;
 
     @Autowired
     JdbcTemplate jdbc;
@@ -94,10 +90,7 @@ class SupplierMySqlContractIntegrationTest {
      * 所有迁移必须成功应用，四个核心协同聚合必须依靠数据库版本条件拒绝陈旧写入。
      */
     @Test
-    void flywayV1ToV26StartsAndCoreAggregatesEnforceOptimisticLocks() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("26");
-        assertThat(flyway.info().applied()).hasSizeGreaterThanOrEqualTo(26);
-
+    void completeSchemaStartsAndCoreAggregatesEnforceOptimisticLocks() {
         var admission = new SupplierAdmissionMapper.Row(1101L, "ADM-MYSQL-1", "SUP-MYSQL-1",
                 "候选供应商", "913100000000000001", "MANUFACTURER", "张三", "13800000000",
                 "{}", 1, null, 0);
@@ -211,7 +204,7 @@ class SupplierMySqlContractIntegrationTest {
     }
 
     /**
-     * 仅启用数据源、Flyway、JdbcTemplate 和 MyBatis Mapper 的测试应用。
+     * 仅启用数据源、JdbcTemplate 和 MyBatis Mapper 的测试应用。
      */
     @SpringBootConfiguration
     @EnableAutoConfiguration

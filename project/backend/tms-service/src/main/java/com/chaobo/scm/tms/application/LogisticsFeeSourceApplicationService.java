@@ -101,6 +101,54 @@ public class LogisticsFeeSourceApplicationService {
         return mapper.findFeeSource(feeSourceNo);
     }
 
+    /** 重算尚未被 BMS 接收的费用来源。 */
+    @Transactional(rollbackFor = Exception.class)
+    public LogisticsSettlementMapper.FeeSourceRow recalculate(
+            String feeSourceNo, RecalculateCommand command) {
+        LogisticsFeeSourceAggregate aggregate = load(feeSourceNo);
+        ensureVersion(aggregate, command.expectedVersion());
+        aggregate.recalculate(command.amount(), command.reason());
+        mapper.updateFeeSource(toRow(aggregate));
+        saveEvents(aggregate.pullEvents());
+        log("RECALCULATE_LOGISTICS_FEE_SOURCE", feeSourceNo,
+            command.operatorId(), command.idempotencyKey());
+        return mapper.findFeeSource(feeSourceNo);
+    }
+
+    /** 作废尚未被 BMS 接收的费用来源。 */
+    @Transactional(rollbackFor = Exception.class)
+    public LogisticsSettlementMapper.FeeSourceRow voidSource(
+            String feeSourceNo, VoidCommand command) {
+        LogisticsFeeSourceAggregate aggregate = load(feeSourceNo);
+        ensureVersion(aggregate, command.expectedVersion());
+        aggregate.voidSource(command.reason());
+        mapper.updateFeeSource(toRow(aggregate));
+        saveEvents(aggregate.pullEvents());
+        log("VOID_LOGISTICS_FEE_SOURCE", feeSourceNo,
+            command.operatorId(), command.idempotencyKey());
+        return mapper.findFeeSource(feeSourceNo);
+    }
+
+    /** BMS 对账差异回执会冻结直接修改，并保留差异原因等待人工处理。 */
+    @Transactional(rollbackFor = Exception.class)
+    public LogisticsSettlementMapper.FeeSourceRow markDifference(
+            String feeSourceNo, String reason, String idempotencyKey) {
+        LogisticsFeeSourceAggregate aggregate = load(feeSourceNo);
+        aggregate.markPushFailed(reason);
+        mapper.updateFeeSource(toRow(aggregate));
+        saveEvents(aggregate.pullEvents());
+        log("MARK_LOGISTICS_FEE_SOURCE_DIFFERENCE", feeSourceNo, null,
+            idempotencyKey);
+        return mapper.findFeeSource(feeSourceNo);
+    }
+
+    private static void ensureVersion(LogisticsFeeSourceAggregate aggregate,
+                                      long expectedVersion) {
+        if (aggregate.version() != expectedVersion) {
+            throw new IllegalStateException("logistics fee source version conflict");
+        }
+    }
+
     /**
      * 查询并返回 {@code list}。
      *
@@ -182,5 +230,14 @@ public class LogisticsFeeSourceApplicationService {
      * @since 0.1.0
      */
     public record PushCommand(String bmsReceiveNo, Long operatorId, String idempotencyKey) {
+    }
+
+    public record RecalculateCommand(BigDecimal amount, String reason,
+                                     long expectedVersion, Long operatorId,
+                                     String idempotencyKey) {
+    }
+
+    public record VoidCommand(String reason, long expectedVersion, Long operatorId,
+                              String idempotencyKey) {
     }
 }

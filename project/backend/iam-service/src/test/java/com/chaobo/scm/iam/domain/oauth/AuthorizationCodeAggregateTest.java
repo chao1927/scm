@@ -74,14 +74,6 @@ class AuthorizationCodeAggregateTest {
         )).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("expired");
 
-        code.markConsumed(issuedAt.plusSeconds(40));
-        assertThatThrownBy(() -> code.validateForConsumption(
-                "OMS-WEB",
-                "https://oms.example/callback",
-                verifier,
-                issuedAt.plusSeconds(50)
-        )).isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("consumed");
     }
 
     private String challenge(String verifier) {

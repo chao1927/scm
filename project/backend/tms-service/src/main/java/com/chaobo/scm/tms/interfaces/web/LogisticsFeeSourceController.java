@@ -67,6 +67,26 @@ public class LogisticsFeeSourceController {
         return service.pushBms(feeSourceNo, new LogisticsFeeSourceApplicationService.PushCommand(request.bmsReceiveNo(), request.operatorId(), request.idempotencyKey()));
     }
 
+    @PostMapping("/fee-sources/{feeSourceNo}/recalculate")
+    public LogisticsSettlementMapper.FeeSourceRow recalculate(
+            @PathVariable String feeSourceNo,
+            @RequestBody RecalculateFeeSourceRequest request) {
+        return service.recalculate(feeSourceNo,
+            new LogisticsFeeSourceApplicationService.RecalculateCommand(
+                request.amount(), request.reason(), request.version(),
+                request.operatorId(), request.idempotencyKey()));
+    }
+
+    @PostMapping("/fee-sources/{feeSourceNo}/void")
+    public LogisticsSettlementMapper.FeeSourceRow voidSource(
+            @PathVariable String feeSourceNo,
+            @RequestBody VoidFeeSourceRequest request) {
+        return service.voidSource(feeSourceNo,
+            new LogisticsFeeSourceApplicationService.VoidCommand(
+                request.reason(), request.version(), request.operatorId(),
+                request.idempotencyKey()));
+    }
+
     /**
      * 查询并返回 {@code list}。
      *
@@ -98,5 +118,14 @@ public class LogisticsFeeSourceController {
      * @since 0.1.0
      */
     public record PushBmsRequest(String bmsReceiveNo, Long operatorId, String idempotencyKey) {
+    }
+
+    public record RecalculateFeeSourceRequest(BigDecimal amount, String reason,
+                                              long version, Long operatorId,
+                                              String idempotencyKey) {
+    }
+
+    public record VoidFeeSourceRequest(String reason, long version, Long operatorId,
+                                       String idempotencyKey) {
     }
 }

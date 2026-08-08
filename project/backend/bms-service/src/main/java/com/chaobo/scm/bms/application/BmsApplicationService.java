@@ -2,6 +2,9 @@ package com.chaobo.scm.bms.application;
 
 import com.chaobo.scm.bms.domain.BmsDomain;
 import com.chaobo.scm.bms.infrastructure.persistence.BmsMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
@@ -27,6 +30,9 @@ public class BmsApplicationService {
      * <p>保存当前对象所需的持久化访问依赖；其具体生命周期由所属对象统一管理。
      */
     private final BmsMapper mapper;
+
+    /** 用于把 RocketMQ 业务载荷转换为费用采集命令。 */
+    private final ObjectMapper objectMapper;
 
     /**
      * objectSequence（类型：{@code AtomicLong}）。
@@ -119,7 +125,19 @@ public class BmsApplicationService {
      * @param mapper 持久化访问依赖，类型为 {@code BmsMapper}
      */
     public BmsApplicationService(BmsMapper mapper) {
+        this(mapper, new ObjectMapper());
+    }
+
+    /**
+     * 生产环境构造器，复用 Spring 统一配置的 JSON 映射规则。
+     *
+     * @param mapper BMS 持久化端口
+     * @param objectMapper JSON 映射器
+     */
+    @Autowired
+    public BmsApplicationService(BmsMapper mapper, ObjectMapper objectMapper) {
         this.mapper = mapper;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -840,10 +858,99 @@ public class BmsApplicationService {
         if (existing != null) {
             return existing;
         }
-        BmsMapper.InboxEventRow row = new BmsMapper.InboxEventRow("BI" + inboxSequence.incrementAndGet(), command.sourceSystem(), command.sourceEventId(), command.eventType(), command.businessNo(), command.payload(), 2, null);
+        BmsMapper.InboxEventRow row = new BmsMapper.InboxEventRow(
+            "BI" + inboxSequence.incrementAndGet(), command.sourceSystem(),
+            command.sourceEventId(), command.eventType(), command.businessNo(),
+            command.payload(), 1, null);
         mapper.insertInboxEvent(row);
-        outbox("BmsExternalEventConsumed", row.inboxNo(), row.businessNo(), "{}");
-        return row;
+        if (!isChargeSourceEvent(command.eventType())) {
+            BmsMapper.InboxEventRow ignored = changeInboxStatus(
+                row, 4, "event does not produce a BMS charge source");
+            outbox("BmsExternalEventIgnored", row.inboxNo(), row.businessNo(),
+                "{\"eventType\":\"" + sanitize(command.eventType()) + "\"}");
+            return ignored;
+        }
+
+        CollectChargeSourceCommand collectCommand = toChargeSourceCommand(command);
+        BmsMapper.ChargeSourceRow existingSource = mapper.findChargeSourceByIdempotency(
+            collectCommand.sourceSystem(), collectCommand.idempotencyKey());
+        BmsMapper.ChargeSourceRow source = existingSource == null
+            ? collectChargeSource(collectCommand) : existingSource;
+        int status = source.status() == BmsDomain.ChargeSourceAggregate.FAILED ? 3 : 2;
+        BmsMapper.InboxEventRow processed = changeInboxStatus(
+            row, status, source.failureReason());
+        if (status == 2 && existingSource == null) {
+            outbox("BmsFeeSourceCollected", source.sourceNo(), command.businessNo(),
+                "{\"sourceEventId\":\"" + sanitize(command.sourceEventId())
+                    + "\",\"feeSourceNo\":\"" + sanitize(command.businessNo())
+                    + "\",\"bmsReceiveNo\":\"" + sanitize(source.sourceNo()) + "\"}");
+        }
+        return processed;
+    }
+
+    /**
+     * 将外部费用事实转换为当前限界上下文的费用采集命令。
+     */
+    private CollectChargeSourceCommand toChargeSourceCommand(ConsumeEventCommand command) {
+        try {
+            JsonNode payload = objectMapper.readTree(command.payload());
+            if (payload == null || !payload.isObject()) {
+                throw new IllegalArgumentException("charge source payload must be a JSON object");
+            }
+            String billingObjectCode = requiredPayloadText(payload, "billingObjectCode");
+            String feeType = requiredPayloadText(payload, "feeType");
+            String billingPeriod = requiredPayloadText(payload, "billingPeriod");
+            JsonNode quantityNode = payload.get("quantity");
+            if (quantityNode == null || !quantityNode.isNumber()
+                    || quantityNode.decimalValue().signum() <= 0) {
+                throw new IllegalArgumentException("charge source quantity must be positive");
+            }
+            String idempotencyKey = isTmsFeeSourceEvent(command)
+                ? command.sourceSystem() + ":FEE_SOURCE:" + command.businessNo()
+                : command.sourceSystem() + ':' + command.sourceEventId() + ':'
+                    + command.eventType() + ':' + command.businessNo();
+            return new CollectChargeSourceCommand(
+                command.sourceSystem(), command.sourceEventId(), idempotencyKey,
+                billingObjectCode, feeType, quantityNode.decimalValue(), billingPeriod,
+                command.payload(), null);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+            throw new IllegalArgumentException("charge source payload is invalid JSON", exception);
+        }
+    }
+
+    private BmsMapper.InboxEventRow changeInboxStatus(
+            BmsMapper.InboxEventRow row, int status, String failureReason) {
+        BmsMapper.InboxEventRow changed = new BmsMapper.InboxEventRow(
+            row.inboxNo(), row.sourceSystem(), row.sourceEventId(), row.eventType(),
+            row.businessNo(), row.payload(), status, failureReason);
+        mapper.updateInboxEvent(changed);
+        return changed;
+    }
+
+    private static String requiredPayloadText(JsonNode payload, String field) {
+        JsonNode value = payload.get(field);
+        if (value == null || value.isNull() || value.asText().isBlank()) {
+            throw new IllegalArgumentException("charge source payload field is required: " + field);
+        }
+        return value.asText();
+    }
+
+    private static boolean isChargeSourceEvent(String eventType) {
+        return "LogisticsFeeSourceGenerated".equals(eventType)
+            || "LogisticsFeeSourcePushed".equals(eventType)
+            || "GoodsReceived".equals(eventType)
+            || "GoodsPutawayCompleted".equals(eventType)
+            || "OutboundOrderShipped".equals(eventType);
+    }
+
+    /**
+     * 判断事件是否为 TMS 同一费用源生命周期中的事实。生成和推送事件共享费用源业务号，
+     * 因而必须共享幂等键，不能因事件类型或消息编号不同而重复计费。
+     */
+    private static boolean isTmsFeeSourceEvent(ConsumeEventCommand command) {
+        return "TMS".equalsIgnoreCase(command.sourceSystem())
+            && ("LogisticsFeeSourceGenerated".equals(command.eventType())
+                || "LogisticsFeeSourcePushed".equals(command.eventType()));
     }
 
     /**

@@ -1,6 +1,6 @@
 # SCM 告警处置手册
 
-所有处置先记录告警时间、环境、服务名和 traceId；禁止直接删除 Outbox/Inbox、跳过 Flyway 或在未知影响下重启全部服务。
+所有处置先记录告警时间、环境、服务名和 traceId；禁止直接删除 Outbox/Inbox、跳过数据库结构核验或在未知影响下重启全部服务。
 
 ## ScmServiceUnavailable
 

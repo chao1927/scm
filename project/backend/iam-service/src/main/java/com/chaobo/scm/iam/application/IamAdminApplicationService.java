@@ -228,13 +228,71 @@ public class IamAdminApplicationService {
         if (claimed == 0) {
             return new ConsumeResult(event.eventId(), "DUPLICATE", true, "idempotent hit");
         }
-        if (PERMISSION_RESOURCE_SCANNED.equals(event.eventType()) || MASTER_DATA_PUBLISHED.equals(event.eventType()) || SECURITY_RISK_DETECTED.equals(event.eventType())) {
+        IamAdminMapper.EventBusinessProjectionRow projection = toBusinessProjection(event);
+        if (projection != null) {
+            mapper.upsertBusinessProjection(projection);
             mapper.updateEvent(new IamAdminMapper.EventInboxRow(event.eventId(), event.eventType(), event.businessNo(), event.payload(), 2, null));
-            outbox("IamExternalEventConsumed", event.businessNo(), event.eventType());
-            return new ConsumeResult(event.eventId(), "SUCCESS", false, "consumed");
+            outbox("IamExternalEventProjected", event.businessNo(), event.eventType());
+            return new ConsumeResult(event.eventId(), "SUCCESS", false,
+                "business projection updated");
         }
         mapper.updateEvent(new IamAdminMapper.EventInboxRow(event.eventId(), event.eventType(), event.businessNo(), event.payload(), 4, "unsupported event type"));
         return new ConsumeResult(event.eventId(), "IGNORED", false, "unsupported event type");
+    }
+
+    /**
+     * 把外部事实映射成 IAM 拥有的授权快照或处置待办。
+     * Inbox 只解决投递幂等，本方法形成可被后续授权、激活和人工补偿流程使用的业务状态。
+     */
+    private static IamAdminMapper.EventBusinessProjectionRow toBusinessProjection(
+            EventEnvelope event) {
+        String projectionType;
+        String status;
+        switch (event.eventType()) {
+            case "MasterDataChanged", MASTER_DATA_PUBLISHED,
+                    "WarehouseEnabled" -> {
+                projectionType = "AUTHORIZABLE_OBJECT";
+                status = "ACTIVE";
+            }
+            case "LocationFrozen" -> {
+                projectionType = "AUTHORIZABLE_OBJECT";
+                status = "FROZEN";
+            }
+            case "SupplierEnabled" -> {
+                projectionType = "EXTERNAL_SUBJECT";
+                status = "ACTIVE";
+            }
+            case "SupplierFrozen" -> {
+                projectionType = "EXTERNAL_SUBJECT";
+                status = "RISK_RESTRICTED";
+            }
+            case "EmployeeOnboarded" -> {
+                projectionType = "USER_LIFECYCLE";
+                status = "PENDING_ACTIVATION";
+            }
+            case "EmployeeOffboarded" -> {
+                projectionType = "USER_LIFECYCLE";
+                status = "DISABLE_PENDING";
+            }
+            case "ApiResourceScanned", PERMISSION_RESOURCE_SCANNED -> {
+                projectionType = "PERMISSION_SUGGESTION";
+                status = "PENDING_CONFIRMATION";
+            }
+            case "SensitiveOperationOccurred", SECURITY_RISK_DETECTED -> {
+                projectionType = "SECURITY_RISK";
+                status = "OPEN";
+            }
+            case "ApprovalCallbackFailed" -> {
+                projectionType = "APPROVAL_COMPENSATION";
+                status = "PENDING_RETRY";
+            }
+            default -> {
+                return null;
+            }
+        }
+        return new IamAdminMapper.EventBusinessProjectionRow(
+            projectionType, event.businessNo(), event.sourceSystem(), event.eventId(),
+            event.eventType(), status, event.payload());
     }
 
     /**

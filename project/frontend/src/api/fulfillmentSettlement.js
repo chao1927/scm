@@ -17,4 +17,3 @@ export const queryTmsFeeSources = () => client.get('/tms/v1/fee-sources')
 
 export const queryBmsBillingObjects = (params) => client.get('/bms/v1/billing-subjects', { params })
 export const queryBmsChargeSources = (params) => client.get('/bms/v1/charge-sources', { params })
-export const queryBmsSettlementSummary = (params) => client.get('/bms/v1/reports/settlement-summary', { params })

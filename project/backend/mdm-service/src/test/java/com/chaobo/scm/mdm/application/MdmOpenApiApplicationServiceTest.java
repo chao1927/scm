@@ -63,6 +63,36 @@ class MdmOpenApiApplicationServiceTest {
         assertThat(openApiMapper.inbox.get("evt-1").status()).isEqualTo(2);
     }
 
+    /** 原来被当作“已支持但忽略”的事件必须形成可查询、可治理的业务投影。 */
+    @Test
+    void referenceBindingAndPermissionEventsCreateBusinessProjections() {
+        MemoryOpenApiMapper mapper = new MemoryOpenApiMapper();
+        MdmOpenApiApplicationService service = new MdmOpenApiApplicationService(
+            new MasterDataRecordApplicationServiceTest.MemoryRecordMapper(),
+            mapper, null, null);
+
+        service.consumeEvent(event("scope-1", "PermissionDataScopeChanged", "IAM"));
+        service.consumeEvent(event("binding-1", "WarehouseExternalCodeBound", "WMS"));
+        service.consumeEvent(event("billing-1", "BillingMasterDataReferenced", "BMS"));
+        service.consumeEvent(event("purchase-1", "PurchaseMasterDataReferenced", "PURCHASE"));
+        service.consumeEvent(event("inventory-1", "InventoryMasterDataReferenced", "INVENTORY"));
+
+        assertThat(mapper.projections.values())
+            .extracting(MdmOpenApiMapper.InboundBusinessProjectionRow::projectionType)
+            .containsExactlyInAnyOrder(
+                "PERMISSION_SCOPE", "EXTERNAL_CODE_BINDING",
+                "MASTER_DATA_REFERENCE", "MASTER_DATA_REFERENCE",
+                "MASTER_DATA_REFERENCE");
+    }
+
+    private MdmOpenApiApplicationService.EventEnvelope event(
+            String eventId, String eventType, String sourceSystem) {
+        return new MdmOpenApiApplicationService.EventEnvelope(
+            eventId, eventType, sourceSystem, "SKU:SKU-001", eventId,
+            "{\"typeCode\":\"SKU\",\"dataCode\":\"SKU-001\"}",
+            null, null, null, "SKU", "SKU-001");
+    }
+
     @Test
     void applicationScopeAndFieldAllowlistAreEnforced() throws Exception {
         MasterDataRecordApplicationServiceTest.MemoryRecordMapper recordMapper =
@@ -133,6 +163,8 @@ class MdmOpenApiApplicationServiceTest {
         final List<MdmMapper.OutboxRow> outbox = new ArrayList<>();
         final Map<String, MdmOpenApiMapper.OpenApiClientRow> clients = new LinkedHashMap<>();
         final Map<String, MdmOpenApiMapper.OpenApiSnapshotRow> snapshots = new LinkedHashMap<>();
+        final Map<String, MdmOpenApiMapper.InboundBusinessProjectionRow> projections =
+            new LinkedHashMap<>();
 
         @Override
         public MdmOpenApiMapper.OpenApiClientRow findClient(String appCode) {
@@ -196,6 +228,13 @@ class MdmOpenApiApplicationServiceTest {
         @Override
         public void insertOutbox(MdmMapper.OutboxRow row) {
             outbox.add(row);
+        }
+
+        @Override
+        public void upsertBusinessProjection(
+                MdmOpenApiMapper.InboundBusinessProjectionRow row) {
+            projections.put(row.projectionType() + ':' + row.sourceSystem()
+                + ':' + row.objectKey(), row);
         }
 
         /**

@@ -38,6 +38,7 @@ services:
       - mysql-data:/var/lib/mysql
       - mysql-logs:/var/log/mysql
       - nacos-schema:/opt/nacos-schema:ro
+      - ../project/backend:/opt/scm-backend:ro
       - ./config/mysql/my.cnf:/etc/mysql/conf.d/my.cnf:ro
       - ./init/mysql:/docker-entrypoint-initdb.d:ro
     healthcheck:

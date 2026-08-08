@@ -15,7 +15,7 @@
 | 菜单权限 E2E | 已覆盖权限快照、未授权菜单、交互与响应式场景 |
 | 前端验证 | Vitest `43/43`、Vite `4953` 模块构建、Chromium E2E `11/11` 通过 |
 | 后端验证 | JDK 17 下后端 11 模块全量测试通过；Supplier 真实 MySQL `3/3`、Inventory 真实 MySQL `1/1` |
-| 九服务真实联调 | `project/qa/nine-service-local-smoke.sh` 一键启动九服务，连接真实 Nacos、MySQL/Flyway、Redis、RocketMQ；九服务均限制为 256 MiB JVM |
+| 九服务真实联调 | `project/qa/nine-service-local-smoke.sh` 显式导入九库完整 schema 后一键启动九服务，连接真实 Nacos、MySQL、Redis、RocketMQ；九服务均限制为 256 MiB JVM |
 | API 与安全基线 | 九服务端口、匿名 `401`、越权 `403`、授权 `200/JSON` 查询全部通过 |
 
 ## 3. 外部验收边界

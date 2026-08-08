@@ -104,6 +104,20 @@ public class ShippingLabelApplicationService {
         return mapper.findLabel(labelNo);
     }
 
+    /** 作废面单并保存领域事件和操作审计。 */
+    @Transactional(rollbackFor = Exception.class)
+    public WaybillMapper.LabelRow voidLabel(String labelNo, VoidCommand command) {
+        ShippingLabelAggregate aggregate = load(labelNo);
+        if (aggregate.version() != command.expectedVersion()) {
+            throw new IllegalStateException("shipping label version conflict");
+        }
+        aggregate.voidLabel(command.reason());
+        mapper.updateLabel(toRow(aggregate));
+        saveEvents(aggregate.pullEvents());
+        log("VOID_SHIPPING_LABEL", labelNo, command.operatorId(), command.idempotencyKey());
+        return mapper.findLabel(labelNo);
+    }
+
     /**
      * 查询并返回 {@code listByWaybill}。
      *
@@ -186,5 +200,9 @@ public class ShippingLabelApplicationService {
      * @since 0.1.0
      */
     public record PrintCommand(String deviceNo, Long operatorId, String idempotencyKey) {
+    }
+
+    public record VoidCommand(String reason, long expectedVersion, Long operatorId,
+                              String idempotencyKey) {
     }
 }

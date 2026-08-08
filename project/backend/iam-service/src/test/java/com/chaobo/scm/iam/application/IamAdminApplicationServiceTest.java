@@ -58,6 +58,30 @@ class IamAdminApplicationServiceTest {
         assertThat(mapper.inbox.get("evt-2").status()).isEqualTo(4);
     }
 
+    /** IAM 入站事件必须形成授权快照或处置待办，而不是只修改 Inbox 状态。 */
+    @Test
+    void inboundEventsCreateBusinessProjections() {
+        MemoryAdminMapper mapper = new MemoryAdminMapper();
+        IamAdminApplicationService service = new IamAdminApplicationService(mapper);
+
+        service.consumeEvent(new IamAdminApplicationService.EventEnvelope(
+            "evt-mdm", "MasterDataChanged", "MDM", "WAREHOUSE-01",
+            "{\"typeCode\":\"WAREHOUSE\",\"dataCode\":\"WAREHOUSE-01\"}"));
+        service.consumeEvent(new IamAdminApplicationService.EventEnvelope(
+            "evt-api", "ApiResourceScanned", "GATEWAY", "POST:/api/orders",
+            "{\"method\":\"POST\",\"apiPath\":\"/api/orders\"}"));
+        service.consumeEvent(new IamAdminApplicationService.EventEnvelope(
+            "evt-risk", "SensitiveOperationOccurred", "OMS", "SO-1", "{}"));
+        service.consumeEvent(new IamAdminApplicationService.EventEnvelope(
+            "evt-callback", "ApprovalCallbackFailed", "OMS", "AP-1", "{}"));
+
+        assertThat(mapper.projections.values())
+            .extracting(IamAdminMapper.EventBusinessProjectionRow::projectionType)
+            .containsExactlyInAnyOrder(
+                "AUTHORIZABLE_OBJECT", "PERMISSION_SUGGESTION",
+                "SECURITY_RISK", "APPROVAL_COMPENSATION");
+    }
+
     /**
      * MemoryAdminMapper。
      *
@@ -102,6 +126,9 @@ class IamAdminApplicationServiceTest {
          * <p>保存当前对象所需的业务处理参数或成员；其具体生命周期由所属对象统一管理。
          */
         final List<IamPermissionOpenApiMapper.OutboxEventRow> outbox = new ArrayList<>();
+
+        /** 入站事件形成的业务投影，键为投影类型和业务对象。 */
+        final Map<String, EventBusinessProjectionRow> projections = new LinkedHashMap<>();
 
         /**
          * 查询并返回 {@code findApp}。
@@ -275,6 +302,11 @@ class IamAdminApplicationServiceTest {
         @Override
         public void updateEvent(EventInboxRow row) {
             inbox.put(row.eventId(), row);
+        }
+
+        @Override
+        public void upsertBusinessProjection(EventBusinessProjectionRow row) {
+            projections.put(row.projectionType() + ':' + row.objectCode(), row);
         }
 
         /**

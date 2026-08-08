@@ -143,7 +143,7 @@ class BmsApplicationServiceTest {
         assertThat(invoice.status()).isEqualTo(BmsDomain.InvoiceAggregate.ISSUED);
         assertThat(finance.status()).isEqualTo(BmsDomain.FinanceHandoverAggregate.POSTED);
         assertThat(refund.status()).isEqualTo(BmsDomain.RefundSettlementAggregate.FINISHED);
-        assertThat(inbox.status()).isEqualTo(2);
+        assertThat(inbox.status()).isEqualTo(4);
         assertThat(service.settlementSummary(LocalDateTime.now().minusDays(1), LocalDateTime.now().plusDays(1)).billAmount()).isEqualByComparingTo("30.00");
         assertThat(mapper.events).extracting(BmsMapper.OutboxEventRow::eventType).contains("BillingRulePublished", "ChargeCalculated", "ReconciliationConfirmed", "FinancialPosted");
     }
@@ -165,6 +165,57 @@ class BmsApplicationServiceTest {
         assertThat(failed.status()).isEqualTo(BmsDomain.ChargeSourceAggregate.FAILED);
         assertThat(replayed.status()).isEqualTo(BmsDomain.ChargeSourceAggregate.ACCEPTED);
         assertThat(service.listCharges(object.objectCode(), "2026-07", null)).hasSize(1);
+    }
+
+    /**
+     * RocketMQ 费用来源事件必须驱动费用来源和费用明细落库，不能只把 Inbox 标为成功。
+     */
+    @Test
+    void logisticsFeeEventCreatesChargeSourceAndChargeDetail() {
+        MemoryBmsMapper mapper = new MemoryBmsMapper();
+        BmsApplicationService service = new BmsApplicationService(mapper);
+        BmsMapper.BillingObjectRow object = service.createBillingObject(
+            new BmsApplicationService.CreateBillingObjectCommand(
+                "CARRIER-001", "承运商一", "CARRIER", "PAYABLE", "CNY",
+                1001L, "object-1"));
+        BmsMapper.BillingRuleRow rule = service.createBillingRule(
+            new BmsApplicationService.CreateBillingRuleCommand(
+                object.objectCode(), "FREIGHT", new BigDecimal("12.00"),
+                BigDecimal.ZERO, LocalDate.parse("2026-01-01"),
+                LocalDate.parse("2026-12-31"), 1001L, "rule-1"));
+        service.publishBillingRule(rule.ruleNo(),
+            new BmsApplicationService.VersionCommand(
+                rule.version(), 1001L, "publish-1"));
+
+        BmsMapper.InboxEventRow consumed = service.consumeEvent(
+            new BmsApplicationService.ConsumeEventCommand(
+                "TMS", "TMS-EVT-100", "LogisticsFeeSourceGenerated", "FEE-100",
+                """
+                    {"billingObjectCode":"CARRIER-001","feeType":"FREIGHT",
+                     "quantity":2,"billingPeriod":"2026-07"}
+                    """));
+        BmsMapper.InboxEventRow pushed = service.consumeEvent(
+            new BmsApplicationService.ConsumeEventCommand(
+                "TMS", "TMS-EVT-101", "LogisticsFeeSourcePushed", "FEE-100",
+                """
+                    {"billingObjectCode":"CARRIER-001","feeType":"FREIGHT",
+                     "quantity":2,"billingPeriod":"2026-07"}
+                    """));
+
+        assertThat(consumed.status()).isEqualTo(2);
+        assertThat(pushed.status()).isEqualTo(2);
+        assertThat(mapper.sources.values()).singleElement()
+            .satisfies(source -> {
+                assertThat(source.sourceEventId()).isEqualTo("TMS-EVT-100");
+                assertThat(source.billingObjectCode()).isEqualTo("CARRIER-001");
+            });
+        assertThat(service.listCharges("CARRIER-001", "2026-07", null))
+            .singleElement()
+            .satisfies(detail -> assertThat(detail.amount())
+                .isEqualByComparingTo("24.00"));
+        assertThat(mapper.events)
+            .filteredOn(event -> "BmsFeeSourceCollected".equals(event.eventType()))
+            .hasSize(1);
     }
 
     /**

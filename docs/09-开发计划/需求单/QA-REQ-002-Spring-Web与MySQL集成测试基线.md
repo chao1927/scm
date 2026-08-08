@@ -1,8 +1,8 @@
-# QA-REQ-002 Spring Web 与 MySQL/Flyway 集成测试基线
+# QA-REQ-002 Spring Web 与 MySQL 完整 schema 集成测试基线
 
 ## 1. 目标
 
-建立可在本机和 CI 重复执行的真实 MySQL 集成测试，覆盖 Flyway、MyBatis SQL、数据库唯一约束和乐观锁；HTTP/JWT 鉴权继续由各服务 MockMvc Web 测试覆盖。
+建立可在本机和 CI 重复执行的真实 MySQL 集成测试，覆盖完整 schema 导入、MyBatis SQL、数据库唯一约束和乐观锁；HTTP/JWT 鉴权继续由各服务 MockMvc Web 测试覆盖。
 
 ## 2. 执行
 
@@ -15,7 +15,7 @@ mvn -Pmysql-it -pl inventory-service -am test
 
 ## 3. 验收
 
-- Inventory 全部 Flyway 迁移在空 MySQL 数据库成功应用。
+- Inventory 完整 schema 在空 MySQL 数据库成功导入。
 - MyBatis 真实插入/更新 SQL 可执行。
 - 相同旧版本第二次更新返回 0，证明乐观锁生效。
 - 相同来源+事件号第二次 Inbox 插入触发 MySQL 唯一约束。

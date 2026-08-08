@@ -30,7 +30,11 @@ decode_secret() {
 MYSQL_ROOT_PASSWORD="$(decode_secret "${MYSQL_ROOT_PASSWORD_B64:-}")"
 MYSQL_APP_PASSWORD="$(decode_secret "${MYSQL_APP_PASSWORD_B64:-}")"
 readonly MYSQL_APP_USER="scm_app"
-readonly MYSQL_DATABASE="scm"
+readonly MYSQL_DATABASES=(
+  scm_supplier scm_purchase scm_wms scm_inventory scm_iam
+  scm_mdm scm_oms scm_tms scm_bms
+)
+readonly MYSQL_DATABASE="${MYSQL_DATABASES[0]}"
 
 validate_password() {
   local name="$1" value="$2"
@@ -46,6 +50,18 @@ validate_password "MySQL 应用密码" "${MYSQL_APP_PASSWORD}"
   || die "VMware MySQL Host 格式应类似 192.168.80.0/255.255.255.0"
 ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1 | grep -Fxq "${MYSQL_BIND_IP}" \
   || die "本机不存在 IP ${MYSQL_BIND_IP}"
+
+database_and_grants_sql() {
+  local database
+  for database in "${MYSQL_DATABASES[@]}"; do
+    printf '%s\n' \
+      "CREATE DATABASE IF NOT EXISTS \`${database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;" \
+      "GRANT SELECT, INSERT, UPDATE, DELETE ON \`${database}\`.* TO '${MYSQL_APP_USER}'@'10.244.0.0/255.255.0.0';" \
+      "GRANT SELECT, INSERT, UPDATE, DELETE ON \`${database}\`.* TO '${MYSQL_APP_USER}'@'${VMWARE_MYSQL_HOST}';"
+  done
+}
+
+DATABASE_AND_GRANTS_SQL="$(database_and_grants_sql)"
 
 if command -v ufw >/dev/null 2>&1 && ufw status | grep -q '^Status: active'; then
   die "UFW 已启用；请先按文档放行可信来源到 TCP 3306，或在受信实验 VMnet 中停用 UFW"
@@ -81,28 +97,24 @@ EOF
 chmod 0600 /root/.my-scm.cnf
 
 if mysql --protocol=socket -uroot -e 'SELECT 1' >/dev/null 2>&1; then
-  log "配置 root 密码、scm 数据库和最小权限应用账号"
+  log "配置 root 密码、九个 SCM 数据库和最小权限应用账号"
   mysql --protocol=socket -uroot <<EOF
 ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY '${MYSQL_ROOT_PASSWORD}';
-CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 CREATE USER IF NOT EXISTS '${MYSQL_APP_USER}'@'10.244.0.0/255.255.0.0' IDENTIFIED WITH caching_sha2_password BY '${MYSQL_APP_PASSWORD}';
 CREATE USER IF NOT EXISTS '${MYSQL_APP_USER}'@'${VMWARE_MYSQL_HOST}' IDENTIFIED WITH caching_sha2_password BY '${MYSQL_APP_PASSWORD}';
 ALTER USER '${MYSQL_APP_USER}'@'10.244.0.0/255.255.0.0' IDENTIFIED WITH caching_sha2_password BY '${MYSQL_APP_PASSWORD}';
 ALTER USER '${MYSQL_APP_USER}'@'${VMWARE_MYSQL_HOST}' IDENTIFIED WITH caching_sha2_password BY '${MYSQL_APP_PASSWORD}';
-GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_APP_USER}'@'10.244.0.0/255.255.0.0';
-GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_APP_USER}'@'${VMWARE_MYSQL_HOST}';
+${DATABASE_AND_GRANTS_SQL}
 FLUSH PRIVILEGES;
 EOF
 elif mysql --defaults-extra-file=/root/.my-scm.cnf -e 'SELECT 1' >/dev/null 2>&1; then
   log "root 已使用输入的密码认证，更新应用账号密码和权限"
   mysql --defaults-extra-file=/root/.my-scm.cnf <<EOF
-CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 CREATE USER IF NOT EXISTS '${MYSQL_APP_USER}'@'10.244.0.0/255.255.0.0' IDENTIFIED WITH caching_sha2_password BY '${MYSQL_APP_PASSWORD}';
 CREATE USER IF NOT EXISTS '${MYSQL_APP_USER}'@'${VMWARE_MYSQL_HOST}' IDENTIFIED WITH caching_sha2_password BY '${MYSQL_APP_PASSWORD}';
 ALTER USER '${MYSQL_APP_USER}'@'10.244.0.0/255.255.0.0' IDENTIFIED WITH caching_sha2_password BY '${MYSQL_APP_PASSWORD}';
 ALTER USER '${MYSQL_APP_USER}'@'${VMWARE_MYSQL_HOST}' IDENTIFIED WITH caching_sha2_password BY '${MYSQL_APP_PASSWORD}';
-GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_APP_USER}'@'10.244.0.0/255.255.0.0';
-GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_APP_USER}'@'${VMWARE_MYSQL_HOST}';
+${DATABASE_AND_GRANTS_SQL}
 FLUSH PRIVILEGES;
 EOF
 else
@@ -128,6 +140,6 @@ mysql --defaults-extra-file=/tmp/scm-mysql-app.cnf "${MYSQL_DATABASE}" -e \
 
 printf '\n========== MySQL 安装成功 ==========\n'
 printf '地址：%s:3306\n数据库：%s\nroot：仅 localhost 管理\n应用账号：%s（允许 Pod 网段与 %s）\n' \
-  "${MYSQL_BIND_IP}" "${MYSQL_DATABASE}" "${MYSQL_APP_USER}" "${VMWARE_MYSQL_HOST}"
+  "${MYSQL_BIND_IP}" "${MYSQL_DATABASES[*]}" "${MYSQL_APP_USER}" "${VMWARE_MYSQL_HOST}"
 mysql --defaults-extra-file=/root/.my-scm.cnf -Nse \
   "SELECT user,host,plugin FROM mysql.user WHERE user IN ('root','${MYSQL_APP_USER}') ORDER BY user,host;"

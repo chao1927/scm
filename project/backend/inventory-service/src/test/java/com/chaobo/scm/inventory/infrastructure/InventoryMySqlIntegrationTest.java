@@ -5,7 +5,6 @@ import com.chaobo.scm.inventory.infrastructure.persistence.InventoryEventMapper;
 import com.chaobo.scm.inventory.infrastructure.persistence.InventoryMapper;
 import com.chaobo.scm.inventory.infrastructure.persistence.InventoryReliableEventMapper;
 import com.chaobo.scm.inventory.infrastructure.persistence.InventoryWorkflowMapper;
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +16,7 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.jdbc.Sql;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.utility.DockerImageName;
 import java.math.BigDecimal;
@@ -34,11 +34,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @SpringBootTest(classes = InventoryMySqlIntegrationTest.TestApplication.class,
         properties = {
                 "spring.config.import=",
-                "spring.cloud.nacos.config.enabled=false",
-                "spring.flyway.enabled=true",
-                "spring.flyway.locations=classpath:db/migration"
+                "spring.cloud.nacos.config.enabled=false"
         })
 @EnabledIfSystemProperty(named = "run.mysql.it", matches = "true")
+@Sql(scripts = "/db/schema.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class InventoryMySqlIntegrationTest {
 
     /**
@@ -64,14 +63,6 @@ class InventoryMySqlIntegrationTest {
         registry.add("spring.datasource.username", () -> "root");
         registry.add("spring.datasource.password", () -> "root");
     }
-
-    /**
-     * flyway（类型：{@code Flyway}）。
-     *
-     * <p>保存当前对象所需的业务处理参数或成员；其具体生命周期由所属对象统一管理。
-     */
-    @Autowired
-    Flyway flyway;
 
     /**
      * inventory（类型：{@code InventoryMapper}）。
@@ -113,9 +104,7 @@ class InventoryMySqlIntegrationTest {
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
      */
     @Test
-    void runsAllMigrationsAndEnforcesMyBatisSqlIdempotencyAndOptimisticLock() {
-        long applied = java.util.Arrays.stream(flyway.info().applied()).count();
-        assertThat(applied).isGreaterThanOrEqualTo(8);
+    void completeSchemaEnforcesMyBatisSqlIdempotencyAndOptimisticLock() {
         inventory.insertAccount(1, 88, 10, "SKU-1", null, new BigDecimal("10"), new BigDecimal("10"), BigDecimal.ZERO, BigDecimal.ZERO, 0);
         assertThat(inventory.updateAccount(1, new BigDecimal("10"), new BigDecimal("9"), BigDecimal.ONE, BigDecimal.ZERO, 1, 0)).isEqualTo(1);
         assertThat(inventory.updateAccount(1, new BigDecimal("10"), new BigDecimal("8"), new BigDecimal("2"), BigDecimal.ZERO, 1, 0)).isZero();
@@ -174,12 +163,11 @@ class InventoryMySqlIntegrationTest {
         assertThat(duplicateReplay.replayId()).isEqualTo(replay.replayId());
     }
 
-    /** 仅装配真实数据源、Flyway、MyBatis 和失败事件存储，不启动 HTTP/Nacos/MQ。 */
+    /** 仅装配真实数据源、MyBatis 和失败事件存储，不启动 HTTP/Nacos/MQ。 */
     @SpringBootConfiguration
     @EnableAutoConfiguration
     @MapperScan("com.chaobo.scm.inventory.infrastructure.persistence")
-    @Import({com.chaobo.scm.inventory.infrastructure.persistence.InventoryFlywayConfiguration.class,
-            com.chaobo.scm.inventory.infrastructure.persistence.MyBatisInventoryEventFailureStore.class})
+    @Import(com.chaobo.scm.inventory.infrastructure.persistence.MyBatisInventoryEventFailureStore.class)
     static class TestApplication {
     }
 }

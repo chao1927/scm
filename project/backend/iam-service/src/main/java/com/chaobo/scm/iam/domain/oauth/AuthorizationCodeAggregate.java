@@ -145,13 +145,6 @@ public final class AuthorizationCodeAggregate {
         }
     }
 
-    public void markConsumed(Instant consumedAt) {
-        if (this.consumedAt != null) {
-            throw new IllegalStateException("authorization code was already consumed");
-        }
-        this.consumedAt = consumedAt;
-    }
-
     public static String pkceChallenge(String verifier) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")

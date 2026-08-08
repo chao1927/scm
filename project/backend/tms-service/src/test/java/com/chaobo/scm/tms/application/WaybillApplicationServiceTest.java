@@ -36,10 +36,14 @@ public class WaybillApplicationServiceTest {
         WaybillMapper.WaybillRow repeated = services.waybillService.createFromTask("TMS700001", new WaybillApplicationService.CreateCommand("SF", "顺丰", "SF999", "SF-EXPRESS", "repeat", 1001L, "idem-repeat"));
         WaybillMapper.LabelRow label = services.labelService.generate(waybill.waybillNo(), new ShippingLabelApplicationService.GenerateCommand("PKG1", "SF-V1", "oss://labels/LBL1.pdf", 1001L, "idem-label"));
         WaybillMapper.LabelRow printed = services.labelService.print(label.labelNo(), new ShippingLabelApplicationService.PrintCommand("PRINTER-1", 1001L, "idem-print"));
+        WaybillMapper.LabelRow voided = services.labelService.voidLabel(
+            label.labelNo(), new ShippingLabelApplicationService.VoidCommand(
+                "包裹取消", printed.version(), 1001L, "idem-label-void"));
         assertThat(repeated.waybillNo()).isEqualTo(waybill.waybillNo());
         assertThat(waybill.status()).isEqualTo(WaybillAggregate.CREATED);
         assertThat(printed.status()).isEqualTo(ShippingLabelAggregate.PRINTED);
-        assertThat(services.waybillMapper.outbox).extracting(TransportTaskMapper.OutboxRow::eventType).contains("WaybillCreated", "ShippingLabelGenerated", "ShippingLabelPrinted");
+        assertThat(voided.status()).isEqualTo(ShippingLabelAggregate.VOIDED);
+        assertThat(services.waybillMapper.outbox).extracting(TransportTaskMapper.OutboxRow::eventType).contains("WaybillCreated", "ShippingLabelGenerated", "ShippingLabelPrinted", "ShippingLabelVoided");
         assertThat(services.waybillMapper.logs).extracting(TransportTaskMapper.OperationLogRow::operationType).contains("CREATE_WAYBILL", "GENERATE_SHIPPING_LABEL", "PRINT_SHIPPING_LABEL");
     }
 

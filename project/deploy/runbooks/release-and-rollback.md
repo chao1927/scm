@@ -2,7 +2,7 @@
 
 ## 上线前
 
-- 固定应用镜像/JAR 校验和、Nacos namespace/DataId 版本和 Flyway 当前版本。
+- 固定应用镜像/JAR 校验和、Nacos namespace/DataId 版本、完整 schema 校验和与 DBA 变更单编号。
 - 运行全量测试、健康检查、API 基线、备份校验和 Outbox/Inbox 盘点。
 - 数据库迁移优先采用兼容的 expand/contract；DDL 执行后只能前滚或补偿，禁止盲目降版本。
 

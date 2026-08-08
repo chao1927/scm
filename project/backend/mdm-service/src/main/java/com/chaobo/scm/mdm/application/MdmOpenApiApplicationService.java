@@ -60,6 +60,7 @@ public class MdmOpenApiApplicationService {
      */
     private final MdmImportQualityApplicationService qualityService;
     private final ObjectMapper objectMapper;
+    private final MasterDataRecordApplicationService recordApplicationService;
     private final Map<String, Snapshot> snapshotCache = new ConcurrentHashMap<>();
 
     /**
@@ -74,19 +75,30 @@ public class MdmOpenApiApplicationService {
     public MdmOpenApiApplicationService(MasterDataRecordMapper recordMapper, MdmOpenApiMapper mapper,
                                         MdmPublicationApplicationService publicationService,
                                         MdmImportQualityApplicationService qualityService) {
-        this(recordMapper, mapper, publicationService, qualityService, new ObjectMapper());
+        this(recordMapper, mapper, publicationService, qualityService,
+            new ObjectMapper(), null);
+    }
+
+    public MdmOpenApiApplicationService(MasterDataRecordMapper recordMapper, MdmOpenApiMapper mapper,
+                                        MdmPublicationApplicationService publicationService,
+                                        MdmImportQualityApplicationService qualityService,
+                                        ObjectMapper objectMapper) {
+        this(recordMapper, mapper, publicationService, qualityService,
+            objectMapper, null);
     }
 
     @Autowired
     public MdmOpenApiApplicationService(MasterDataRecordMapper recordMapper, MdmOpenApiMapper mapper,
                                         MdmPublicationApplicationService publicationService,
                                         MdmImportQualityApplicationService qualityService,
-                                        ObjectMapper objectMapper) {
+                                        ObjectMapper objectMapper,
+                                        MasterDataRecordApplicationService recordApplicationService) {
         this.recordMapper = recordMapper;
         this.mapper = mapper;
         this.publicationService = publicationService;
         this.qualityService = qualityService;
         this.objectMapper = objectMapper;
+        this.recordApplicationService = recordApplicationService;
     }
 
     public OpenApiAccess authenticate(String appCode, long timestamp, String signature) {
@@ -211,11 +223,20 @@ public class MdmOpenApiApplicationService {
             return new ConsumeResult(event.eventId(), "DUPLICATE", true, "idempotent hit");
         }
         try {
-            if (SUPPLIER_PROFILE_CHANGE_SUBMITTED.equals(event.eventType()) || CARRIER_SERVICE_CONFIRMED.equals(event.eventType())) {
+            if ("ApprovalApproved".equals(event.eventType())
+                    || "ApprovalRejected".equals(event.eventType())) {
+                applyApprovalDecision(event);
+                mapper.upsertBusinessProjection(toBusinessProjection(event));
+            } else if (SUPPLIER_PROFILE_CHANGE_SUBMITTED.equals(event.eventType()) || CARRIER_SERVICE_CONFIRMED.equals(event.eventType())) {
                 qualityService.raiseQualityIssue(new MdmImportQualityApplicationService.RaiseQualityIssueCommand(event.typeCode(), event.dataCode(), event.eventType(), event.failureReason() == null ? event.payload() : event.failureReason(), null, event.idempotencyKey()));
-            } else if (!supportedIgnored(event.eventType())) {
-                mapper.updateEvent(new MdmPublicationMapper.EventInboxRow(event.eventId(), event.eventType(), event.businessKey(), event.payload(), 4, "unsupported event type"));
-                return new ConsumeResult(event.eventId(), "IGNORED", false, "unsupported event type");
+            } else {
+                MdmOpenApiMapper.InboundBusinessProjectionRow projection =
+                    toBusinessProjection(event);
+                if (projection == null) {
+                    mapper.updateEvent(new MdmPublicationMapper.EventInboxRow(event.eventId(), event.eventType(), event.businessKey(), event.payload(), 4, "unsupported event type"));
+                    return new ConsumeResult(event.eventId(), "IGNORED", false, "unsupported event type");
+                }
+                mapper.upsertBusinessProjection(projection);
             }
             mapper.insertOutbox(new MdmMapper.OutboxRow("MdmExternalEventConsumed", event.businessKey(), event.eventType(), 1, LocalDateTime.now()));
             mapper.updateEvent(new MdmPublicationMapper.EventInboxRow(event.eventId(), event.eventType(), event.businessKey(), event.payload(), 2, null));
@@ -223,6 +244,28 @@ public class MdmOpenApiApplicationService {
         } catch (RuntimeException exception) {
             mapper.updateEvent(new MdmPublicationMapper.EventInboxRow(event.eventId(), event.eventType(), event.businessKey(), event.payload(), 3, exception.getMessage()));
             throw exception;
+        }
+    }
+
+    /** 审批事件通过主数据聚合推进状态，保证版本快照、领域事件和审计同时生成。 */
+    private void applyApprovalDecision(EventEnvelope event) {
+        if (recordApplicationService == null) {
+            throw new IllegalStateException("master data record application service is required");
+        }
+        MasterDataRecordMapper.RecordRow row =
+            recordMapper.findRecordByCode(event.typeCode(), event.dataCode());
+        if (row == null) {
+            throw new IllegalArgumentException("approval target master data record not found");
+        }
+        String reason = event.failureReason() == null || event.failureReason().isBlank()
+            ? event.eventType() : event.failureReason();
+        MasterDataRecordApplicationService.StateCommand command =
+            new MasterDataRecordApplicationService.StateCommand(
+                reason, row.version(), null, event.idempotencyKey());
+        if ("ApprovalApproved".equals(event.eventType())) {
+            recordApplicationService.approve(row.recordNo(), command);
+        } else {
+            recordApplicationService.reject(row.recordNo(), command);
         }
     }
 
@@ -363,8 +406,44 @@ public class MdmOpenApiApplicationService {
      * @param eventType 业务处理参数或成员，类型为 {@code String}
      * @return 条件成立或操作被接受时为 {@code true}，否则为 {@code false}
      */
-    private static boolean supportedIgnored(String eventType) {
-        return "ApprovalApproved".equals(eventType) || "ApprovalRejected".equals(eventType) || "PermissionDataScopeChanged".equals(eventType) || "WarehouseExternalCodeBound".equals(eventType) || "BillingMasterDataReferenced".equals(eventType);
+    private static MdmOpenApiMapper.InboundBusinessProjectionRow toBusinessProjection(
+            EventEnvelope event) {
+        String projectionType;
+        String status;
+        switch (event.eventType()) {
+            case "ApprovalApproved" -> {
+                projectionType = "APPROVAL_DECISION";
+                status = "APPROVED";
+            }
+            case "ApprovalRejected" -> {
+                projectionType = "APPROVAL_DECISION";
+                status = "REJECTED";
+            }
+            case "PermissionDataScopeChanged" -> {
+                projectionType = "PERMISSION_SCOPE";
+                status = "REFRESH_REQUIRED";
+            }
+            case "WarehouseExternalCodeBound" -> {
+                projectionType = "EXTERNAL_CODE_BINDING";
+                status = "BOUND";
+            }
+            case "BillingMasterDataReferenced", "PurchaseMasterDataReferenced",
+                    "InventoryMasterDataReferenced" -> {
+                projectionType = "MASTER_DATA_REFERENCE";
+                status = "ACTIVE";
+            }
+            default -> {
+                return null;
+            }
+        }
+        String objectKey = event.typeCode() + ':' + event.dataCode();
+        if (event.typeCode() == null || event.typeCode().isBlank()
+                || event.dataCode() == null || event.dataCode().isBlank()) {
+            objectKey = event.businessKey();
+        }
+        return new MdmOpenApiMapper.InboundBusinessProjectionRow(
+            projectionType, objectKey, event.sourceSystem(), event.eventId(),
+            event.eventType(), status, event.payload());
     }
 
     /**

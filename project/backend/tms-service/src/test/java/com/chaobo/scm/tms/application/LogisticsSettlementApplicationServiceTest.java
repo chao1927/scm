@@ -37,11 +37,24 @@ public class LogisticsSettlementApplicationServiceTest {
         LogisticsSettlementMapper.ExceptionRow closed = services.exceptionService.close(exception.exceptionNo(), new LogisticsExceptionApplicationService.CloseCommand("已索赔", "CARRIER", exception.version(), 1001L, "idem-close"));
         LogisticsSettlementMapper.FeeSourceRow feeSource = services.feeSourceService.generate("WB800001", new LogisticsFeeSourceApplicationService.GenerateCommand("FREIGHT", new BigDecimal("12.30"), "CNY", "202607", "SHIPPER", 1001L, "idem-fee"));
         LogisticsSettlementMapper.FeeSourceRow repeated = services.feeSourceService.generate("WB800001", new LogisticsFeeSourceApplicationService.GenerateCommand("FREIGHT", new BigDecimal("99.99"), "CNY", "202607", "SHIPPER", 1001L, "idem-fee-repeat"));
-        LogisticsSettlementMapper.FeeSourceRow pushed = services.feeSourceService.pushBms(feeSource.feeSourceNo(), new LogisticsFeeSourceApplicationService.PushCommand("BMS1", 1001L, "idem-push"));
+        LogisticsSettlementMapper.FeeSourceRow recalculated = services.feeSourceService.recalculate(
+            feeSource.feeSourceNo(), new LogisticsFeeSourceApplicationService.RecalculateCommand(
+                new BigDecimal("13.20"), "承运商报价修正", feeSource.version(),
+                1001L, "idem-recalculate"));
+        LogisticsSettlementMapper.FeeSourceRow pushed = services.feeSourceService.pushBms(recalculated.feeSourceNo(), new LogisticsFeeSourceApplicationService.PushCommand("BMS1", 1001L, "idem-push"));
+        LogisticsSettlementMapper.FeeSourceRow other = services.feeSourceService.generate(
+            "WB800001", new LogisticsFeeSourceApplicationService.GenerateCommand(
+                "PACKAGING", new BigDecimal("2.00"), "CNY", "202607",
+                "SHIPPER", 1001L, "idem-packaging"));
+        LogisticsSettlementMapper.FeeSourceRow voided = services.feeSourceService.voidSource(
+            other.feeSourceNo(), new LogisticsFeeSourceApplicationService.VoidCommand(
+                "重复费用", other.version(), 1001L, "idem-void"));
         assertThat(closed.status()).isEqualTo(LogisticsExceptionAggregate.CLOSED);
         assertThat(repeated.feeSourceNo()).isEqualTo(feeSource.feeSourceNo());
         assertThat(pushed.pushStatus()).isEqualTo(LogisticsFeeSourceAggregate.PUSHED);
-        assertThat(services.mapper.outbox).extracting(TransportTaskMapper.OutboxRow::eventType).contains("LogisticsExceptionRegistered", "LogisticsExceptionClosed", "LogisticsFeeSourceGenerated", "LogisticsFeeSourcePushed");
+        assertThat(recalculated.amount()).isEqualByComparingTo("13.20");
+        assertThat(voided.pushStatus()).isEqualTo(LogisticsFeeSourceAggregate.VOIDED);
+        assertThat(services.mapper.outbox).extracting(TransportTaskMapper.OutboxRow::eventType).contains("LogisticsExceptionRegistered", "LogisticsExceptionClosed", "LogisticsFeeSourceGenerated", "LogisticsFeeSourceRecalculated", "LogisticsFeeSourcePushed", "LogisticsFeeSourceVoided");
     }
 
     /**

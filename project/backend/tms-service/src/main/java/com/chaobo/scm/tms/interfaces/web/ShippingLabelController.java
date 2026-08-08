@@ -66,6 +66,14 @@ public class ShippingLabelController {
         return service.print(labelNo, new ShippingLabelApplicationService.PrintCommand(request.deviceNo(), request.operatorId(), request.idempotencyKey()));
     }
 
+    @PostMapping("/shipping-labels/{labelNo}/void")
+    public WaybillMapper.LabelRow voidLabel(@PathVariable String labelNo,
+                                            @RequestBody VoidLabelRequest request) {
+        return service.voidLabel(labelNo, new ShippingLabelApplicationService.VoidCommand(
+            request.reason(), request.version(), request.operatorId(),
+            request.idempotencyKey()));
+    }
+
     /**
      * 查询并返回 {@code list}。
      *
@@ -98,5 +106,9 @@ public class ShippingLabelController {
      * @since 0.1.0
      */
     public record PrintLabelRequest(String deviceNo, Long operatorId, String idempotencyKey) {
+    }
+
+    public record VoidLabelRequest(String reason, long version, Long operatorId,
+                                   String idempotencyKey) {
     }
 }

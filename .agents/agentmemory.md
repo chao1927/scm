@@ -41,7 +41,7 @@
 - `domain`：`asn`、`contract`、`item`、`order`、`profile`、`qualification`、`quality`、`quote`、`returning`、`shared`。
 - `infrastructure`：`integration`、`mq`、`persistence`、`security`。
 
-供应商服务关键技术事实：MyBatis + Flyway + MySQL、Redis、RocketMQ、Dubbo；写操作使用 `TransactionalCommandExecutor`、`CommandContext`、审计、Outbox；入站事件使用 Inbox、原始载荷保存和重放服务。
+供应商服务关键技术事实：MyBatis + MySQL 完整 schema、Redis、RocketMQ、Dubbo；数据库结构由部署前显式导入，应用启动不执行 DDL；写操作使用 `TransactionalCommandExecutor`、`CommandContext`、审计、Outbox；入站事件使用 Inbox、原始载荷保存和重放服务。
 
 ## 4. 流程审批相关代码位置
 

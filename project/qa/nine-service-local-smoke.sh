@@ -111,10 +111,26 @@ reset_qa_databases() {
   local sql=""
   local service port database
   while IFS='|' read -r service port database; do
-    sql="${sql}DROP DATABASE IF EXISTS ${database}; CREATE DATABASE ${database} CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; GRANT ALL PRIVILEGES ON ${database}.* TO '${MYSQL_APP_USER}'@'%'; "
+    sql="${sql}DROP DATABASE IF EXISTS ${database}; CREATE DATABASE ${database} CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; GRANT SELECT, INSERT, UPDATE, DELETE ON ${database}.* TO '${MYSQL_APP_USER}'@'%'; "
   done <<<"${SERVICES}"
   docker compose --env-file "${ENV_FILE}" -f "${STACK_DIR}/docker-compose.yml" \
     exec -T mysql mysql -uroot "-p${MYSQL_ROOT_PASSWORD}" -e "${sql} FLUSH PRIVILEGES;"
+}
+
+initialize_database_schemas() {
+  local service port database schema_file
+  echo "显式导入九服务完整 schema..."
+  while IFS='|' read -r service port database; do
+    schema_file="${BACKEND_DIR}/${service}/src/main/resources/db/schema.sql"
+    [[ -s "${schema_file}" ]] || {
+      echo "缺少完整 schema：${schema_file}" >&2
+      return 1
+    }
+    docker compose --env-file "${ENV_FILE}" -f "${STACK_DIR}/docker-compose.yml" \
+      exec -T mysql mysql -uroot "-p${MYSQL_ROOT_PASSWORD}" "${database}" \
+      <"${schema_file}"
+    echo "  ✓ ${database}"
+  done <<<"${SERVICES}"
 }
 
 wait_health() {
@@ -222,6 +238,7 @@ forbidden_token() {
 build_artifacts
 initialize_rocketmq_contracts
 reset_qa_databases
+initialize_database_schemas
 echo "启动九个真实服务..."
 while IFS='|' read -r service port database; do
   start_service "${service}" "${port}" "${database}"
@@ -237,4 +254,4 @@ FORBIDDEN_TOKEN="$(forbidden_token)"
   --forbidden-token "${FORBIDDEN_TOKEN}" \
   --mysql-address "127.0.0.1:${MYSQL_PORT}"
 
-echo "九服务真实 Flyway/MySQL/Nacos/Redis/RocketMQ 启动及 API 安全基线验收通过。"
+echo "九服务完整 schema/MySQL/Nacos/Redis/RocketMQ 启动及 API 安全基线验收通过。"

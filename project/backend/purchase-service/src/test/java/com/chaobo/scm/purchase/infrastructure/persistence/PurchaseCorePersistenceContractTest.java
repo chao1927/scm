@@ -31,8 +31,8 @@ class PurchaseCorePersistenceContractTest {
     }
 
     @Test
-    void orderChangeMigrationPersistsBaseOrderVersion() throws Exception {
-        try (var stream = getClass().getResourceAsStream("/db/migration/V13__purchase_order_change_base_version.sql")) {
+    void completeSchemaPersistsBaseOrderVersion() throws Exception {
+        try (var stream = getClass().getResourceAsStream("/db/schema.sql")) {
             assertThat(stream).isNotNull();
             var sql = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
             assertThat(sql).contains("add column base_order_version int null");

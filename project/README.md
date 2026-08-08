@@ -16,13 +16,13 @@ project/
 
 ## 技术基线
 
-- JDK 21 LTS
-- Spring Boot 4.1
-- MyBatis、MySQL 8、Flyway
+- JDK 17
+- Spring Boot 4
+- MyBatis、MySQL 8
 - Spring Security OAuth2 Resource Server、Redis
 - JavaScript、React 19、Vite
 
-后端统一使用 JDK 21。MySQL、Redis 和消息队列暂不由本项目启动，但代码和配置按它们已经存在编写。
+后端统一使用 JDK 17。应用不会自动创建或修改数据库结构，首次启动前必须显式导入九服务完整 schema。
 
 ## 已实现切片
 
@@ -74,7 +74,14 @@ project/
 - 设置 `ROCKETMQ_ENABLED=true` 与 `ROCKETMQ_ENDPOINTS` 后启用投递任务
 - 设置 `ROCKETMQ_MASTER_DATA_CONSUMER_ENABLED=true` 后，订阅主数据主题并以收件箱保证幂等消费
 
-Flyway 迁移位于 `supplier-service/src/main/resources/db/migration`。它补齐了原始设计 DDL 中 ASN 聚合关系所需的外键字段。
+九服务分别在 `<service>/src/main/resources/db/schema.sql` 提供面向空库的完整结构。可以使用以下命令一次性创建并导入九个数据库：
+
+```bash
+cd backend
+MYSQL_ADMIN_PASSWORD='<root密码>' ./bin/init-schema.sh
+```
+
+完整 schema 只能导入空库。数据库结构变更后，需要更新对应服务的 `db/schema.sql`，并在发布前通过 DBA 变更单或重建非生产数据库应用；应用启动阶段不会执行 DDL。
 
 ## 验证命令
 

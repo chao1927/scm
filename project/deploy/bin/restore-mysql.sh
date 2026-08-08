@@ -43,4 +43,4 @@ while IFS=$'\t' read -r database file _ _; do
   gzip -dc "${BACKUP_DIR%/}/${file}" | mysql --host="${MYSQL_HOST_VALUE}" \
     --port="${MYSQL_PORT_VALUE}" --user="${MYSQL_USER_VALUE}"
 done <"${BACKUP_DIR%/}/manifest.tsv"
-echo "恢复导入完成。必须继续执行 Flyway 校验、行数抽样和业务只读冒烟。"
+echo "恢复导入完成。必须继续执行完整 schema 核验、行数抽样和业务只读冒烟。"

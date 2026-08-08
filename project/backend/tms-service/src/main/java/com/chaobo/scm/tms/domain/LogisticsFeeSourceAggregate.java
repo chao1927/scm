@@ -35,6 +35,9 @@ public class LogisticsFeeSourceAggregate {
      */
     public static final int PUSH_FAILED = 3;
 
+    /** 已作废，不能再重算或推送。 */
+    public static final int VOIDED = 4;
+
     /**
      * feeSourceNo（类型：{@code String}）。
      *
@@ -75,7 +78,7 @@ public class LogisticsFeeSourceAggregate {
      *
      * <p>保存当前对象所需的金额或计费值；其具体生命周期由所属对象统一管理。
      */
-    private final BigDecimal amount;
+    private BigDecimal amount;
 
     /**
      * currency（类型：{@code String}）。
@@ -190,7 +193,8 @@ public class LogisticsFeeSourceAggregate {
      */
     public static LogisticsFeeSourceAggregate generate(String feeSourceNo, String waybillNo, String carrierCode, String logisticsProductCode, String feeItemCode, BigDecimal amount, String currency, String billingPeriod, String responsibleParty) {
         LogisticsFeeSourceAggregate aggregate = new LogisticsFeeSourceAggregate(feeSourceNo, waybillNo, carrierCode, logisticsProductCode, feeItemCode, amount, currency, billingPeriod, responsibleParty, PENDING_PUSH, null, null, 1);
-        aggregate.events.add(TmsEvent.of("LogisticsFeeSourceGenerated", feeSourceNo, waybillNo + "|" + feeItemCode + "|" + amount.toPlainString()));
+        aggregate.events.add(TmsEvent.of(
+            "LogisticsFeeSourceGenerated", feeSourceNo, aggregate.feePayload(null)));
         return aggregate;
     }
 
@@ -234,7 +238,28 @@ public class LogisticsFeeSourceAggregate {
         this.bmsReceiveNo = bmsReceiveNo;
         failureReason = null;
         version++;
-        events.add(TmsEvent.of("LogisticsFeeSourcePushed", feeSourceNo, bmsReceiveNo));
+        events.add(TmsEvent.of(
+            "LogisticsFeeSourcePushed", feeSourceNo, feePayload(bmsReceiveNo)));
+    }
+
+    /**
+     * 费用事件必须携带 BMS 可直接消费的稳定字段，避免消费者猜测管道分隔字符串。
+     */
+    private String feePayload(String receiveNo) {
+        String receiveField = receiveNo == null ? "null" : '"' + json(receiveNo) + '"';
+        return "{\"feeSourceNo\":\"" + json(feeSourceNo)
+            + "\",\"sourceOrderNo\":\"" + json(waybillNo)
+            + "\",\"billingObjectCode\":\"" + json(carrierCode)
+            + "\",\"feeType\":\"" + json(feeItemCode)
+            + "\",\"quantity\":1,\"billingPeriod\":\"" + json(billingPeriod)
+            + "\",\"currency\":\"" + json(currency)
+            + "\",\"amountSnapshot\":{\"amount\":" + amount.toPlainString()
+            + "},\"bmsReceiveNo\":" + receiveField + '}';
+    }
+
+    private static String json(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"")
+            .replace("\r", "\\r").replace("\n", "\\n");
     }
 
     /**
@@ -251,6 +276,42 @@ public class LogisticsFeeSourceAggregate {
         failureReason = reason;
         version++;
         events.add(TmsEvent.of("LogisticsFeeSourcePushFailed", feeSourceNo, reason));
+    }
+
+    /** 在推送 BMS 前修正来源金额。 */
+    public void recalculate(BigDecimal newAmount, String reason) {
+        if (pushStatus == PUSHED || pushStatus == VOIDED) {
+            throw new IllegalStateException("pushed or voided fee source cannot be recalculated");
+        }
+        if (newAmount == null || newAmount.signum() < 0) {
+            throw new IllegalArgumentException("recalculated amount must not be negative");
+        }
+        if (blank(reason)) {
+            throw new IllegalArgumentException("recalculation reason is required");
+        }
+        amount = newAmount;
+        pushStatus = PENDING_PUSH;
+        failureReason = null;
+        version++;
+        events.add(TmsEvent.of(
+            "LogisticsFeeSourceRecalculated", feeSourceNo, feePayload(null)));
+    }
+
+    /** 作废尚未推送的费用来源，保留原金额用于审计。 */
+    public void voidSource(String reason) {
+        if (pushStatus == VOIDED) {
+            return;
+        }
+        if (pushStatus == PUSHED) {
+            throw new IllegalStateException("pushed fee source cannot be voided");
+        }
+        if (blank(reason)) {
+            throw new IllegalArgumentException("fee source void reason is required");
+        }
+        pushStatus = VOIDED;
+        failureReason = reason;
+        version++;
+        events.add(TmsEvent.of("LogisticsFeeSourceVoided", feeSourceNo, reason));
     }
 
     /**
