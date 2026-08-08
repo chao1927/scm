@@ -72,21 +72,6 @@ public class MdmOpenApiApplicationService {
      * @param publicationService 应用或外部协作依赖，类型为 {@code MdmPublicationApplicationService}
      * @param qualityService 应用或外部协作依赖，类型为 {@code MdmImportQualityApplicationService}
      */
-    public MdmOpenApiApplicationService(MasterDataRecordMapper recordMapper, MdmOpenApiMapper mapper,
-                                        MdmPublicationApplicationService publicationService,
-                                        MdmImportQualityApplicationService qualityService) {
-        this(recordMapper, mapper, publicationService, qualityService,
-            new ObjectMapper(), null);
-    }
-
-    public MdmOpenApiApplicationService(MasterDataRecordMapper recordMapper, MdmOpenApiMapper mapper,
-                                        MdmPublicationApplicationService publicationService,
-                                        MdmImportQualityApplicationService qualityService,
-                                        ObjectMapper objectMapper) {
-        this(recordMapper, mapper, publicationService, qualityService,
-            objectMapper, null);
-    }
-
     @Autowired
     public MdmOpenApiApplicationService(MasterDataRecordMapper recordMapper, MdmOpenApiMapper mapper,
                                         MdmPublicationApplicationService publicationService,
@@ -99,10 +84,6 @@ public class MdmOpenApiApplicationService {
         this.qualityService = qualityService;
         this.objectMapper = objectMapper;
         this.recordApplicationService = recordApplicationService;
-    }
-
-    public OpenApiAccess authenticate(String appCode, long timestamp, String signature) {
-        return authenticate(appCode, timestamp, signature, "legacy", "");
     }
 
     public OpenApiAccess authenticate(String appCode, long timestamp, String signature,

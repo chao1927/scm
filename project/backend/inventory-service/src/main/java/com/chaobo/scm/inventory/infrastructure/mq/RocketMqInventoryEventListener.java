@@ -1,6 +1,7 @@
 package com.chaobo.scm.inventory.infrastructure.mq;
 
 import com.chaobo.scm.inventory.application.InventoryEventEnvelope;
+import com.chaobo.scm.common.logging.ScmLogContext;
 import com.chaobo.scm.inventory.application.InventoryEventEnvelopeCodec;
 import com.chaobo.scm.inventory.application.InventoryInboundEventApplicationService;
 import jakarta.annotation.PreDestroy;
@@ -64,15 +65,18 @@ public class RocketMqInventoryEventListener {
 
     private ConsumeResult consume(MessageView message) {
         String body = body(message);
-        try {
+        try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
             InventoryEventEnvelope event = codec.decode(body);
             inbound.consume(event, body);
+            log.info("event=rocketmq_consume operation=inventory_event_consume result=SUCCESS messageId={} topic={}",
+                    message.getMessageId(), message.getTopic());
             return ConsumeResult.SUCCESS;
         } catch (RuntimeException exception) {
-            log.warn(
-                    "库存 RocketMQ 事件消费失败，等待 Broker 重投，messageId={}",
-                    message.getMessageId(),
-                    exception);
+            try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
+                log.warn(
+                        "event=rocketmq_consume operation=inventory_event_consume result=RETRY messageId={} topic={}",
+                        message.getMessageId(), message.getTopic(), exception);
+            }
             return ConsumeResult.FAILURE;
         }
     }

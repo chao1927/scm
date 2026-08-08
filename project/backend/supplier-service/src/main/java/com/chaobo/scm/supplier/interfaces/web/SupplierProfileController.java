@@ -63,7 +63,7 @@ public class SupplierProfileController {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code ApiResponse<ProfileViews.Profile>}
      */
     @GetMapping
-    @PreAuthorize("hasAuthority('supplier:profile:read')")
+    @PreAuthorize("hasAnyAuthority('*', 'supplier:*', 'supplier:profile:read')")
     public ApiResponse<ProfileViews.Profile> profile(@RequestParam long supplierId, @AuthenticationPrincipal Jwt jwt, HttpServletRequest request) {
         return ApiResponse.success(service.profile(supplierId, scope(jwt)), request.getHeader("X-Request-Id"), request.getHeader("X-Trace-Id"));
     }
@@ -81,7 +81,7 @@ public class SupplierProfileController {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code ApiResponse<PageResult<ProfileViews.Change>>}
      */
     @GetMapping("/change-requests")
-    @PreAuthorize("hasAuthority('supplier:profile:read')")
+    @PreAuthorize("hasAnyAuthority('*', 'supplier:*', 'supplier:profile:read')")
     public ApiResponse<PageResult<ProfileViews.Change>> changes(@RequestParam long supplierId, @RequestParam(required = false) Integer status, @RequestParam(defaultValue = "1") int pageNo, @RequestParam(defaultValue = "20") int pageSize, @AuthenticationPrincipal Jwt jwt, HttpServletRequest request) {
         return ApiResponse.success(service.changes(supplierId, scope(jwt), status, pageNo, pageSize), request.getHeader("X-Request-Id"), request.getHeader("X-Trace-Id"));
     }

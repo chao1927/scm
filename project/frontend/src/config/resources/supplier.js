@@ -18,6 +18,17 @@ export const supplierResources = {
     rowKey: ['admissionNo', 'id'],
     columns: [column('admissionNo', '准入单号'), column('supplierName', '供应商'), column('supplierCode', '供应商编码'), column('statusName', '状态', { status: true }), column('updatedAt', '更新时间', { date: true })],
   },
+  'supplier.user-bindings': {
+    query: get('/supplier/v1/access/users'),
+    rowKey: ['id', 'userId'],
+    columns: [column('supplierId', '供应商'), column('userId', '用户 ID'), column('role', '绑定角色'), column('primary', '主账号'), column('status', '状态', { status: true }), column('boundAt', '绑定时间', { date: true })],
+  },
+  'supplier.skus': {
+    query: get('/supplier/v1/items'),
+    detail: getDetail('/supplier/v1/items'),
+    rowKey: ['id', 'skuCode'],
+    columns: [column('skuCode', 'SKU'), column('supplierId', '供应商'), column('supplierSkuCode', '供应商商品编码'), column('unitPrice', '含税单价', { number: true }), column('currency', '币种'), column('statusName', '状态', { status: true }), column('updatedAt', '更新时间', { date: true })],
+  },
   'supplier.po-confirms': {
     query: queryPoConfirms,
     detail: getDetail('/supplier/v1/po-confirms'),
@@ -40,6 +51,12 @@ export const supplierResources = {
     ],
     create: { label: '新建 ASN', permission: 'supplier:asn:create', kind: 'asn' },
   },
+  'supplier.returns': {
+    query: get('/supplier/v1/returns'),
+    detail: getDetail('/supplier/v1/returns'),
+    rowKey: ['id', 'returnNo'],
+    columns: [column('returnNo', '退供单号'), column('supplierId', '供应商'), column('warehouseId', '仓库'), column('returnReason', '退供原因'), column('statusName', '状态', { status: true }), column('waybillNo', '运单号'), column('updatedAt', '更新时间', { date: true })],
+  },
   'supplier.reconciliations': {
     query: get('/supplier/v1/reconciliations'),
     rowKey: ['reconciliationNo', 'id'],
@@ -60,5 +77,15 @@ export const supplierResources = {
     query: queryQualityIssues,
     rowKey: ['id', 'issueNo'],
     columns: [column('issueNo', '整改编号'), column('supplierName', '供应商'), column('rectificationPlan', '整改方案'), column('statusName', '状态', { status: true }), column('dueAt', '完成期限', { date: true })],
+  },
+  'supplier.scores': {
+    query: get('/supplier/v1/scores'),
+    rowKey: ['id', 'supplierId', 'periodCode'],
+    columns: [column('supplierId', '供应商'), column('periodCode', '评分期间'), column('totalScore', '总分', { number: true }), column('manualAdjustment', '人工调整', { number: true }), column('statusName', '状态', { status: true }), column('publishedAt', '发布时间', { date: true })],
+  },
+  'supplier.operation-logs': {
+    query: get('/supplier/v1/operations/operation-logs'),
+    rowKey: ['id', 'operationLogId'],
+    columns: [column('operationAt', '操作时间', { date: true }), column('operatorName', '操作人'), column('operatorId', '操作人 ID'), column('operationType', '操作内容'), column('targetType', '对象类型'), column('targetNo', '业务单号'), column('resultName', '操作结果', { status: true }), column('failReason', '失败原因')],
   },
 }

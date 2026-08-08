@@ -47,7 +47,7 @@ public class SupplierAdmissionQueryController {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code ApiResponse<PageResult<SupplierAdmissionView>>}
      */
     @GetMapping
-    @PreAuthorize("hasAuthority('supplier:admission:view')")
+    @PreAuthorize("hasAnyAuthority('*', 'supplier:*', 'supplier:admission:view')")
     public ApiResponse<PageResult<SupplierAdmissionView>> page(@RequestParam(required = false) Integer status, @RequestParam(required = false) String keyword, @RequestParam(defaultValue = "1") int pageNo, @RequestParam(defaultValue = "20") int pageSize, HttpServletRequest request) {
         return ApiResponse.success(service.page(status, keyword, pageNo, pageSize), request.getHeader("X-Request-Id"), request.getHeader("X-Trace-Id"));
     }
@@ -61,7 +61,7 @@ public class SupplierAdmissionQueryController {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code ApiResponse<SupplierAdmissionView>}
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('supplier:admission:view')")
+    @PreAuthorize("hasAnyAuthority('*', 'supplier:*', 'supplier:admission:view')")
     public ApiResponse<SupplierAdmissionView> detail(@PathVariable long id, HttpServletRequest request) {
         return ApiResponse.success(service.detail(id), request.getHeader("X-Request-Id"), request.getHeader("X-Trace-Id"));
     }

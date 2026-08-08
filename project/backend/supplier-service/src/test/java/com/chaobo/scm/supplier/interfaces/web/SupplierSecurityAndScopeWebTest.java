@@ -125,6 +125,17 @@ class SupplierSecurityAndScopeWebTest {
     }
 
     /**
+     * 平台管理员的 {@code *} 权限必须能够通过供应商协同方法级权限校验。
+     */
+    @Test
+    void wildcardAuthoritiesCanReadAsnList() throws Exception {
+        for (String authority : List.of("*", "supplier:*")) {
+            mockMvc.perform(get("/api/supplier/v1/asns").with(token(authority)))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    /**
      * 外部供应商令牌中的 supplier_id 必须覆盖查询参数，防止横向读取其他供应商数据。
      */
     @Test

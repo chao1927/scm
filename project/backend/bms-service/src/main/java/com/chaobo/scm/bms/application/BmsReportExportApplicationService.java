@@ -5,6 +5,9 @@ import com.chaobo.scm.bms.infrastructure.persistence.BmsReadQueryMapper;
 import com.chaobo.scm.bms.infrastructure.persistence.BmsReportExportMapper;
 import com.chaobo.scm.common.security.ScmAccessContext;
 import com.chaobo.scm.common.api.PageResult;
+import com.chaobo.scm.common.logging.ScmLogContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +29,8 @@ import java.util.UUID;
  */
 @Service
 public class BmsReportExportApplicationService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(BmsReportExportApplicationService.class);
 
     private static final int PENDING = 1;
     private static final int PROCESSING = 2;
@@ -120,7 +125,7 @@ public class BmsReportExportApplicationService {
                 continue;
             }
             BmsReportExportMapper.ExportTaskRow claimed = tasks.find(candidate.exportNo());
-            try {
+            try (ScmLogContext ignored = ScmLogContext.openSystem(claimed.exportNo())) {
                 List<BmsReadQueryMapper.SettlementView> rows =
                     reports.listSettlementSummaries(claimed.billingPeriod()).stream()
                         .filter(row -> row.objectCode().equals(claimed.objectCode()))
@@ -131,10 +136,16 @@ public class BmsReportExportApplicationService {
                 String reference = storage.put(key, content, "text/csv");
                 tasks.markSucceeded(claimed.exportNo(), reference, rows.size());
                 completed++;
+                LOG.info("event=batch_task operation=bms_report_export result=SUCCESS exportNo={} rowCount={}",
+                        claimed.exportNo(), rows.size());
             } catch (Exception exception) {
                 int status = claimed.attemptCount() >= claimed.maxAttempts()
                     ? FINAL_FAILURE : RETRYABLE_FAILURE;
                 tasks.markFailed(claimed.exportNo(), status, error(exception));
+                try (ScmLogContext ignored = ScmLogContext.openSystem(claimed.exportNo())) {
+                    LOG.error("event=batch_task operation=bms_report_export result=FAILURE exportNo={} status={}",
+                            claimed.exportNo(), status, exception);
+                }
             }
         }
         return completed;

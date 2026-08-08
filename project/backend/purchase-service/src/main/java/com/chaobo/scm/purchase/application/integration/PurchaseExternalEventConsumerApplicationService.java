@@ -209,7 +209,9 @@ public class PurchaseExternalEventConsumerApplicationService
     private void consumeWms(PurchaseExternalEvent event) {
         facts.upsertWmsInbound(event.eventCode(), text(event.inboundNo(), event.businessNo()), event.orderNo(), event.asnNo(), event.warehouseCode(), event.eventType(), zero(event.receivedQty()), zero(event.qualifiedQty()), zero(event.unqualifiedQty()), zero(event.putawayQty()), event.reason(), occurredAt(event), write(event.payload()));
         if (event.inboundNo() != null && !event.inboundNo().isBlank()) {
-            var context = new CommandContext(0, event.sourceSystem(), 0, null, event.eventCode(), null, event.sourceSystem() + ":" + event.eventCode(), Set.of("purchase:inbound:sync-wms"));
+            var context = CommandContext.forEvent(
+                    event.sourceSystem(), event.eventCode(), null,
+                    Set.of("purchase:inbound:sync-wms"), write(event.payload()));
             inbounds.syncWmsFromEvent(event.inboundNo(), new InboundCommands.SyncWms(version(event), zero(event.receivedQty()), zero(event.qualifiedQty()), zero(event.unqualifiedQty()), zero(event.putawayQty()), event.reason()), context);
         }
     }
@@ -225,7 +227,9 @@ public class PurchaseExternalEventConsumerApplicationService
         var orderNo = orderNo(event);
         var supplierId = requiredLong(event.supplierId(), "供应商ID");
         facts.upsertSupplierConfirm(event.eventCode(), orderNo, supplierId, event.eventType(), event.reason(), version(event), occurredAt(event), write(event.payload()));
-        var context = new CommandContext(0, event.sourceSystem(), 0, event.purchaseOrgId(), event.eventCode(), null, event.sourceSystem() + ":" + event.eventCode(), Set.of());
+        var context = CommandContext.forEvent(
+                event.sourceSystem(), event.eventCode(), event.purchaseOrgId(),
+                Set.of(), write(event.payload()));
         purchaseOrders.recordSupplierResponse(orderNo, supplierId, responseType, event.reason(), context);
     }
 

@@ -1,4 +1,4 @@
-const page = (id, label, options = {}) => ({ id, label, ...options })
+const page = (id, label) => ({ id, label })
 
 export const wmsSystem = {
   id: 'wms',
@@ -24,7 +24,7 @@ export const wmsSystem = {
     page('return-receipts', '退货入库'),
     page('count-plans', '盘点管理'),
     page('exceptions', '异常处理'),
-    page('failed-events', '事件运维', { legacy: 'wms' }),
+    page('failed-events', '事件运维'),
     page('operation-logs', '操作日志'),
   ],
 }

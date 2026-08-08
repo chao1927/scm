@@ -1,5 +1,6 @@
 package com.chaobo.scm.bms.infrastructure.mq;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
 import com.chaobo.scm.bms.application.BmsApplicationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -63,7 +64,7 @@ public class RocketMqBmsInboundEventConsumer {
     }
 
     private ConsumeResult consume(MessageView message) {
-        try {
+        try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
             JsonNode root = read(message);
             if (required(root, SCHEMA_VERSION_FIELD).asInt() != 1) {
                 throw new IllegalArgumentException(
@@ -73,10 +74,14 @@ public class RocketMqBmsInboundEventConsumer {
                 text(root, "sourceSystem"), text(root, "eventCode"),
                 text(root, "eventType"), businessNo(root),
                 required(root, "data").toString()));
+            LOG.info("event=rocketmq_consume operation=bms_inbound_event_consume result=SUCCESS messageId={} topic={}",
+                message.getMessageId(), message.getTopic());
             return ConsumeResult.SUCCESS;
         } catch (Exception exception) {
-            LOG.warn("BMS RocketMQ event failed; waiting for broker retry, messageId={}",
-                message.getMessageId(), exception);
+            try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
+                LOG.warn("event=rocketmq_consume operation=bms_inbound_event_consume result=RETRY messageId={} topic={}",
+                    message.getMessageId(), message.getTopic(), exception);
+            }
             return ConsumeResult.FAILURE;
         }
     }

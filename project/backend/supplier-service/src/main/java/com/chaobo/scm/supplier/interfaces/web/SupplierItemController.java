@@ -68,7 +68,7 @@ public class SupplierItemController {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code ApiResponse<PageResult<SupplierItemView>>}
      */
     @GetMapping
-    @PreAuthorize("hasAuthority('supplier:sku:read')")
+    @PreAuthorize("hasAnyAuthority('*', 'supplier:*', 'supplier:sku:read')")
     public ApiResponse<PageResult<SupplierItemView>> page(@RequestParam(required = false) Long supplierId, @RequestParam(required = false) Integer status, @RequestParam(required = false) String keyword, @RequestParam(defaultValue = "1") int pageNo, @RequestParam(defaultValue = "20") int pageSize, @AuthenticationPrincipal Jwt jwt, HttpServletRequest req) {
         return ApiResponse.success(service.page(supplierId, scope(jwt), status, keyword, pageNo, pageSize), req.getHeader("X-Request-Id"), req.getHeader("X-Trace-Id"));
     }
@@ -83,7 +83,7 @@ public class SupplierItemController {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code ApiResponse<SupplierItemView>}
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('supplier:sku:read')")
+    @PreAuthorize("hasAnyAuthority('*', 'supplier:*', 'supplier:sku:read')")
     public ApiResponse<SupplierItemView> detail(@PathVariable long id, @AuthenticationPrincipal Jwt jwt, HttpServletRequest req) {
         return ApiResponse.success(service.detail(id, scope(jwt)), req.getHeader("X-Request-Id"), req.getHeader("X-Trace-Id"));
     }

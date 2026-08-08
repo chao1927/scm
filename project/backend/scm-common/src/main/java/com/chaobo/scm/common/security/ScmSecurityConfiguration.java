@@ -1,5 +1,6 @@
 package com.chaobo.scm.common.security;
 
+import com.chaobo.scm.common.logging.ScmRequestLoggingFilter;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -9,7 +10,9 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.core.env.Environment;
 import java.util.Map;
 
 /**
@@ -35,7 +38,7 @@ public class ScmSecurityConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean(com.fasterxml.jackson.databind.ObjectMapper.class)
-    com.fasterxml.jackson.databind.ObjectMapper scmLegacyJacksonObjectMapper() {
+    com.fasterxml.jackson.databind.ObjectMapper scmJackson2ObjectMapper() {
         return new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
     }
 
@@ -68,11 +71,18 @@ public class ScmSecurityConfiguration {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code SecurityFilterChain}
      */
     @Bean
-    SecurityFilterChain scmSecurityFilterChain(HttpSecurity http, ScmSecurityProperties properties) throws Exception {
+    SecurityFilterChain scmSecurityFilterChain(HttpSecurity http, ScmSecurityProperties properties,
+            Environment environment) throws Exception {
+        ScmRequestLoggingFilter requestLoggingFilter = new ScmRequestLoggingFilter(
+                environment.getProperty("spring.application.name", "unknown-service"));
         return http.csrf(csrf -> csrf.disable()).authorizeHttpRequests(authorize -> {
             authorize.requestMatchers("/actuator/health", "/actuator/info").permitAll();
             if (!properties.getPublicPaths().isEmpty()) {
                 authorize.requestMatchers(properties.getPublicPaths().toArray(String[]::new)).permitAll();
+            }
+            if (!properties.getAuthenticatedPaths().isEmpty()) {
+                authorize.requestMatchers(properties.getAuthenticatedPaths().toArray(String[]::new))
+                        .authenticated();
             }
             authorize.anyRequest().access((authentication, context) -> {
                 var auth = authentication.get();
@@ -90,6 +100,7 @@ public class ScmSecurityConfiguration {
                 return new AuthorizationDecision(allowed);
             });
         }).oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt ->
-                jwt.jwtAuthenticationConverter(new ScmJwtAuthenticationConverter()))).build();
+                jwt.jwtAuthenticationConverter(new ScmJwtAuthenticationConverter())))
+                .addFilterBefore(requestLoggingFilter, BearerTokenAuthenticationFilter.class).build();
     }
 }

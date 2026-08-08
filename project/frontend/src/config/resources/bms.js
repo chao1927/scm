@@ -107,4 +107,9 @@ export const bmsResources = {
       { key: 'retry-export', label: '重试导出', permission: 'bms:report:retry', visible: (row) => row.__rowKind === 'export' && row.status === 5, run: retrySettlementExport },
     ],
   },
+  'bms.operation-logs': simpleResource(get('/bms/v1/operation-logs'), ['id'], [
+    ['createdAt', '操作时间', 'date'], ['operatorId', '操作人 ID'],
+    ['operationType', '操作内容'], ['businessNo', '业务单号'],
+    ['idempotencyKey', '幂等键'],
+  ]),
 }

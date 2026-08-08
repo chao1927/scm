@@ -1,6 +1,7 @@
 package com.chaobo.scm.purchase.application.operations;
 
 import java.time.OffsetDateTime;
+import java.math.BigDecimal;
 
 /**
  * PurchaseOperationsViews。
@@ -40,5 +41,18 @@ public final class PurchaseOperationsViews {
      * @since 0.1.0
      */
     public record FailedCommand(long commandId, String commandType, String targetSystem, String businessNo, int retryCount, String reason, OffsetDateTime updatedAt) {
+    }
+
+    /** 供应商报价事件在采购上下文中的事实投影。 */
+    public record Quotation(long factId, String eventCode, String quoteNo, String rfqNo,
+                            long supplierId, String skuCode, BigDecimal quoteQty,
+                            BigDecimal quoteAmount, String currency, String quoteStatus,
+                            OffsetDateTime updatedAt) {
+    }
+
+    /** 采购业务操作日志。 */
+    public record OperationLog(long id, String requestId, String traceId, long operatorId,
+                               String operatorName, String operation, String targetType,
+                               long targetId, String targetNo, OffsetDateTime createdAt) {
     }
 }

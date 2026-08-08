@@ -1180,18 +1180,6 @@ public class BmsApplicationService {
         return new BmsMapper.FinanceHandoverRow(null, aggregate.handoverNo(), aggregate.billNo(), aggregate.status(), aggregate.voucherNo(), aggregate.failureReason(), aggregate.version());
     }
 
-    /**
-     * 转换数据模型 {@code toRow}。
-     *
-     * <p>该内部步骤用于收敛重复逻辑或保护局部规则，调用方应通过当前类型公开的业务入口使用该能力。
-     * @param aggregate 业务处理参数或成员，类型为 {@code BmsDomain.RefundSettlementAggregate}
-     * @return 转换数据模型的结果，类型为 {@code BmsMapper.RefundSettlementRow}
-     */
-    private BmsMapper.RefundSettlementRow toRow(BmsDomain.RefundSettlementAggregate aggregate) {
-        return new BmsMapper.RefundSettlementRow(null, aggregate.refundNo(), aggregate.billNo(),
-            aggregate.refundAmount(), aggregate.status(), aggregate.failureReason(), aggregate.version());
-    }
-
     /** 按原持久化快照保留不可变退款事实，并使用版本条件更新。 */
     private void updateRefund(BmsDomain.RefundSettlementAggregate aggregate,
                               BmsMapper.RefundSettlementRow source, String evidenceRef,
@@ -1487,12 +1475,6 @@ public class BmsApplicationService {
     public record RequestRefundCommand(String billNo, String afterSaleNo, String paymentNo,
                                        BigDecimal refundAmount, String currency, String merchantNo,
                                        Long operatorId, String idempotencyKey) {
-
-        /** 兼容已有内部调用；币种和商户号由账单计费对象补全。 */
-        public RequestRefundCommand(String billNo, BigDecimal refundAmount, Long operatorId,
-                                    String idempotencyKey) {
-            this(billNo, null, null, refundAmount, null, null, operatorId, idempotencyKey);
-        }
     }
 
     /**

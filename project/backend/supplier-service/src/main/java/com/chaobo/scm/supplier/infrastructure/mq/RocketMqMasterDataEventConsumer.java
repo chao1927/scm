@@ -1,5 +1,6 @@
 package com.chaobo.scm.supplier.infrastructure.mq;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
 import com.chaobo.scm.supplier.application.masterdata.MasterDataEvent;
 import com.chaobo.scm.supplier.application.masterdata.MasterDataEventConsumerApplicationService;
 import com.chaobo.scm.supplier.application.masterdata.MasterDataEventFailureApplicationService;
@@ -99,15 +100,23 @@ public class RocketMqMasterDataEventConsumer {
      * @return 执行命令的结果，类型为 {@code ConsumeResult}
      */
     private ConsumeResult consume(MessageView message) {
-        try {
+        try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
             applicationService.consume(toEvent(message));
+            log.info("event=rocketmq_consume operation=supplier_master_data_consume result=SUCCESS messageId={} topic={}",
+                    message.getMessageId(), message.getTopic());
             return ConsumeResult.SUCCESS;
         } catch (Exception exception) {
-            log.warn("主数据事件消费失败，等待消息队列重试，messageId={}", message.getMessageId(), exception);
+            try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
+                log.warn("event=rocketmq_consume operation=supplier_master_data_consume result=RETRY messageId={} topic={}",
+                        message.getMessageId(), message.getTopic(), exception);
+            }
             try {
                 failureService.recordFailure(toEvent(message), exception.getMessage());
             } catch (Exception failure) {
-                log.error("主数据事件失败记录写入失败，messageId={}", message.getMessageId(), failure);
+                try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
+                    log.error("event=rocketmq_failure_record operation=supplier_master_data_failure_record result=FAILURE messageId={}",
+                            message.getMessageId(), failure);
+                }
             }
             return ConsumeResult.FAILURE;
         }
@@ -128,7 +137,7 @@ public class RocketMqMasterDataEventConsumer {
         Map<String, Object> envelope = json.readValue(body, Map.class);
         Object rawData = envelope.get("data");
         Map<String, Object> data = rawData instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
-        String eventCode = text(envelope, "eventCode", message.getMessageId().toString());
+        String eventCode = text(envelope, "eventCode", ScmLogContext.reference(message.getMessageId()));
         String eventType = text(envelope, "eventType", message.getTag().orElse(null));
         String sourceSystem = text(envelope, "sourceSystem", "MDM");
         long aggregateId = number(envelope.get("aggregateId"));

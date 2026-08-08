@@ -1,6 +1,7 @@
 package com.chaobo.scm.mdm.interfaces.web;
 
 import com.chaobo.scm.mdm.application.MdmOpenApiApplicationService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,7 +53,7 @@ class MdmOpenApiControllerTest {
          * <p>构造阶段集中接收必需依赖或恢复对象状态，确保实例创建后即可安全参与所属用例。
          */
         StubOpenApiService() {
-            super(null, null, null, null);
+            super(null, null, null, null, new ObjectMapper(), null);
         }
 
         /**

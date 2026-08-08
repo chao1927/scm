@@ -1,9 +1,12 @@
 package com.chaobo.scm.mdm.application.outbox;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
 import com.chaobo.scm.mdm.infrastructure.persistence.MdmOutboxMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 主数据 Outbox 可靠投递应用服务。
@@ -13,6 +16,8 @@ import org.springframework.stereotype.Service;
 @Service
 @Profile("!test")
 public class MdmOutboxDispatchApplicationService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(MdmOutboxDispatchApplicationService.class);
 
     private static final int MAX_BATCH_SIZE = 200;
     private static final int MAX_ERROR_LENGTH = 1000;
@@ -41,7 +46,7 @@ public class MdmOutboxDispatchApplicationService {
         int failed = 0;
         for (var event : mapper.pending(Math.max(1, Math.min(limit, MAX_BATCH_SIZE)),
                 Math.max(1, maxRetries))) {
-            try {
+            try (ScmLogContext ignored = ScmLogContext.openSystem(Long.toString(event.eventId()))) {
                 String topic = event.destinationTopic() == null
                     || event.destinationTopic().isBlank()
                     ? defaultTopic : event.destinationTopic();
@@ -50,9 +55,15 @@ public class MdmOutboxDispatchApplicationService {
                     event.payload(), topic));
                 mapper.markPublished(event.eventId());
                 published++;
+                LOG.info("event=rocketmq_publish operation=mdm_outbox_publish result=SUCCESS eventId={} eventType={} topic={}",
+                        event.eventId(), event.eventType(), topic);
             } catch (RuntimeException exception) {
                 mapper.markFailed(event.eventId(), error(exception));
                 failed++;
+                try (ScmLogContext ignored = ScmLogContext.openSystem(Long.toString(event.eventId()))) {
+                    LOG.error("event=rocketmq_publish operation=mdm_outbox_publish result=FAILURE eventId={} eventType={}",
+                            event.eventId(), event.eventType(), exception);
+                }
             }
         }
         return new DispatchResult(published, failed);

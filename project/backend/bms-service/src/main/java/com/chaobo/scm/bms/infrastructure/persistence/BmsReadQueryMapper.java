@@ -193,6 +193,9 @@ public interface BmsReadQueryMapper {
     List<SettlementView> listSettlementSummaries(
         @Param("billingPeriod") String billingPeriod);
 
+    @Select("SELECT id,operation_type operationType,business_no businessNo,operator_id operatorId,idempotency_key idempotencyKey,created_at createdAt FROM bms_operation_audit_log ORDER BY created_at DESC LIMIT #{limit}")
+    List<OperationLogView> listOperationLogs(int limit);
+
     /**
      * 费用明细列表项。
      */
@@ -277,5 +280,10 @@ public interface BmsReadQueryMapper {
         public BigDecimal netAmount() {
             return billAmount.subtract(refundAmount);
         }
+    }
+
+    /** 结算业务操作审计日志。 */
+    record OperationLogView(long id, String operationType, String businessNo, Long operatorId,
+                            String idempotencyKey, LocalDateTime createdAt) {
     }
 }

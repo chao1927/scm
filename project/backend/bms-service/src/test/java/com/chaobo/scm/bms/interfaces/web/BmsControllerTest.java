@@ -128,8 +128,11 @@ class BmsControllerTest {
                 String refundNo,
                 BmsApplicationService.ManualRefundResolutionCommand command) {
             lastManualCommand = command;
-            return new BmsMapper.RefundSettlementRow(1L, refundNo, "B-1", BigDecimal.TEN,
-                5, command.reason(), command.expectedVersion() + 1);
+            return new BmsMapper.RefundSettlementRow(
+                1L, refundNo, "B-1", null, null, BigDecimal.TEN, "CNY", "OBJ",
+                "request:" + refundNo, "digest:" + refundNo, 1,
+                5, command.reason(), command.evidenceRef(), command.reviewerId(),
+                command.expectedVersion() + 1);
         }
     }
 }

@@ -11,6 +11,13 @@
     <artifactId>scm-common</artifactId>
     <dependencies>
         <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <!-- 本地仓库已有版本，仅用于公共模块编译；运行时由 Boot 4/Tomcat 11 提供 Servlet 6.1。 -->
+            <version>6.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
             <groupId>org.apache.rocketmq</groupId>
             <artifactId>rocketmq-client-java</artifactId>
             <version>5.0.8</version>

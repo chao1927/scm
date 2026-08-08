@@ -112,4 +112,12 @@ public class BmsReadQueryController {
         return service.settlement(billingPeriod, pageNo, pageSize,
             ScmAccessContexts.require(authentication));
     }
+
+    /** 查询结算业务操作审计日志。 */
+    @GetMapping("/operation-logs")
+    public PageResult<BmsReadQueryMapper.OperationLogView> operationLogs(
+        @RequestParam(defaultValue = "1") int pageNo,
+        @RequestParam(defaultValue = "20") int pageSize) {
+        return service.operationLogs(pageNo, pageSize);
+    }
 }

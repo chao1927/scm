@@ -44,6 +44,12 @@ public interface PurchaseOperationsMapper {
     @Select("select command_id commandId,command_type commandType,target_system targetSystem,business_no businessNo," + "retry_count retryCount,last_error reason,updated_at updatedAt from purchase_integration_command " + "where status=5 order by updated_at desc limit #{limit}")
     List<PurchaseOperationsViews.FailedCommand> failedCommands(int limit);
 
+    @Select("SELECT fact_id factId,event_code eventCode,quote_no quoteNo,rfq_no rfqNo,supplier_id supplierId,sku_code skuCode,quote_qty quoteQty,quote_amount quoteAmount,currency,quote_status quoteStatus,updated_at updatedAt FROM purchase_supplier_quote_fact ORDER BY updated_at DESC LIMIT #{limit}")
+    List<PurchaseOperationsViews.Quotation> quotations(int limit);
+
+    @Select("SELECT log_id id,request_id requestId,trace_id traceId,operator_id operatorId,operator_name operatorName,operation,target_type targetType,target_id targetId,target_no targetNo,created_at createdAt FROM purchase_operation_log ORDER BY created_at DESC LIMIT #{limit}")
+    List<PurchaseOperationsViews.OperationLog> operationLogs(int limit);
+
     /**
      * 执行命令 {@code replayCommand}。
      *

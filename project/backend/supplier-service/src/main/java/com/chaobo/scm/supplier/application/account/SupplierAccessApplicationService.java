@@ -123,6 +123,16 @@ public class SupplierAccessApplicationService {
         return mapper.bindings(supplierId).stream().map(row -> new SupplierUserBindingView(row.id(), row.supplierId(), row.userId(), row.role(), row.primary(), row.status(), row.boundAt(), row.version())).toList();
     }
 
+    /** 查询当前数据范围内的供应商账号绑定。 */
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public List<SupplierUserBindingView> bindings(CommandContext context) {
+        context.requirePermission("supplier:account:view");
+        return mapper.allBindings(context.supplierScopeId()).stream()
+                .map(row -> new SupplierUserBindingView(row.id(), row.supplierId(), row.userId(), row.role(),
+                        row.primary(), row.status(), row.boundAt(), row.version()))
+                .toList();
+    }
+
     /**
      * 执行命令 {@code saveContact}。
      *

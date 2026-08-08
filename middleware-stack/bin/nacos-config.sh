@@ -91,7 +91,7 @@ delete_config_if_present() {
 common_config() {
   local max_pool="$1"
   local min_idle="$2"
-  printf 'spring:\n  datasource:\n    username: %s\n    password: %s\n    hikari:\n      maximum-pool-size: %s\n      minimum-idle: %s\n      connection-timeout: 3000\n' \
+  printf 'spring:\n  datasource:\n    username: %s\n    password: %s\n    hikari:\n      maximum-pool-size: %s\n      minimum-idle: %s\n      connection-timeout: 3000\nscm:\n  logging:\n    path: ./logs\n    max-file-size: 100MB\n    max-history: 7\n    info-total-size-cap: 2GB\n    error-total-size-cap: 1GB\n' \
     "${MYSQL_APP_USER}" "${MYSQL_APP_PASSWORD}" "${max_pool}" "${min_idle}"
 }
 

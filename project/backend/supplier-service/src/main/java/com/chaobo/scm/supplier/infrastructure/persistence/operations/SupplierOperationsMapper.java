@@ -223,6 +223,9 @@ public interface SupplierOperationsMapper {
     @Select("SELECT (SELECT COUNT(*) FROM sup_work_item WHERE status IN(1,2)) pendingWork,(SELECT COUNT(*) FROM sup_warning WHERE status IN(1,2)) openWarnings,(SELECT COUNT(*) FROM sup_event_consume_log WHERE consume_status=3) failedInboundEvents,(SELECT COUNT(*) FROM sup_domain_event WHERE event_status=4) failedOutboundEvents,(SELECT COUNT(*) FROM sup_quality_issue WHERE issue_status<>4 AND deleted=0) activeQualityIssues,(SELECT COUNT(*) FROM sup_supplier_return WHERE return_status NOT IN(10,11) AND deleted=0) openReturns,(SELECT COUNT(*) FROM sup_reconciliation WHERE status IN(1,3) AND deleted=0) pendingReconciliations,(SELECT COALESCE(AVG(total_score),0) FROM sup_score_result WHERE status=2) latestAverageScore")
     OperationViews.Dashboard dashboard();
 
+    @Select("SELECT operation_log_id id,operator_id operatorId,operator_name operatorName,operation_type operationType,target_type targetType,target_id targetId,target_no targetNo,result,fail_reason failReason,request_id requestId,operation_at operationAt FROM sup_operation_audit_log ORDER BY operation_at DESC LIMIT #{limit}")
+    List<OperationViews.OperationLog> operationLogs(int limit);
+
     /**
      * 处理当前类型职责中的操作 {@code insertExport}。
      *

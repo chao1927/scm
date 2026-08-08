@@ -1,4 +1,4 @@
-const page = (id, label, options = {}) => ({ id, label, ...options })
+const page = (id, label) => ({ id, label })
 
 export const inventorySystem = {
   id: 'inventory',
@@ -11,15 +11,15 @@ export const inventorySystem = {
   workflow: ['库存事实已接收', '余额已更新', '可用量已重算', '流水已登记', '读模型已刷新'],
   pages: [
     page('workbench', '库存工作台'),
-    page('balances', '库存余额', { legacy: 'stocks' }),
-    page('available', '可用库存', { legacy: 'stocks' }),
+    page('balances', '库存余额'),
+    page('available', '可用库存'),
     page('reservations', '预占管理'),
     page('freezes', '冻结解冻'),
     page('adjustments', '库存调整'),
-    page('ledgers', '库存流水', { legacy: 'ledgers' }),
-    page('snapshots', '库存快照', { legacy: 'snapshots' }),
-    page('reconciliations', '库存对账', { legacy: 'reconciliations' }),
-    page('event-logs', '事件日志', { legacy: 'inventory-events' }),
+    page('ledgers', '库存流水'),
+    page('snapshots', '库存快照'),
+    page('reconciliations', '库存对账'),
+    page('event-logs', '事件日志'),
     page('operation-logs', '操作日志'),
   ],
 }

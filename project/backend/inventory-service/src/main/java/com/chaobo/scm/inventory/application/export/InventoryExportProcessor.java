@@ -1,9 +1,12 @@
 package com.chaobo.scm.inventory.application.export;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
 import java.time.LocalDateTime;
 import java.util.Locale;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 在短事务之外生成 CSV 并写入对象存储。
@@ -12,6 +15,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class InventoryExportProcessor {
+
+    private static final Logger LOG = LoggerFactory.getLogger(InventoryExportProcessor.class);
 
     private static final String CSV_CONTENT_TYPE = "text/csv;charset=UTF-8";
     private final InventoryExportStorePort store;
@@ -38,7 +43,7 @@ public class InventoryExportProcessor {
             return;
         }
         int processingVersion = task.version() + 1;
-        try {
+        try (ScmLogContext ignored = ScmLogContext.openSystem(task.taskNo())) {
             byte[] content = new InventoryCsvWriter().write(
                     InventoryExportDefinitions.columnsFor(task.exportType()),
                     data.load(task, maxRows));
@@ -51,12 +56,18 @@ public class InventoryExportProcessor {
             if (!store.complete(task.id(), processingVersion, object, fileName)) {
                 throw new IllegalStateException("导出任务完成状态冲突");
             }
+            LOG.info("event=batch_task operation=inventory_export result=SUCCESS taskId={} taskNo={} exportType={}",
+                    task.id(), task.taskNo(), task.exportType());
         } catch (RuntimeException exception) {
             store.fail(
                     task.id(),
                     processingVersion,
                     failureReason(exception),
                     LocalDateTime.now().plusSeconds(retryDelaySeconds));
+            try (ScmLogContext ignored = ScmLogContext.openSystem(task.taskNo())) {
+                LOG.error("event=batch_task operation=inventory_export result=FAILURE taskId={} taskNo={} exportType={}",
+                        task.id(), task.taskNo(), task.exportType(), exception);
+            }
         }
     }
 

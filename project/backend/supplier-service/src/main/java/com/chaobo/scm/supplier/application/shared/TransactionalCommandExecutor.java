@@ -58,7 +58,7 @@ public class TransactionalCommandExecutor {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code CommandResult}
      */
     public CommandResult execute(String namespace, CommandContext context, Object request, Supplier<CommandResult> action) {
-        String key = namespace + ":" + context.idempotencyKey();
+        String key = namespace + ":" + context.requiredIdempotencyKey();
         String hash = sha256(request.toString());
         var stored = idempotencyPort.find(key);
         if (stored.isPresent()) {

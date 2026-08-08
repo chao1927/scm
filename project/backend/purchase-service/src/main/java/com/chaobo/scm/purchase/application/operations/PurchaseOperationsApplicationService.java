@@ -58,6 +58,18 @@ public class PurchaseOperationsApplicationService {
         return mapper.failedCommands(100);
     }
 
+    /** 查询供应商报价事实投影。 */
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public List<PurchaseOperationsViews.Quotation> quotations() {
+        return mapper.quotations(100);
+    }
+
+    /** 查询最近的采购操作日志。 */
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public List<PurchaseOperationsViews.OperationLog> operationLogs() {
+        return mapper.operationLogs(100);
+    }
+
     /**
      * 执行命令 {@code replayCommand}。
      *

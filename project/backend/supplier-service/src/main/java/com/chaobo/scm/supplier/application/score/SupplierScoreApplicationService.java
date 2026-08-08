@@ -177,6 +177,12 @@ public class SupplierScoreApplicationService {
         return mapper.rules();
     }
 
+    /** 查询当前供应商数据范围内的评分结果。 */
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public List<ScoreViews.Result> results(Long scope) {
+        return mapper.results(scope, 100);
+    }
+
     /**
      * 处理当前类型职责中的操作 {@code calculate}。
      *

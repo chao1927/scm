@@ -161,7 +161,7 @@ public class AsnController {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code ApiResponse<AsnDetailView>}
      */
     @GetMapping("/{asnId}")
-    @PreAuthorize("hasAuthority('supplier:asn:read')")
+    @PreAuthorize("hasAnyAuthority('*', 'supplier:*', 'supplier:asn:read')")
     public ApiResponse<AsnDetailView> detail(@PathVariable long asnId, @AuthenticationPrincipal Jwt jwt, HttpServletRequest request) {
         Long supplierScopeId = supplierScope(jwt);
         return ApiResponse.success(queryService.detail(asnId, supplierScopeId), request.getHeader("X-Request-Id"), request.getHeader("X-Trace-Id"));
@@ -181,7 +181,7 @@ public class AsnController {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code ApiResponse<PageResult<AsnSummaryView>>}
      */
     @GetMapping
-    @PreAuthorize("hasAuthority('supplier:asn:read')")
+    @PreAuthorize("hasAnyAuthority('*', 'supplier:*', 'supplier:asn:read')")
     public ApiResponse<PageResult<AsnSummaryView>> page(@RequestParam(required = false) Long supplierId, @RequestParam(required = false) Integer status, @RequestParam(required = false) String keyword, @RequestParam(defaultValue = "1") int pageNo, @RequestParam(defaultValue = "20") int pageSize, @AuthenticationPrincipal Jwt jwt, HttpServletRequest request) {
         Long supplierScopeId = supplierScope(jwt);
         return ApiResponse.success(queryService.page(supplierId, supplierScopeId, status, keyword, pageNo, pageSize), request.getHeader("X-Request-Id"), request.getHeader("X-Trace-Id"));

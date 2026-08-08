@@ -5,6 +5,9 @@ import com.chaobo.scm.bms.domain.BmsDomain;
 import com.chaobo.scm.bms.infrastructure.persistence.BmsExternalTaskMapper;
 import com.chaobo.scm.bms.infrastructure.persistence.BmsMapper;
 import com.chaobo.scm.common.security.ScmAccessContext;
+import com.chaobo.scm.common.logging.ScmLogContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +23,8 @@ import java.util.UUID;
  */
 @Service
 public class BmsExternalIntegrationApplicationService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(BmsExternalIntegrationApplicationService.class);
 
     public static final int PENDING = 1;
     public static final int SUCCEEDED = 2;
@@ -103,16 +108,22 @@ public class BmsExternalIntegrationApplicationService {
                 continue;
             }
             var claimed = tasks.find(candidate.taskNo());
-            try {
+            try (ScmLogContext ignored = ScmLogContext.openSystem(claimed.taskNo())) {
                 String externalRef = execute(claimed);
                 tasks.markSucceeded(claimed.taskNo(), externalRef);
                 succeeded++;
+                LOG.info("event=integration_command operation=bms_external_dispatch result=SUCCESS taskNo={} taskType={}",
+                        claimed.taskNo(), claimed.taskType());
             } catch (PaymentGateway.ResultUnknownException exception) {
                 boolean terminal = claimed.attemptCount() >= claimed.maxAttempts();
                 markRefundResultUnknown(claimed, message(exception));
                 tasks.markFailed(claimed.taskNo(),
                     terminal ? FINAL_FAILED : RETRY_WAITING, message(exception));
                 failed++;
+                try (ScmLogContext ignored = ScmLogContext.openSystem(claimed.taskNo())) {
+                    LOG.error("event=integration_command operation=bms_external_dispatch result=UNKNOWN taskNo={} taskType={} terminal={}",
+                            claimed.taskNo(), claimed.taskType(), terminal, exception);
+                }
             } catch (RuntimeException exception) {
                 boolean terminal = claimed.attemptCount() >= claimed.maxAttempts();
                 if (terminal) {
@@ -121,6 +132,10 @@ public class BmsExternalIntegrationApplicationService {
                 tasks.markFailed(claimed.taskNo(),
                     terminal ? FINAL_FAILED : RETRY_WAITING, message(exception));
                 failed++;
+                try (ScmLogContext ignored = ScmLogContext.openSystem(claimed.taskNo())) {
+                    LOG.error("event=integration_command operation=bms_external_dispatch result=FAILURE taskNo={} taskType={} terminal={}",
+                            claimed.taskNo(), claimed.taskType(), terminal, exception);
+                }
             }
         }
         return new DispatchResult(succeeded, failed);

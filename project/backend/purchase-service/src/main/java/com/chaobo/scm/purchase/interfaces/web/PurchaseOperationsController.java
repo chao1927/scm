@@ -88,6 +88,12 @@ public class PurchaseOperationsController {
         return ok(operations.failedCommands(), request);
     }
 
+    /** 查询最近的采购操作日志。 */
+    @GetMapping("/operation-logs")
+    public ApiResponse<List<PurchaseOperationsViews.OperationLog>> operationLogs(HttpServletRequest request) {
+        return ok(operations.operationLogs(), request);
+    }
+
     /**
      * 执行命令 {@code replayCommand}。
      *

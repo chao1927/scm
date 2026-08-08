@@ -1,5 +1,6 @@
 package com.chaobo.scm.wms.infrastructure.mq;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
 import com.chaobo.scm.wms.application.inbox.WmsInboundEventApplicationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -59,7 +60,7 @@ public class RocketMqWmsInboundEventConsumer {
     }
 
     private ConsumeResult consume(MessageView message) {
-        try {
+        try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
             var root = read(message);
             int version = required(root, "schemaVersion").asInt();
             if (version != 1) {
@@ -69,10 +70,14 @@ public class RocketMqWmsInboundEventConsumer {
                 text(root, "sourceSystem"), text(root, "eventCode"),
                 text(root, "eventType"), required(root, "data").toString());
             application.consume(envelope, 0L);
+            LOG.info("event=rocketmq_consume operation=wms_inbound_event_consume result=SUCCESS messageId={} topic={}",
+                message.getMessageId(), message.getTopic());
             return ConsumeResult.SUCCESS;
         } catch (Exception exception) {
-            LOG.warn("WMS RocketMQ 事件消费失败，等待 Broker 重试，messageId={}",
-                message.getMessageId(), exception);
+            try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
+                LOG.warn("event=rocketmq_consume operation=wms_inbound_event_consume result=RETRY messageId={} topic={}",
+                    message.getMessageId(), message.getTopic(), exception);
+            }
             return ConsumeResult.FAILURE;
         }
     }

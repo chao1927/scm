@@ -69,7 +69,7 @@ public class PoConfirmController {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code ApiResponse<PageResult<PoConfirmView>>}
      */
     @GetMapping
-    @PreAuthorize("hasAuthority('supplier:po_confirm:read')")
+    @PreAuthorize("hasAnyAuthority('*', 'supplier:*', 'supplier:po_confirm:read')")
     public ApiResponse<PageResult<PoConfirmView>> page(@RequestParam(required = false) Long supplierId, @RequestParam(required = false) Integer status, @RequestParam(required = false) String keyword, @RequestParam(defaultValue = "1") int pageNo, @RequestParam(defaultValue = "20") int pageSize, @AuthenticationPrincipal Jwt jwt, HttpServletRequest r) {
         return ApiResponse.success(service.page(supplierId, scope(jwt), status, keyword, pageNo, pageSize), r.getHeader("X-Request-Id"), r.getHeader("X-Trace-Id"));
     }
@@ -84,7 +84,7 @@ public class PoConfirmController {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code ApiResponse<PoConfirmView>}
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('supplier:po_confirm:read')")
+    @PreAuthorize("hasAnyAuthority('*', 'supplier:*', 'supplier:po_confirm:read')")
     public ApiResponse<PoConfirmView> detail(@PathVariable long id, @AuthenticationPrincipal Jwt jwt, HttpServletRequest r) {
         return ApiResponse.success(service.detail(id, scope(jwt)), r.getHeader("X-Request-Id"), r.getHeader("X-Trace-Id"));
     }

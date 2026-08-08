@@ -52,9 +52,7 @@ class BmsExternalIntegrationApplicationServiceTest {
     @Test
     void invalidPaymentSignatureNeverClaimsReceipt() {
         var mapper = new BmsApplicationServiceTest.MemoryBmsMapper();
-        mapper.refunds.put("RF-1", new BmsMapper.RefundSettlementRow(
-            1L, "RF-1", "B-1", BigDecimal.TEN,
-            BmsDomain.RefundSettlementAggregate.REQUESTED, null, 1));
+        mapper.refunds.put("RF-1", refundRow("RF-1"));
         var callback = new PaymentCallbackApplicationService(
             input -> { throw new IllegalArgumentException("signature invalid"); },
             new BmsApplicationService(mapper));
@@ -62,6 +60,7 @@ class BmsExternalIntegrationApplicationServiceTest {
         assertThatThrownBy(() -> callback.receive(
             new PaymentCallbackApplicationService.CallbackCommand(
                 "RF-1", "PAY-EVT-1", true, null,
+                null, null, null, null,
                 1L, "nonce", "bad", "{}")))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("signature invalid");
@@ -71,9 +70,7 @@ class BmsExternalIntegrationApplicationServiceTest {
     @Test
     void unknownPaymentResultKeepsRefundPendingInsteadOfReleasingAmount() {
         var mapper = new BmsApplicationServiceTest.MemoryBmsMapper();
-        mapper.refunds.put("RF-UNKNOWN", new BmsMapper.RefundSettlementRow(
-            1L, "RF-UNKNOWN", "B-1", BigDecimal.TEN,
-            BmsDomain.RefundSettlementAggregate.REQUESTED, null, 1));
+        mapper.refunds.put("RF-UNKNOWN", refundRow("RF-UNKNOWN"));
         var taskMapper = new MemoryTaskMapper();
         var service = integration(mapper, taskMapper,
             request -> new ErpFinanceGateway.PostingResult("VOUCHER-1"),
@@ -120,6 +117,13 @@ class BmsExternalIntegrationApplicationServiceTest {
         return new ScmAccessContext(1001, "finance", "BMS",
             Set.of("bms:external-task:retry"),
             Map.of("BILLING_OBJECT", Set.of(objectCode)));
+    }
+
+    private static BmsMapper.RefundSettlementRow refundRow(String refundNo) {
+        return new BmsMapper.RefundSettlementRow(
+            1L, refundNo, "B-1", null, null, BigDecimal.TEN, "CNY", "OBJ",
+            "request:" + refundNo, "digest:" + refundNo, 1,
+            BmsDomain.RefundSettlementAggregate.REQUESTED, null, null, null, 1);
     }
 
     private static BmsExternalIntegrationApplicationService integration(

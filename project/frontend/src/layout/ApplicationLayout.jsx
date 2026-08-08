@@ -45,9 +45,8 @@ export default function ApplicationLayout({ session, onLogout }) {
         const candidates = [
           `${activeSystem.id}-${item.id}`,
           `${activeSystem.id}.${item.id}`,
-          item.legacy,
           item.id,
-        ].filter(Boolean)
+        ]
         const override = candidates.map((key) => menuOverrides.get(key)).find(Boolean)
         return {
           key: item.id,

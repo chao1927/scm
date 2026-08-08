@@ -267,6 +267,12 @@ public class SupplierOperationsApplicationService {
         return mapper.dashboard();
     }
 
+    /** 查询最近的持久化操作审计日志。 */
+    @Transactional(readOnly = true, rollbackFor = Exception.class)
+    public List<OperationViews.OperationLog> operationLogs(int limit) {
+        return mapper.operationLogs(Math.max(1, Math.min(limit, 200)));
+    }
+
     /**
      * 执行命令 {@code createExport}。
      *
@@ -291,9 +297,10 @@ public class SupplierOperationsApplicationService {
         }
         Long effectiveSupplierId = c.supplierScopeId() == null ? supplierId : c.supplierScopeId();
         String effectiveQuery = queryJson == null || queryJson.isBlank() ? "{}" : queryJson;
+        String idempotencyKey = c.requiredIdempotencyKey();
         long id = ids.nextId();
-        mapper.insertExport(id, type, effectiveSupplierId, effectiveQuery, c.operatorId(), c.idempotencyKey());
-        var persisted = mapper.exportTaskByIdempotency(c.operatorId(), c.idempotencyKey());
+        mapper.insertExport(id, type, effectiveSupplierId, effectiveQuery, c.operatorId(), idempotencyKey);
+        var persisted = mapper.exportTaskByIdempotency(c.operatorId(), idempotencyKey);
         if (persisted == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "导出任务创建结果不可用");
         }

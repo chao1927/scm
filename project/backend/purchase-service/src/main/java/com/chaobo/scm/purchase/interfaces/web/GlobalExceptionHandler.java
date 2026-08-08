@@ -9,6 +9,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * GlobalExceptionHandler。
@@ -20,6 +22,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger LOG = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     /**
      * 处理当前类型职责中的操作 {@code business}。
@@ -58,6 +62,9 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> system(Exception exception, HttpServletRequest request) {
+        LOG.error("event=http_exception operation=global_exception_handler result=FAILURE requestId={} traceId={} exceptionType={}",
+                request.getHeader("X-Request-Id"), request.getHeader("X-Trace-Id"),
+                exception.getClass().getSimpleName(), exception);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.failure(ErrorCode.SYSTEM_ERROR.name(), "系统异常", request.getHeader("X-Request-Id"), request.getHeader("X-Trace-Id")));
     }
 

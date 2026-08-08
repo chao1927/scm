@@ -68,6 +68,7 @@ describe('system catalog', () => {
   it('keeps page identifiers unique inside each system', () => {
     systemCatalog.forEach((system) => {
       expect(new Set(system.pages.map((page) => page.id)).size).toBe(system.pages.length)
+      expect(system.pages.every((page) => !Object.hasOwn(page, 'legacy'))).toBe(true)
     })
   })
 })

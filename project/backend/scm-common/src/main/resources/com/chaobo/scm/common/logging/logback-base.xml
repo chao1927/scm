@@ -1,0 +1,58 @@
+<included>
+    <property name="SCM_LOG_PATTERN"
+              value="time=%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} level=%level service=${SCM_APP_NAME} thread=%thread traceId=%X{traceId:-} requestId=%X{requestId:-} operatorId=%X{operatorId:-0} operator=%X{operator:-system} logger=%logger{48} message=%msg%n%ex"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${SCM_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <appender name="INFO_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${SCM_LOG_HOME}/${SCM_APP_NAME}/info/info.log</file>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>ERROR</level>
+            <onMatch>DENY</onMatch>
+            <onMismatch>NEUTRAL</onMismatch>
+        </filter>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${SCM_LOG_HOME}/${SCM_APP_NAME}/info/info.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>${SCM_LOG_MAX_FILE_SIZE}</maxFileSize>
+            <maxHistory>${SCM_LOG_MAX_HISTORY}</maxHistory>
+            <totalSizeCap>${SCM_LOG_INFO_TOTAL_SIZE_CAP}</totalSizeCap>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${SCM_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${SCM_LOG_HOME}/${SCM_APP_NAME}/error/error.log</file>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>ERROR</level>
+        </filter>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${SCM_LOG_HOME}/${SCM_APP_NAME}/error/error.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>${SCM_LOG_MAX_FILE_SIZE}</maxFileSize>
+            <maxHistory>${SCM_LOG_MAX_HISTORY}</maxHistory>
+            <totalSizeCap>${SCM_LOG_ERROR_TOTAL_SIZE_CAP}</totalSizeCap>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${SCM_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="INFO_FILE"/>
+        <appender-ref ref="ERROR_FILE"/>
+    </root>
+</included>

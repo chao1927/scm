@@ -108,6 +108,9 @@ public interface SupplierAccessMapper {
     @Select("SELECT supplier_user_id id,supplier_id supplierId,user_id userId,binding_role role,is_primary `primary`,status,bound_at boundAt,version FROM sup_supplier_user_binding WHERE supplier_id=#{supplierId} ORDER BY status,bound_at")
     List<BindingRow> bindings(long supplierId);
 
+    @Select("<script>SELECT supplier_user_id id,supplier_id supplierId,user_id userId,binding_role role,is_primary `primary`,status,bound_at boundAt,version FROM sup_supplier_user_binding <if test='supplierId!=null'>WHERE supplier_id=#{supplierId}</if> ORDER BY status,bound_at DESC</script>")
+    List<BindingRow> allBindings(@Param("supplierId") Long supplierId);
+
     /**
      * 处理当前类型职责中的操作 {@code insertBinding}。
      *

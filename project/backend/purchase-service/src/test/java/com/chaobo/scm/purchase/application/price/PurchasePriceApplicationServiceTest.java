@@ -37,7 +37,8 @@ class PurchasePriceApplicationServiceTest {
     }
 
     private CommandContext context() {
-        return new CommandContext(1001, "buyer", 1, 2001L, "REQ-PRICE-001", "TRACE-001", "IDEM-PRICE-001", Set.of("purchase:price:create"));
+        return new CommandContext(1001, "buyer", 1, 2001L, "REQ-PRICE-001", "TRACE-001",
+                "IDEM-PRICE-001", Set.of("purchase:price:create"), "price-request-digest");
     }
 
     private static final class CapturingRepository implements PurchasePriceRepository {

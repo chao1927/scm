@@ -1,8 +1,11 @@
 package com.chaobo.scm.oms.application;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
 import com.chaobo.scm.oms.infrastructure.persistence.OmsOutboxMapper;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * OMS Outbox 可靠投递应用服务。
@@ -14,6 +17,8 @@ import org.springframework.stereotype.Service;
 @Service
 @ConditionalOnProperty(name = "scm.rocketmq.enabled", havingValue = "true")
 public class OmsOutboxDispatchApplicationService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(OmsOutboxDispatchApplicationService.class);
 
     private static final int MAX_ERROR_LENGTH = 512;
     private final OmsOutboxMapper mapper;
@@ -39,15 +44,21 @@ public class OmsOutboxDispatchApplicationService {
             if (mapper.claim(event.id()) != 1) {
                 continue;
             }
-            try {
+            try (ScmLogContext ignored = ScmLogContext.openSystem(event.eventCode())) {
                 broker.publish(new OmsMessageBroker.OutboundMessage(
                         event.eventCode(), event.eventType(),
                         event.businessNo(), event.payload()));
                 mapper.markPublished(event.id());
                 published++;
+                LOG.info("event=rocketmq_publish operation=oms_outbox_publish result=SUCCESS eventId={} eventCode={} eventType={}",
+                        event.id(), event.eventCode(), event.eventType());
             } catch (RuntimeException exception) {
                 mapper.markFailed(event.id(), errorMessage(exception));
                 failed++;
+                try (ScmLogContext ignored = ScmLogContext.openSystem(event.eventCode())) {
+                    LOG.error("event=rocketmq_publish operation=oms_outbox_publish result=FAILURE eventId={} eventCode={} eventType={}",
+                            event.id(), event.eventCode(), event.eventType(), exception);
+                }
             }
         }
         return new DispatchResult(published, failed);

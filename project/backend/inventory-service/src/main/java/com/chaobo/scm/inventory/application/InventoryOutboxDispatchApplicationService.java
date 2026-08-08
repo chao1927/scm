@@ -1,9 +1,12 @@
 package com.chaobo.scm.inventory.application;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 库存 Outbox 真实消息投递应用服务。
@@ -16,6 +19,8 @@ import org.springframework.stereotype.Service;
 @Service
 @Profile("!test")
 public class InventoryOutboxDispatchApplicationService implements InventoryOutboundEventReplayer {
+
+    private static final Logger LOG = LoggerFactory.getLogger(InventoryOutboxDispatchApplicationService.class);
 
     private static final int DEFAULT_BATCH_SIZE = 50;
     private static final int MAX_BATCH_SIZE = 200;
@@ -81,11 +86,17 @@ public class InventoryOutboxDispatchApplicationService implements InventoryOutbo
     }
 
     private void publish(InventoryOutboxStore.OutboxEvent event) {
-        try {
+        try (ScmLogContext ignored = ScmLogContext.openSystem(event.eventCode())) {
             broker.publish(message(event));
             store.markPublished(event.id());
+            LOG.info("event=rocketmq_publish operation=inventory_outbox_publish result=SUCCESS eventId={} eventCode={} eventType={}",
+                    event.id(), event.eventCode(), event.eventType());
         } catch (RuntimeException exception) {
             store.markFailed(event.id(), errorMessage(exception));
+            try (ScmLogContext ignored = ScmLogContext.openSystem(event.eventCode())) {
+                LOG.error("event=rocketmq_publish operation=inventory_outbox_publish result=FAILURE eventId={} eventCode={} eventType={}",
+                        event.id(), event.eventCode(), event.eventType(), exception);
+            }
             throw exception;
         }
     }

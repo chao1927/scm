@@ -205,6 +205,14 @@ public class SupplierOperationsController {
         return ok(service.dashboard(), request);
     }
 
+    /** 查询供应商协同的持久化操作审计日志。 */
+    @GetMapping("/operation-logs")
+    @PreAuthorize("hasAnyAuthority('*', 'supplier:*', 'supplier:operation-log:read')")
+    public ApiResponse<List<OperationViews.OperationLog>> operationLogs(
+            @RequestParam(defaultValue = "100") int limit, HttpServletRequest request) {
+        return ok(service.operationLogs(limit), request);
+    }
+
     /**
      * 执行命令 {@code createExport}。
      *
@@ -215,7 +223,7 @@ public class SupplierOperationsController {
      * @return 执行命令的结果，类型为 {@code ApiResponse<Long>}
      */
     @PostMapping("/exports")
-    @PreAuthorize("hasAuthority('supplier:export:create')")
+    @PreAuthorize("hasAnyAuthority('*', 'supplier:*', 'supplier:export:create')")
     public ApiResponse<Long> createExport(@Valid @RequestBody ExportCreate body, HttpServletRequest request, Authentication authentication) {
         return ok(service.createExport(body.exportType(), body.supplierId(), body.queryJson(), contexts.create(request, authentication)), request);
     }
@@ -233,7 +241,7 @@ public class SupplierOperationsController {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code ApiResponse<List<OperationViews.ExportTask>>}
      */
     @GetMapping("/exports")
-    @PreAuthorize("hasAuthority('supplier:export:read')")
+    @PreAuthorize("hasAnyAuthority('*', 'supplier:*', 'supplier:export:read')")
     public ApiResponse<List<OperationViews.ExportTask>> exports(@RequestParam(required = false) Long supplierId, @RequestParam(required = false) Integer status, @RequestParam(defaultValue = "1") int pageNo, @RequestParam(defaultValue = "20") int pageSize, @AuthenticationPrincipal Jwt jwt, HttpServletRequest request) {
         return ok(service.exportTasks(supplierId, scope(jwt), status, pageNo, pageSize), request);
     }
@@ -247,7 +255,7 @@ public class SupplierOperationsController {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code ApiResponse<OperationViews.ExportTask>}
      */
     @GetMapping("/exports/{id}")
-    @PreAuthorize("hasAuthority('supplier:export:read')")
+    @PreAuthorize("hasAnyAuthority('*', 'supplier:*', 'supplier:export:read')")
     public ApiResponse<OperationViews.ExportTask> exportDetail(@PathVariable long id,
                                                                @AuthenticationPrincipal Jwt jwt,
                                                                HttpServletRequest request) {
@@ -258,7 +266,7 @@ public class SupplierOperationsController {
      * 人工重试失败导出任务。
      */
     @PostMapping("/exports/{id}/retry")
-    @PreAuthorize("hasAuthority('supplier:export:retry')")
+    @PreAuthorize("hasAnyAuthority('*', 'supplier:*', 'supplier:export:retry')")
     public ApiResponse<Void> retryExport(@PathVariable long id, @Valid @RequestBody ExportRetry body,
                                          HttpServletRequest request, Authentication authentication) {
         service.retryExport(id, body.version(), contexts.create(request, authentication));
@@ -269,7 +277,7 @@ public class SupplierOperationsController {
      * 下载已完成的真实导出文件。
      */
     @GetMapping("/exports/{id}/file")
-    @PreAuthorize("hasAuthority('supplier:export:read')")
+    @PreAuthorize("hasAnyAuthority('*', 'supplier:*', 'supplier:export:read')")
     public ResponseEntity<byte[]> downloadExport(@PathVariable long id, @AuthenticationPrincipal Jwt jwt) {
         var file = service.downloadExport(id, scope(jwt));
         return ResponseEntity.ok()

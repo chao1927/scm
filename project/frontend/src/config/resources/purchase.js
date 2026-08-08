@@ -63,6 +63,11 @@ export const purchaseResources = {
       { key: 'close', label: '截标', permission: 'purchase:rfq:close', visible: (row) => [2, 3].includes(row.status), run: (row, text) => closeRfq(row.rfqNo, row.version, reason(text)) },
     ],
   },
+  'purchase.quotations': {
+    query: get('/purchase/v1/quotations'),
+    rowKey: ['factId', 'quoteNo', 'eventCode'],
+    columns: [column('quoteNo', '报价单号'), column('rfqNo', 'RFQ 单号'), column('supplierId', '供应商'), column('skuCode', 'SKU'), column('quoteQty', '报价数量', { number: true }), column('quoteAmount', '报价金额', { number: true }), column('currency', '币种'), column('quoteStatus', '报价状态', { status: true }), column('updatedAt', '更新时间', { date: true })],
+  },
   'purchase.compare-results': {
     query: get('/purchase/v1/bid-comparisons'),
     detail: getDetail('/purchase/v1/bid-comparisons'),
@@ -116,5 +121,10 @@ export const purchaseResources = {
     rowKey: ['id', 'eventId'],
     columns: [column('id', '事件 ID'), column('sourceSystem', '来源系统'), column('eventCode', '事件编码'), column('eventType', '事件类型'), column('retryCount', '重试次数'), column('reason', '失败原因'), column('updatedAt', '更新时间', { date: true })],
     actions: [{ key: 'replay', label: '重放', permission: 'purchase:event:replay', tone: 'primary', run: (row, text) => replayPurchaseFailedEvent(row.id, reason(text)) }],
+  },
+  'purchase.operation-logs': {
+    query: get('/purchase/v1/operations/operation-logs'),
+    rowKey: ['id', 'logId'],
+    columns: [column('createdAt', '操作时间', { date: true }), column('operatorName', '操作人'), column('operatorId', '操作人 ID'), column('operation', '操作内容'), column('targetType', '对象类型'), column('targetNo', '业务单号'), column('requestId', '请求 ID'), column('traceId', '链路 ID')],
   },
 }

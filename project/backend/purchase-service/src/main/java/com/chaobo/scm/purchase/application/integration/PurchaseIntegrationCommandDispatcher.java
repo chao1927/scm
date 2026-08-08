@@ -1,5 +1,8 @@
 package com.chaobo.scm.purchase.application.integration;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.chaobo.scm.purchase.infrastructure.persistence.integration.IntegrationCommandMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -19,6 +22,8 @@ import java.util.List;
  */
 @Service
 public class PurchaseIntegrationCommandDispatcher {
+
+    private static final Logger LOG = LoggerFactory.getLogger(PurchaseIntegrationCommandDispatcher.class);
 
     /**
      * mapper（类型：{@code IntegrationCommandMapper}）。
@@ -93,13 +98,19 @@ public class PurchaseIntegrationCommandDispatcher {
      * @param row 业务处理参数或成员，类型为 {@code IntegrationCommandMapper.CommandRow}
      */
     void send(IntegrationCommandMapper.CommandRow row) {
-        try {
+        try (ScmLogContext ignored = ScmLogContext.openSystem(Long.toString(row.commandId()))) {
             IntegrationCommandGateway.DispatchReceipt receipt = gateway.dispatch(row);
             tx.executeWithoutResult(status -> mapper.markSucceeded(row.commandId(), receipt.remoteReference()));
+            LOG.info("event=integration_command operation=purchase_integration_dispatch result=SUCCESS commandId={} commandType={}",
+                    row.commandId(), row.commandType());
         } catch (RuntimeException exception) {
             String reason = message(exception);
             OffsetDateTime next = OffsetDateTime.now().plusSeconds(backoffSeconds(row.retryCount()));
             tx.executeWithoutResult(status -> mapper.markRetry(row.commandId(), row.retryCount(), next, reason, maxRetries));
+            try (ScmLogContext ignored = ScmLogContext.openSystem(Long.toString(row.commandId()))) {
+                LOG.error("event=integration_command operation=purchase_integration_dispatch result=FAILURE commandId={} commandType={} retryCount={}",
+                        row.commandId(), row.commandType(), row.retryCount(), exception);
+            }
         }
     }
 

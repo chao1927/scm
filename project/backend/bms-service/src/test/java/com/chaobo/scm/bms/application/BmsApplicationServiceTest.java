@@ -35,8 +35,10 @@ class BmsApplicationServiceTest {
             "CUSTOMER", "PAYABLE", "CNY", 1, 1));
         mapper.bills.put("B-1", new BmsMapper.BillRow(1L, "B-1", "R-1", "OBJ", new BigDecimal("100"), 2, 1));
         BmsApplicationService service = new BmsApplicationService(mapper);
-        var first = service.requestRefundSettlement(new BmsApplicationService.RequestRefundCommand("B-1", new BigDecimal("60"), 1L, "refund-1"));
-        assertThatThrownBy(() -> service.requestRefundSettlement(new BmsApplicationService.RequestRefundCommand("B-1", new BigDecimal("50"), 1L, "refund-2"))).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("refundable");
+        var first = service.requestRefundSettlement(refundRequest("B-1", "60", 1L, "refund-1"));
+        assertThatThrownBy(() -> service.requestRefundSettlement(
+            refundRequest("B-1", "50", 1L, "refund-2")))
+            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("refundable");
         var failed = service.consumeRefundReceipt(first.refundNo(), receipt("PAY-FAIL-1", false, "渠道失败", "60.00"));
         var retried = service.retryRefundSettlement(first.refundNo(), new BmsApplicationService.VersionCommand(failed.version(), 1L, "retry-1"));
         var finished = service.consumeRefundReceipt(first.refundNo(), receipt("PAY-OK-1", true, null, "60.00"));
@@ -50,15 +52,14 @@ class BmsApplicationServiceTest {
     void keepsPendingRefundOccupiedAndRequiresTwoPersonEvidenceForManualClose() {
         MemoryBmsMapper mapper = refundFixture();
         BmsApplicationService service = new BmsApplicationService(mapper);
-        var refund = service.requestRefundSettlement(new BmsApplicationService.RequestRefundCommand(
-            "B-1", new BigDecimal("60.00"), 1L, "refund-pending"));
+        var refund = service.requestRefundSettlement(
+            refundRequest("B-1", "60.00", 1L, "refund-pending"));
         var pending = service.markRefundConfirmationPending(refund.refundNo(),
             new BmsApplicationService.ConfirmationPendingCommand(
                 "payment timeout", refund.version(), 1L, "pending-1"));
 
         assertThatThrownBy(() -> service.requestRefundSettlement(
-            new BmsApplicationService.RequestRefundCommand("B-1", new BigDecimal("50.00"),
-                1L, "refund-over")))
+            refundRequest("B-1", "50.00", 1L, "refund-over")))
             .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("refundable");
         assertThatThrownBy(() -> service.closeRefundManually(pending.refundNo(),
             new BmsApplicationService.ManualRefundResolutionCommand("verified unpaid", "ticket-1",
@@ -69,20 +70,19 @@ class BmsApplicationServiceTest {
             new BmsApplicationService.ManualRefundResolutionCommand("verified unpaid", "ticket-1",
                 pending.version(), 1L, 2L, "close-1"));
         assertThat(closed.status()).isEqualTo(BmsDomain.RefundSettlementAggregate.CLOSED);
-        assertThat(service.requestRefundSettlement(new BmsApplicationService.RequestRefundCommand(
-            "B-1", new BigDecimal("50.00"), 1L, "refund-after-close"))).isNotNull();
+        assertThat(service.requestRefundSettlement(
+            refundRequest("B-1", "50.00", 1L, "refund-after-close"))).isNotNull();
     }
 
     @Test
     void rejectsReceiptFactsAndRequestIdempotencyConflicts() {
         MemoryBmsMapper mapper = refundFixture();
         BmsApplicationService service = new BmsApplicationService(mapper);
-        var first = service.requestRefundSettlement(new BmsApplicationService.RequestRefundCommand(
-            "B-1", new BigDecimal("40.00"), 1L, "same-key"));
-        assertThat(service.requestRefundSettlement(new BmsApplicationService.RequestRefundCommand(
-            "B-1", new BigDecimal("40.00"), 1L, "same-key")).refundNo()).isEqualTo(first.refundNo());
-        assertThatThrownBy(() -> service.requestRefundSettlement(new BmsApplicationService.RequestRefundCommand(
-            "B-1", new BigDecimal("30.00"), 1L, "same-key")))
+        var first = service.requestRefundSettlement(refundRequest("B-1", "40.00", 1L, "same-key"));
+        assertThat(service.requestRefundSettlement(
+            refundRequest("B-1", "40.00", 1L, "same-key")).refundNo()).isEqualTo(first.refundNo());
+        assertThatThrownBy(() -> service.requestRefundSettlement(
+            refundRequest("B-1", "30.00", 1L, "same-key")))
             .isInstanceOf(IllegalStateException.class).hasMessageContaining("conflicts");
 
         var unchanged = service.consumeRefundReceipt(first.refundNo(),
@@ -95,6 +95,13 @@ class BmsApplicationServiceTest {
             String receiptNo, boolean success, String reason, String amount) {
         return new BmsApplicationService.RefundReceiptCommand(receiptNo, success, reason,
             new BigDecimal(amount), "CNY", "OBJ", "TX-" + receiptNo, "{}");
+    }
+
+    private static BmsApplicationService.RequestRefundCommand refundRequest(
+            String billNo, String amount, Long operatorId, String idempotencyKey) {
+        return new BmsApplicationService.RequestRefundCommand(
+            billNo, null, null, new BigDecimal(amount), null, null,
+            operatorId, idempotencyKey);
     }
 
     private static MemoryBmsMapper refundFixture() {
@@ -133,7 +140,8 @@ class BmsApplicationServiceTest {
         invoice = service.issueInvoice(invoice.invoiceNo(), new BmsApplicationService.VersionCommand(invoice.version(), 1001L, "invoice-issue-1"));
         BmsMapper.FinanceHandoverRow finance = service.requestFinanceHandover(new BmsApplicationService.RequestFinanceCommand(bill.billNo(), 1001L, "finance-1"));
         finance = service.postFinanceHandover(finance.handoverNo(), new BmsApplicationService.PostFinanceCommand("ERP-V-1", finance.version(), 1001L, "finance-post-1"));
-        BmsMapper.RefundSettlementRow refund = service.requestRefundSettlement(new BmsApplicationService.RequestRefundCommand(bill.billNo(), new BigDecimal("5.00"), 1001L, "refund-1"));
+        BmsMapper.RefundSettlementRow refund = service.requestRefundSettlement(
+            refundRequest(bill.billNo(), "5.00", 1001L, "refund-1"));
         refund = service.finishRefundSettlement(refund.refundNo(), new BmsApplicationService.VersionCommand(refund.version(), 1001L, "refund-finish-1"));
         BmsMapper.InboxEventRow inbox = service.consumeEvent(new BmsApplicationService.ConsumeEventCommand("ERP", "ERP-EVT-1", "FinanceVoucherPosted", finance.handoverNo(), "{}"));
         assertThat(source.status()).isEqualTo(BmsDomain.ChargeSourceAggregate.ACCEPTED);

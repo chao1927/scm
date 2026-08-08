@@ -1,5 +1,6 @@
 package com.chaobo.scm.mdm.infrastructure.mq;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
 import com.chaobo.scm.mdm.application.MdmOpenApiApplicationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -61,13 +62,17 @@ public class RocketMqMdmInboundEventConsumer {
     }
 
     private ConsumeResult consume(MessageView message) {
-        try {
+        try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
             JsonNode root = read(message);
             application.consumeEvent(toEvent(root));
+            LOG.info("event=rocketmq_consume operation=mdm_inbound_event_consume result=SUCCESS messageId={} topic={}",
+                message.getMessageId(), message.getTopic());
             return ConsumeResult.SUCCESS;
         } catch (Exception exception) {
-            LOG.warn("MDM RocketMQ event failed; waiting for broker retry, messageId={}",
-                message.getMessageId(), exception);
+            try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
+                LOG.warn("event=rocketmq_consume operation=mdm_inbound_event_consume result=RETRY messageId={} topic={}",
+                    message.getMessageId(), message.getTopic(), exception);
+            }
             return ConsumeResult.FAILURE;
         }
     }

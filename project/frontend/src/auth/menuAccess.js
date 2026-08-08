@@ -1,4 +1,4 @@
-export const menuPermissions = {
+const menuPermissions = {
   'supplier-asn': 'supplier:asn:read',
   'supplier-order': 'supplier:po_confirm:read',
   'supplier-quality': 'supplier:quality:read',

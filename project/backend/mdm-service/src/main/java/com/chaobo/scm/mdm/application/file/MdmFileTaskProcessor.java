@@ -1,5 +1,6 @@
 package com.chaobo.scm.mdm.application.file;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
 import com.chaobo.scm.mdm.infrastructure.persistence.MasterDataRecordMapper;
 import com.chaobo.scm.mdm.infrastructure.persistence.MdmImportQualityMapper;
 import org.springframework.beans.factory.annotation.Value;
@@ -8,12 +9,16 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 编排单个主数据导入或导出文件任务。
  */
 @Service
 public class MdmFileTaskProcessor {
+
+    private static final Logger LOG = LoggerFactory.getLogger(MdmFileTaskProcessor.class);
 
     private static final String CSV_CONTENT_TYPE = "text/csv;charset=UTF-8";
     private static final java.util.Set<String> SAFE_PLAIN_EXPORT_FIELDS =
@@ -46,10 +51,12 @@ public class MdmFileTaskProcessor {
         if (taskMapper.claimImportTask(task.importTaskNo(), task.version()) != 1) {
             return;
         }
-        try {
+        try (ScmLogContext ignored = ScmLogContext.openSystem(task.importTaskNo())) {
             if (task.status() == com.chaobo.scm.mdm.domain.ImportTaskAggregate.VALIDATED) {
                 execution.applyValidatedRows(task.importTaskNo());
                 taskMapper.releaseImportTask(task.importTaskNo());
+                LOG.info("event=batch_task operation=mdm_import_apply result=SUCCESS taskNo={}",
+                        task.importTaskNo());
                 return;
             }
             MdmFileStoragePort.StoredContent source = storage.load(task.fileUrl());
@@ -60,8 +67,14 @@ public class MdmFileTaskProcessor {
                 execution.applyValidatedRows(task.importTaskNo());
             }
             taskMapper.releaseImportTask(task.importTaskNo());
+            LOG.info("event=batch_task operation=mdm_import result=SUCCESS taskNo={}",
+                    task.importTaskNo());
         } catch (RuntimeException exception) {
             taskMapper.failImportProcessing(task.importTaskNo(), failureReason(exception), retryDelaySeconds);
+            try (ScmLogContext ignored = ScmLogContext.openSystem(task.importTaskNo())) {
+                LOG.error("event=batch_task operation=mdm_import result=FAILURE taskNo={}",
+                        task.importTaskNo(), exception);
+            }
         }
     }
 
@@ -69,7 +82,7 @@ public class MdmFileTaskProcessor {
         if (taskMapper.claimExportTask(task.exportTaskNo(), task.version()) != 1) {
             return;
         }
-        try {
+        try (ScmLogContext ignored = ScmLogContext.openSystem(task.exportTaskNo())) {
             ExportSpec spec = ExportSpec.parse(task, new com.fasterxml.jackson.databind.ObjectMapper());
             List<MasterDataRecordMapper.RecordRow> rows = recordMapper.listRecordsForExport(
                     task.typeCode(), spec.status(), spec.dataCodePrefix(), exportMaxRows + 1);
@@ -80,8 +93,14 @@ public class MdmFileTaskProcessor {
             String objectKey = "exports/" + task.exportTaskNo() + "/master-data.csv";
             storage.store(objectKey, csv, CSV_CONTENT_TYPE);
             taskMapper.completeExportTask(task.exportTaskNo(), objectKey);
+            LOG.info("event=batch_task operation=mdm_export result=SUCCESS taskNo={} typeCode={} rowCount={}",
+                    task.exportTaskNo(), task.typeCode(), rows.size());
         } catch (RuntimeException exception) {
             taskMapper.failExportTask(task.exportTaskNo(), failureReason(exception), retryDelaySeconds);
+            try (ScmLogContext ignored = ScmLogContext.openSystem(task.exportTaskNo())) {
+                LOG.error("event=batch_task operation=mdm_export result=FAILURE taskNo={} typeCode={}",
+                        task.exportTaskNo(), task.typeCode(), exception);
+            }
         }
     }
 

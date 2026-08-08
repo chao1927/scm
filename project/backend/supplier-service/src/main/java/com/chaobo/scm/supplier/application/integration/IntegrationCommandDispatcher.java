@@ -1,5 +1,8 @@
 package com.chaobo.scm.supplier.application.integration;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.chaobo.scm.common.error.*;
 import com.chaobo.scm.common.integration.*;
 import com.chaobo.scm.supplier.infrastructure.integration.*;
@@ -23,6 +26,8 @@ import java.util.*;
  */
 @Service
 public class IntegrationCommandDispatcher {
+
+    private static final Logger LOG = LoggerFactory.getLogger(IntegrationCommandDispatcher.class);
 
     /**
      * repo（类型：{@code IntegrationCommandRepository}）。
@@ -111,7 +116,7 @@ public class IntegrationCommandDispatcher {
      * @param command 用例输入命令，类型为 {@code IntegrationCommand}
      */
     private void execute(IntegrationCommand command) {
-        try {
+        try (ScmLogContext ignored = ScmLogContext.openSystem(Long.toString(command.id()))) {
             String reference = switch(command.type()) {
                 case "WMS_CREATE_APPOINTMENT" ->
                     wmsAppointment(read(command, WmsCollaborationApi.InboundAppointmentCommand.class));
@@ -141,10 +146,16 @@ public class IntegrationCommandDispatcher {
                     throw new BusinessException(ErrorCode.BUSINESS_RULE_FAILED, "不支持的集成命令: " + command.type());
             };
             tx.executeWithoutResult(status -> repo.markSucceeded(command.id(), reference));
+            LOG.info("event=integration_command operation=supplier_integration_dispatch result=SUCCESS commandId={} commandType={}",
+                    command.id(), command.type());
         } catch (RuntimeException exception) {
             String reason = exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage();
             OffsetDateTime next = OffsetDateTime.now().plusSeconds(Math.min(300L, 1L << Math.min(command.retryCount(), 8)));
             tx.executeWithoutResult(status -> repo.markRetry(command.id(), command.retryCount(), next, reason.substring(0, Math.min(1000, reason.length())), maxRetries));
+            try (ScmLogContext ignored = ScmLogContext.openSystem(Long.toString(command.id()))) {
+                LOG.error("event=integration_command operation=supplier_integration_dispatch result=FAILURE commandId={} commandType={} retryCount={}",
+                        command.id(), command.type(), command.retryCount(), exception);
+            }
         }
     }
 

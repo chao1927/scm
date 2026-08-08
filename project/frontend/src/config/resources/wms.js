@@ -213,4 +213,9 @@ export const wmsResources = {
       { key: 'dispatch', label: '投递 WMS Outbox', permission: 'wms:operations:manage', run: () => dispatchWmsOutbox(50) },
     ],
   },
+  'wms.operation-logs': {
+    query: get('/wms/v1/operations/operation-logs'),
+    rowKey: ['id', 'logId'],
+    columns: [column('createdAt', '操作时间', { date: true }), column('operatorId', '操作人 ID'), column('operation', '操作内容'), column('targetType', '对象类型'), column('targetNo', '业务单号'), column('requestId', '请求 ID'), column('traceId', '链路 ID')],
+  },
 }

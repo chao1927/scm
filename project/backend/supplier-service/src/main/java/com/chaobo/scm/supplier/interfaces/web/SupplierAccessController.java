@@ -91,6 +91,13 @@ public class SupplierAccessController {
         return ok(service.bindings(supplierId, contexts.create(request, authentication)), request);
     }
 
+    /** 查询当前账号数据范围内的全部供应商账号绑定。 */
+    @GetMapping("/users")
+    public ApiResponse<List<SupplierUserBindingView>> bindings(HttpServletRequest request,
+                                                                Authentication authentication) {
+        return ok(service.bindings(contexts.create(request, authentication)), request);
+    }
+
     /**
      * 执行命令 {@code save}。
      *

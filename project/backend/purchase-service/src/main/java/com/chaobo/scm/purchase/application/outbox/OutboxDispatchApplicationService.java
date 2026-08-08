@@ -1,5 +1,8 @@
 package com.chaobo.scm.purchase.application.outbox;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +19,8 @@ import java.util.List;
 @Service
 @ConditionalOnProperty(name = "scm.rocketmq.enabled", havingValue = "true")
 public class OutboxDispatchApplicationService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(OutboxDispatchApplicationService.class);
 
     /**
      * store（类型：{@code OutboxDispatchPort}）。
@@ -63,11 +68,17 @@ public class OutboxDispatchApplicationService {
      * @param message 业务处理参数或成员，类型为 {@code OutboxMessage}
      */
     public void dispatch(OutboxMessage message) {
-        try {
+        try (ScmLogContext ignored = ScmLogContext.openSystem(Long.toString(message.eventId()))) {
             broker.publish(message);
             store.markPublished(message.eventId());
+            LOG.info("event=rocketmq_publish operation=purchase_outbox_publish result=SUCCESS eventId={}",
+                    message.eventId());
         } catch (RuntimeException exception) {
             store.markFailed(message.eventId(), abbreviate(exception.getMessage()));
+            try (ScmLogContext ignored = ScmLogContext.openSystem(Long.toString(message.eventId()))) {
+                LOG.error("event=rocketmq_publish operation=purchase_outbox_publish result=FAILURE eventId={}",
+                        message.eventId(), exception);
+            }
         }
     }
 

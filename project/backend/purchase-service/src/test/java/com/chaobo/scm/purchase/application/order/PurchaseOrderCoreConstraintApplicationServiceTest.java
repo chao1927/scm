@@ -67,7 +67,8 @@ class PurchaseOrderCoreConstraintApplicationServiceTest {
     }
 
     private CommandContext context(String permission) {
-        return new CommandContext(1001, "buyer", 1, 2001L, "REQ-PO-001", "TRACE-001", "IDEM-PO-001", Set.of(permission));
+        return new CommandContext(1001, "buyer", 1, 2001L, "REQ-PO-001", "TRACE-001",
+                "IDEM-PO-001", Set.of(permission), "purchase-order-request-digest");
     }
 
     private InboundTrackingRepository inboundRepository(boolean exists) {

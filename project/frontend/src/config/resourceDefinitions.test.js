@@ -14,6 +14,7 @@ import { purchaseResources } from './resources/purchase'
 import { supplierResources } from './resources/supplier'
 import { tmsResources } from './resources/tms'
 import { wmsResources } from './resources/wms'
+import { systemCatalog } from './systemCatalog'
 
 describe('resource definitions', () => {
   const resourcesBySystem = {
@@ -45,16 +46,25 @@ describe('resource definitions', () => {
         Object.keys(definitions).length,
       ]),
     )).toEqual({
-      supplier: 6,
-      purchase: 11,
-      wms: 14,
+      supplier: 11,
+      purchase: 13,
+      wms: 15,
       inventory: 10,
       oms: 11,
       tms: 9,
-      bms: 10,
+      bms: 11,
       mdm: 11,
       iam: 14,
     })
+  })
+
+  it('connects every catalog business page to a real resource definition', () => {
+    const missingPages = systemCatalog.flatMap((system) => system.pages
+      .filter((page) => page.id !== 'workbench')
+      .map((page) => `${system.id}.${page.id}`)
+      .filter((key) => !resourceDefinitions[key]))
+
+    expect(missingPages).toEqual([])
   })
 
   it('normalizes the supported backend page shapes', () => {

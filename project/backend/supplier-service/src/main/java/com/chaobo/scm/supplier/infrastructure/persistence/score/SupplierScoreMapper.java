@@ -157,6 +157,9 @@ public interface SupplierScoreMapper {
     @Select("SELECT score_result_id id,supplier_id supplierId,period_code periodCode,total_score totalScore,dimension_scores_json dimensionScoresJson,fact_summary_json factSummaryJson,manual_adjustment manualAdjustment,adjustment_reason adjustmentReason,status,published_at publishedAt,version FROM sup_score_result WHERE score_result_id=#{id}")
     ScoreViews.Result result(long id);
 
+    @Select("<script>SELECT score_result_id id,supplier_id supplierId,period_code periodCode,total_score totalScore,dimension_scores_json dimensionScoresJson,fact_summary_json factSummaryJson,manual_adjustment manualAdjustment,adjustment_reason adjustmentReason,status,published_at publishedAt,version FROM sup_score_result <if test='supplierId!=null'>WHERE supplier_id=#{supplierId}</if> ORDER BY period_code DESC,supplier_id LIMIT #{limit}</script>")
+    List<ScoreViews.Result> results(@Param("supplierId") Long supplierId, @Param("limit") int limit);
+
     /**
      * 执行命令 {@code publishResult}。
      *

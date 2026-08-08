@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import java.util.List;
 
 /**
@@ -25,6 +26,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/wms/v1/operations")
 @org.springframework.security.access.prepost.PreAuthorize("hasAnyAuthority('*', 'wms:*', 'wms:operations:manage')")
+@ConditionalOnProperty(name = "scm.rocketmq.enabled", havingValue = "true", matchIfMissing = true)
 public class WmsOperationsController {
 
     /**

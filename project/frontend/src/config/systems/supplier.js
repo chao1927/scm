@@ -1,4 +1,4 @@
-const page = (id, label, options = {}) => ({ id, label, ...options })
+const page = (id, label) => ({ id, label })
 
 export const supplierSystem = {
   id: 'supplier',
@@ -14,13 +14,13 @@ export const supplierSystem = {
     page('profile', '供应商档案'),
     page('user-bindings', '账号绑定'),
     page('skus', '供应商商品'),
-    page('po-confirms', '订单协同', { legacy: 'supplier-order' }),
-    page('asns', 'ASN 管理', { legacy: 'supplier-asn' }),
+    page('po-confirms', '订单协同'),
+    page('asns', 'ASN 管理'),
     page('returns', '退供协同'),
     page('reconciliations', '对账协同'),
-    page('quality-issues', '质量协同', { legacy: 'supplier-quality' }),
+    page('quality-issues', '质量协同'),
     page('scores', '供应商评分'),
-    page('rectifications', '整改管理', { legacy: 'supplier-quality' }),
+    page('rectifications', '整改管理'),
     page('operation-logs', '操作日志'),
   ],
 }

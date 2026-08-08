@@ -1,5 +1,8 @@
 package com.chaobo.scm.iam.application.outbox;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.chaobo.scm.iam.infrastructure.persistence.IamOutboxMapper;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
@@ -12,6 +15,8 @@ import org.springframework.stereotype.Service;
 @Service
 @Profile("!test")
 public class IamOutboxDispatchApplicationService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(IamOutboxDispatchApplicationService.class);
 
     private static final int MAX_BATCH_SIZE = 200;
     private static final int MAX_ERROR_LENGTH = 1000;
@@ -36,15 +41,21 @@ public class IamOutboxDispatchApplicationService {
         int failed = 0;
         for (var event : mapper.pending(Math.max(1, Math.min(limit, MAX_BATCH_SIZE)),
                 Math.max(1, maxRetries))) {
-            try {
+            try (ScmLogContext ignored = ScmLogContext.openSystem(Long.toString(event.eventId()))) {
                 broker.publish(new IamMessageBrokerPort.OutboundMessage(
                     Long.toString(event.eventId()), event.eventType(),
                     event.businessNo(), event.payload()));
                 mapper.markPublished(event.eventId());
                 published++;
+                LOG.info("event=rocketmq_publish operation=iam_outbox_publish result=SUCCESS eventId={} eventType={}",
+                        event.eventId(), event.eventType());
             } catch (RuntimeException exception) {
                 mapper.markFailed(event.eventId(), error(exception));
                 failed++;
+                try (ScmLogContext ignored = ScmLogContext.openSystem(Long.toString(event.eventId()))) {
+                    LOG.error("event=rocketmq_publish operation=iam_outbox_publish result=FAILURE eventId={} eventType={}",
+                            event.eventId(), event.eventType(), exception);
+                }
             }
         }
         return new DispatchResult(published, failed);

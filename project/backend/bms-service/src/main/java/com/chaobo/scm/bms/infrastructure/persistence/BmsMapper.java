@@ -668,14 +668,6 @@ public interface BmsMapper {
                                String merchantNo, String requestIdempotencyKey, String requestDigest,
                                int attemptNo, int status, String failureReason, String evidenceRef,
                                Long reviewerId, long version) {
-
-        /** 兼容历史调用的最小退款快照。 */
-        public RefundSettlementRow(Long id, String refundNo, String billNo, BigDecimal refundAmount,
-                                   int status, String failureReason, long version) {
-            this(id, refundNo, billNo, null, null, refundAmount, "CNY", "DEFAULT",
-                "legacy:" + refundNo, billNo + "|" + refundAmount, 1, status, failureReason,
-                null, null, version);
-        }
     }
 
     /** 支付渠道退款回执快照。 */

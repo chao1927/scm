@@ -84,6 +84,13 @@ public class BmsReadQueryApplicationService {
             BmsReadQueryMapper.SettlementView::objectCode), pageNo, pageSize);
     }
 
+    /** 查询最近的结算业务操作日志。 */
+    public PageResult<BmsReadQueryMapper.OperationLogView> operationLogs(
+        int pageNo, int pageSize) {
+        int limit = Math.max(1, Math.min(pageNo * pageSize, 200));
+        return page(mapper.listOperationLogs(limit), pageNo, pageSize);
+    }
+
     private void requireRequestedScope(String objectCode, ScmAccessContext access) {
         if (objectCode != null && !objectCode.isBlank()) {
             access.requireScope(BILLING_OBJECT_SCOPE, objectCode.trim());

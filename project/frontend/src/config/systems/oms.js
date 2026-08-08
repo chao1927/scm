@@ -1,4 +1,4 @@
-const page = (id, label, options = {}) => ({ id, label, ...options })
+const page = (id, label) => ({ id, label })
 
 export const omsSystem = {
   id: 'oms',
@@ -11,12 +11,12 @@ export const omsSystem = {
   workflow: ['渠道订单已接收', '订单已审核', '库存已预占', '履约单已下发', '订单已完成'],
   pages: [
     page('workbench', 'OMS 工作台'),
-    page('channel-orders', '渠道订单接入', { legacy: 'channelOrders' }),
-    page('sales-orders', '销售订单', { legacy: 'salesOrders' }),
+    page('channel-orders', '渠道订单接入'),
+    page('sales-orders', '销售订单'),
     page('audit-results', '订单审单'),
-    page('fulfillments', '分仓履约', { legacy: 'fulfillments' }),
+    page('fulfillments', '分仓履约'),
     page('reservations', '库存预占'),
-    page('outbounds', '出库单', { legacy: 'outbounds' }),
+    page('outbounds', '出库单'),
     page('cancel-requests', '取消管理'),
     page('after-sales', '售后管理'),
     page('exceptions', '异常处理'),

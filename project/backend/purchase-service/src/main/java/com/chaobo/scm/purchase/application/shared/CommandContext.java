@@ -2,11 +2,11 @@ package com.chaobo.scm.purchase.application.shared;
 
 import com.chaobo.scm.common.error.BusinessException;
 import com.chaobo.scm.common.error.ErrorCode;
-import java.util.Set;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.Set;
 
 /**
  * CommandContext。
@@ -19,20 +19,34 @@ import java.util.HexFormat;
 public record CommandContext(long operatorId, String operatorName, long tenantId, Long purchaseOrgScope, String requestId, String traceId, String idempotencyKey, Set<String> permissions, String requestDigest) {
 
     /**
-     * 创建 CommandContext。
+     * 为 RocketMQ 入站事件创建系统命令上下文。
      *
-     * <p>构造阶段集中接收必需依赖或恢复对象状态，确保实例创建后即可安全参与所属用例。
-     * @param operatorId 业务或技术标识，类型为 {@code long}
-     * @param operatorName 业务处理参数或成员，类型为 {@code String}
-     * @param tenantId 业务或技术标识，类型为 {@code long}
-     * @param purchaseOrgScope 业务处理参数或成员，类型为 {@code Long}
-     * @param requestId 业务或技术标识，类型为 {@code String}
-     * @param traceId 业务或技术标识，类型为 {@code String}
-     * @param idempotencyKey 业务或技术标识，类型为 {@code String}
-     * @param permissions 业务处理参数或成员，类型为 {@code Set<String>}
+     * <p>事件编码同时作为请求与幂等标识，载荷摘要用于拒绝“同一事件编码、
+     * 不同业务内容”的错误重放。
+     *
+     * @param sourceSystem 事件来源系统
+     * @param eventCode 事件编码
+     * @param purchaseOrgScope 采购组织范围
+     * @param permissions 系统命令所需权限
+     * @param payloadJson 标准事件载荷 JSON
+     * @return 事件命令上下文
      */
-    public CommandContext(long operatorId, String operatorName, long tenantId, Long purchaseOrgScope, String requestId, String traceId, String idempotencyKey, Set<String> permissions) {
-        this(operatorId, operatorName, tenantId, purchaseOrgScope, requestId, traceId, idempotencyKey, permissions, legacyDigest(requestId, idempotencyKey));
+    public static CommandContext forEvent(
+            String sourceSystem,
+            String eventCode,
+            Long purchaseOrgScope,
+            Set<String> permissions,
+            String payloadJson) {
+        return new CommandContext(
+                0,
+                sourceSystem,
+                0,
+                purchaseOrgScope,
+                eventCode,
+                null,
+                sourceSystem + ":" + eventCode,
+                permissions,
+                sha256(payloadJson));
     }
 
     /**
@@ -86,23 +100,13 @@ public record CommandContext(long operatorId, String operatorName, long tenantId
         return requestDigest;
     }
 
-    /**
-     * 处理当前类型职责中的操作 {@code legacyDigest}。
-     *
-     * <p>该内部步骤用于收敛重复逻辑或保护局部规则，调用方应通过当前类型公开的业务入口使用该能力。
-     * @param requestId 业务或技术标识，类型为 {@code String}
-     * @param idempotencyKey 业务或技术标识，类型为 {@code String}
-     * @return 处理当前类型职责中的操作的结果，类型为 {@code String}
-     */
-    private static String legacyDigest(String requestId, String idempotencyKey) {
-        String source = requestId == null || requestId.isBlank() ? idempotencyKey : requestId;
-        if (source == null || source.isBlank()) {
-            return "";
-        }
+    private static String sha256(String value) {
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(source.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest((value == null ? "" : value).getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 unavailable", exception);
         }
     }
+
 }

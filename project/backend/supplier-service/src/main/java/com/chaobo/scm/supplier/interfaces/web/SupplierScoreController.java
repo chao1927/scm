@@ -64,6 +64,13 @@ public class SupplierScoreController {
         return ok(service.rules(), r);
     }
 
+    /** 查询当前账号数据范围内的供应商评分结果。 */
+    @GetMapping("/scores")
+    public ApiResponse<List<ScoreViews.Result>> results(@AuthenticationPrincipal Jwt jwt,
+                                                         HttpServletRequest request) {
+        return ok(service.results(scope(jwt)), request);
+    }
+
     /**
      * 执行命令 {@code createRule}。
      *

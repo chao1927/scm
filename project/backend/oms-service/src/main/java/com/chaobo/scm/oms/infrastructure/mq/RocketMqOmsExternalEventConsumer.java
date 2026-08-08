@@ -1,5 +1,6 @@
 package com.chaobo.scm.oms.infrastructure.mq;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
 import com.chaobo.scm.oms.application.OmsExternalEventHandler;
 import jakarta.annotation.PreDestroy;
 import org.apache.rocketmq.client.apis.ClientConfiguration;
@@ -72,15 +73,19 @@ public class RocketMqOmsExternalEventConsumer {
     }
 
     ConsumeResult consume(MessageView message) {
-        try {
+        try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
             ByteBuffer body = message.getBody().asReadOnlyBuffer();
             byte[] bytes = new byte[body.remaining()];
             body.get(bytes);
             handler.consume(codec.decode(bytes));
+            LOG.info("event=rocketmq_consume operation=oms_external_event_consume result=SUCCESS messageId={} topic={}",
+                    message.getMessageId(), message.getTopic());
             return ConsumeResult.SUCCESS;
         } catch (Exception exception) {
-            LOG.warn("OMS RocketMQ 事件处理失败，等待代理重试，messageId={}",
-                    message.getMessageId(), exception);
+            try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
+                LOG.warn("event=rocketmq_consume operation=oms_external_event_consume result=RETRY messageId={} topic={}",
+                        message.getMessageId(), message.getTopic(), exception);
+            }
             return ConsumeResult.FAILURE;
         }
     }

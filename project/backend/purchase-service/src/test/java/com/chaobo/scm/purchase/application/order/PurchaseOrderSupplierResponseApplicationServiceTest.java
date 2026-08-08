@@ -119,7 +119,7 @@ class PurchaseOrderSupplierResponseApplicationServiceTest {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code CommandContext}
      */
     private static CommandContext systemContext() {
-        return new CommandContext(0, "SUPPLIER", 0, null, "event-1", null, "SUPPLIER:event-1", java.util.Set.of());
+        return CommandContext.forEvent("SUPPLIER", "event-1", null, java.util.Set.of(), "{}");
     }
 
     /**

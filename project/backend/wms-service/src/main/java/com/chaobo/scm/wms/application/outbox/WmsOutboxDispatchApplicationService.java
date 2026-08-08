@@ -2,10 +2,14 @@ package com.chaobo.scm.wms.application.outbox;
 
 import com.chaobo.scm.common.error.BusinessException;
 import com.chaobo.scm.common.error.ErrorCode;
+import com.chaobo.scm.common.logging.ScmLogContext;
 import com.chaobo.scm.wms.infrastructure.persistence.event.WmsEventMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * WmsOutboxDispatchApplicationService。
@@ -16,7 +20,10 @@ import java.util.List;
  * @since 0.1.0
  */
 @Service
+@ConditionalOnProperty(name = "scm.rocketmq.enabled", havingValue = "true", matchIfMissing = true)
 public class WmsOutboxDispatchApplicationService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(WmsOutboxDispatchApplicationService.class);
 
     /**
      * mapper（类型：{@code WmsEventMapper}）。
@@ -57,13 +64,19 @@ public class WmsOutboxDispatchApplicationService {
         int published = 0;
         int failed = 0;
         for (var event : mapper.pending(batchSize)) {
-            try {
+            try (ScmLogContext ignored = ScmLogContext.openSystem(event.code())) {
                 broker.publish(event.code(), event.type(), event.payload());
                 mapper.markPublished(event.id());
                 published++;
+                LOG.info("event=rocketmq_publish operation=wms_outbox_publish result=SUCCESS eventId={} eventCode={} eventType={}",
+                        event.id(), event.code(), event.type());
             } catch (RuntimeException ex) {
                 mapper.markFailed(event.id());
                 failed++;
+                try (ScmLogContext ignored = ScmLogContext.openSystem(event.code())) {
+                    LOG.error("event=rocketmq_publish operation=wms_outbox_publish result=FAILURE eventId={} eventCode={} eventType={}",
+                            event.id(), event.code(), event.type(), ex);
+                }
             }
         }
         return new DispatchResult(published, failed);

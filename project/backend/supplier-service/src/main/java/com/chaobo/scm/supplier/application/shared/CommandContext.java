@@ -16,9 +16,18 @@ public record CommandContext(long operatorId, String operatorName, long organiza
 
     public CommandContext {
         permissions = permissions == null ? Set.of() : Set.copyOf(permissions);
+    }
+
+    /**
+     * 返回写命令必需的幂等键；只读查询可以不携带该请求头。
+     *
+     * @return 非空幂等键
+     */
+    public String requiredIdempotencyKey() {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED, "写请求必须提供 X-Idempotency-Key");
         }
+        return idempotencyKey;
     }
 
     /**
@@ -28,7 +37,9 @@ public record CommandContext(long operatorId, String operatorName, long organiza
      * @param permission 业务处理参数或成员，类型为 {@code String}
      */
     public void requirePermission(String permission) {
-        if (!permissions.contains(permission)) {
+        String namespaceWildcard = permission.substring(0, permission.indexOf(':') + 1) + "*";
+        if (!permissions.contains("*") && !permissions.contains(namespaceWildcard)
+                && !permissions.contains(permission)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "缺少权限: " + permission);
         }
     }

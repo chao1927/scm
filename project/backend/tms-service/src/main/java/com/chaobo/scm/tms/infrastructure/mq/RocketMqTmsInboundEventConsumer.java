@@ -1,5 +1,6 @@
 package com.chaobo.scm.tms.infrastructure.mq;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
 import com.chaobo.scm.tms.application.TmsInboundEventApplicationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -64,7 +65,7 @@ public class RocketMqTmsInboundEventConsumer {
     }
 
     private ConsumeResult consume(MessageView message) {
-        try {
+        try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
             JsonNode root = read(message);
             int version = required(root, "schemaVersion").asInt();
             if (version != 1) {
@@ -75,10 +76,14 @@ public class RocketMqTmsInboundEventConsumer {
                 text(root, "sourceSystem"), text(root, "eventCode"),
                 text(root, "eventType"), optionalText(root, "aggregateNo"),
                 required(root, "data")));
+            LOG.info("event=rocketmq_consume operation=tms_inbound_event_consume result=SUCCESS messageId={} topic={}",
+                message.getMessageId(), message.getTopic());
             return ConsumeResult.SUCCESS;
         } catch (Exception exception) {
-            LOG.warn("TMS RocketMQ event failed; waiting for broker retry, messageId={}",
-                message.getMessageId(), exception);
+            try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
+                LOG.warn("event=rocketmq_consume operation=tms_inbound_event_consume result=RETRY messageId={} topic={}",
+                    message.getMessageId(), message.getTopic(), exception);
+            }
             return ConsumeResult.FAILURE;
         }
     }

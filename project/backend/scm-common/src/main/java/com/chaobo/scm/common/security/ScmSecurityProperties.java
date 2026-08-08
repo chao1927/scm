@@ -58,6 +58,14 @@ public class ScmSecurityProperties {
     private List<String> publicPaths = List.of();
 
     /**
+     * 仅要求有效 Bearer Token、无需子系统管理权限的精确 HTTP 路径。
+     *
+     * <p>用于“当前用户”“本人权限”“菜单”等自助查询，避免为了读取自己的会话信息而授予
+     * {@code iam:*} 管理权限。</p>
+     */
+    private List<String> authenticatedPaths = List.of();
+
+    /**
      * 处理当前类型职责中的操作 {@code isEnabled}。
      *
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
@@ -143,6 +151,16 @@ public class ScmSecurityProperties {
         this.publicPaths = publicPaths == null
                 ? List.of()
                 : publicPaths.stream().filter(path -> path != null && !path.isBlank()).toList();
+    }
+
+    public List<String> getAuthenticatedPaths() {
+        return authenticatedPaths;
+    }
+
+    public void setAuthenticatedPaths(List<String> authenticatedPaths) {
+        this.authenticatedPaths = authenticatedPaths == null
+                ? List.of()
+                : authenticatedPaths.stream().filter(path -> path != null && !path.isBlank()).toList();
     }
 
     /**

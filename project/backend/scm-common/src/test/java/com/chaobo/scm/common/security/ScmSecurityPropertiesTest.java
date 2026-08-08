@@ -72,8 +72,10 @@ class ScmSecurityPropertiesTest {
     void keepsOnlyExplicitNonBlankPublicPaths() {
         var properties = new ScmSecurityProperties();
         properties.setPublicPaths(List.of("/api/iam/v1/auth/login", " "));
+        properties.setAuthenticatedPaths(List.of("/api/iam/v1/me", " "));
 
         assertThat(properties.getPublicPaths()).containsExactly("/api/iam/v1/auth/login");
+        assertThat(properties.getAuthenticatedPaths()).containsExactly("/api/iam/v1/me");
     }
 
     private static ScmSecurityProperties configuredActive() {

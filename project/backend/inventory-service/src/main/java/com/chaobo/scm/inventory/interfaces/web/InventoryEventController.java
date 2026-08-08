@@ -1,7 +1,7 @@
 package com.chaobo.scm.inventory.interfaces.web;
 
 import com.chaobo.scm.common.api.ApiResponse;
-import com.chaobo.scm.inventory.application.InventoryEventApplicationService;
+import com.chaobo.scm.inventory.application.InventoryOutboxOperationsApplicationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
@@ -21,19 +21,19 @@ import org.springframework.web.bind.annotation.*;
 public class InventoryEventController {
 
     /**
-     * service（类型：{@code InventoryEventApplicationService}）。
+     * service（类型：{@code InventoryOutboxOperationsApplicationService}）。
      *
      * <p>保存当前对象所需的应用或外部协作依赖；其具体生命周期由所属对象统一管理。
      */
-    private final InventoryEventApplicationService service;
+    private final InventoryOutboxOperationsApplicationService service;
 
     /**
      * 创建 InventoryEventController。
      *
      * <p>构造阶段集中接收必需依赖或恢复对象状态，确保实例创建后即可安全参与所属用例。
-     * @param service 应用或外部协作依赖，类型为 {@code InventoryEventApplicationService}
+     * @param service 应用或外部协作依赖，类型为 {@code InventoryOutboxOperationsApplicationService}
      */
-    public InventoryEventController(InventoryEventApplicationService service) {
+    public InventoryEventController(InventoryOutboxOperationsApplicationService service) {
         this.service = service;
     }
 
@@ -43,10 +43,10 @@ public class InventoryEventController {
      * <p>该方法完成当前用例中的一个明确业务动作；状态修改、权限、幂等和异常语义由所属层次共同约束。
      * @param body 业务处理参数或成员，类型为 {@code DispatchRequest}
      * @param request 接口请求参数，类型为 {@code HttpServletRequest}
-     * @return 执行命令的结果，类型为 {@code ApiResponse<InventoryEventApplicationService.DispatchResult>}
+     * @return 执行命令的结果，类型为 {@code ApiResponse<InventoryOutboxOperationsApplicationService.DispatchResult>}
      */
     @PostMapping("/api/inventory/v1/operations/outbox/dispatch")
-    public ApiResponse<InventoryEventApplicationService.DispatchResult> dispatch(@Valid @RequestBody DispatchRequest body, HttpServletRequest request) {
+    public ApiResponse<InventoryOutboxOperationsApplicationService.DispatchResult> dispatch(@Valid @RequestBody DispatchRequest body, HttpServletRequest request) {
         return ok(service.dispatch(body.limit()), request);
     }
 

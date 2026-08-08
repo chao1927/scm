@@ -1,9 +1,12 @@
 package com.chaobo.scm.supplier.application.operations.export;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
 import com.chaobo.scm.supplier.application.operations.OperationViews;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.OffsetDateTime;
 import java.util.Locale;
@@ -19,6 +22,8 @@ import java.util.Locale;
  */
 @Service
 public class SupplierExportProcessor {
+
+    private static final Logger LOG = LoggerFactory.getLogger(SupplierExportProcessor.class);
 
     private static final String CSV_CONTENT_TYPE = "text/csv;charset=UTF-8";
     private final SupplierExportTaskLifecyclePort lifecycle;
@@ -55,7 +60,7 @@ public class SupplierExportProcessor {
             return;
         }
         int processingVersion = task.version() + 1;
-        try {
+        try (ScmLogContext ignored = ScmLogContext.openSystem(Long.toString(task.id()))) {
             var rows = data.load(task.exportType(), task.supplierId(), task.queryJson(), maxRows);
             byte[] content = csv.write(SupplierExportDefinitions.columnsFor(task.exportType()), rows);
             String fileName = "supplier-" + task.exportType().toLowerCase(Locale.ROOT) + '-' + task.id() + ".csv";
@@ -63,9 +68,15 @@ public class SupplierExportProcessor {
             var stored = storage.store(objectKey, content, CSV_CONTENT_TYPE);
             lifecycle.complete(task.id(), processingVersion, stored, fileName,
                     "/api/supplier/v1/operations/exports/" + task.id() + "/file");
+            LOG.info("event=batch_task operation=supplier_export result=SUCCESS taskId={} exportType={}",
+                    task.id(), task.exportType());
         } catch (RuntimeException exception) {
             lifecycle.fail(task.id(), processingVersion, failureReason(exception),
                     OffsetDateTime.now().plusSeconds(retryDelaySeconds));
+            try (ScmLogContext ignored = ScmLogContext.openSystem(Long.toString(task.id()))) {
+                LOG.error("event=batch_task operation=supplier_export result=FAILURE taskId={} exportType={}",
+                        task.id(), task.exportType(), exception);
+            }
         }
     }
 

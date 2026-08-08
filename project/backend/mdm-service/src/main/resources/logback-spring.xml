@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <springProperty scope="context" name="SCM_APP_NAME" source="spring.application.name" defaultValue="mdm-service"/>
+    <springProperty scope="context" name="SCM_LOG_HOME" source="scm.logging.path" defaultValue="./logs"/>
+    <springProperty scope="context" name="SCM_LOG_MAX_FILE_SIZE" source="scm.logging.max-file-size" defaultValue="100MB"/>
+    <springProperty scope="context" name="SCM_LOG_MAX_HISTORY" source="scm.logging.max-history" defaultValue="7"/>
+    <springProperty scope="context" name="SCM_LOG_INFO_TOTAL_SIZE_CAP" source="scm.logging.info-total-size-cap" defaultValue="2GB"/>
+    <springProperty scope="context" name="SCM_LOG_ERROR_TOTAL_SIZE_CAP" source="scm.logging.error-total-size-cap" defaultValue="1GB"/>
+    <include resource="com/chaobo/scm/common/logging/logback-base.xml"/>
+</configuration>

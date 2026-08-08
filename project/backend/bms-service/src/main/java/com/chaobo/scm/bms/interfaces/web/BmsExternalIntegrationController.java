@@ -78,7 +78,8 @@ public class BmsExternalIntegrationController {
         PaymentCallbackRequest request = parse(rawBody);
         callback.receive(new PaymentCallbackApplicationService.CallbackCommand(
             request.refundNo(), request.receiptNo(), request.success(),
-            request.failureReason(), timestamp, nonce, signature, rawBody));
+            request.failureReason(), request.refundAmount(), request.currency(),
+            request.merchantNo(), request.paymentTxnNo(), timestamp, nonce, signature, rawBody));
     }
 
     private PaymentCallbackRequest parse(String rawBody) {
@@ -90,7 +91,9 @@ public class BmsExternalIntegrationController {
     }
 
     public record PaymentCallbackRequest(String refundNo, String receiptNo,
-                                         boolean success, String failureReason) {
+                                         boolean success, String failureReason,
+                                         java.math.BigDecimal refundAmount, String currency,
+                                         String merchantNo, String paymentTxnNo) {
     }
 
     public record ManualRetryRequest(String reason) {

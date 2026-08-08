@@ -41,7 +41,8 @@ class PurchaseOperationsApplicationServiceTest {
      * @return 处理当前类型职责中的操作的结果，类型为 {@code CommandContext}
      */
     private static CommandContext context(Set<String> permissions) {
-        return new CommandContext(1, "operator", 1, 1L, "request", "trace", "replay-1", permissions);
+        return new CommandContext(1, "operator", 1, 1L, "request", "trace", "replay-1",
+                permissions, "replay-request-digest");
     }
 
     /**

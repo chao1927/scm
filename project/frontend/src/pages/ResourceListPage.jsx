@@ -81,6 +81,11 @@ export default function ResourceListPage() {
     setSearchParams(mergeListSearchParams(searchParams, patch))
   }
 
+  const resetSearch = () => {
+    setKeywordDraft('')
+    setSearchParams(new URLSearchParams())
+  }
+
   const actionMutation = useMutation({
     mutationFn: ({ action, record, reason }) => action.run(record, reason),
     onSuccess: (_, variables) => {
@@ -162,7 +167,7 @@ export default function ResourceListPage() {
             onChange={(event) => setKeywordDraft(event.target.value)}
             onSearch={(keyword) => updateSearch({ keyword, pageNo: 1 })}
           />
-          <Button onClick={() => setSearchParams(new URLSearchParams())}>重置</Button>
+          <Button onClick={resetSearch}>重置</Button>
         </div>
         {query.isError && <InlineQueryError error={query.error} retrying={query.isFetching} onRetry={() => query.refetch()} />}
         <Table

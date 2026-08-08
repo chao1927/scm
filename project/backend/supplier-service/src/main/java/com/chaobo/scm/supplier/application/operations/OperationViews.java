@@ -77,6 +77,12 @@ public final class OperationViews {
     public record Dashboard(long pendingWork, long openWarnings, long failedInboundEvents, long failedOutboundEvents, long activeQualityIssues, long openReturns, long pendingReconciliations, BigDecimal latestAverageScore) {
     }
 
+    /** 持久化操作审计日志的列表视图。 */
+    public record OperationLog(long id, long operatorId, String operatorName, String operationType,
+                               String targetType, Long targetId, String targetNo, int result,
+                               String failReason, String requestId, OffsetDateTime operationAt) {
+    }
+
     /**
      * ExportTask。
      *

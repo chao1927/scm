@@ -6,40 +6,21 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 /**
- * 库存事件兼容门面。
+ * 库存 Outbox 运维应用服务。
  *
- * <p>新生产链路统一写 Outbox 后由 RocketMQ 投递；新消费链路统一进入版本化 Inbox 服务。该门面保留原
- * HTTP 运维入口和调拨适配器调用方式，但不再包含字符串拆分或“只改状态不发消息”的伪投递逻辑。
+ * <p>仅负责人工触发一次真实 RocketMQ 投递扫描。业务事件写入统一依赖
+ * {@link InventoryEventPublisher}，不再通过兼容门面形成第二套发布入口。
  *
  * @author SCM Team
  */
 @Service
-public class InventoryEventApplicationService {
+public class InventoryOutboxOperationsApplicationService {
 
-    private final InventoryEventPublisher outbox;
     private final ObjectProvider<InventoryOutboxDispatchApplicationService> dispatcher;
 
-    public InventoryEventApplicationService(
-            InventoryEventPublisher outbox,
+    public InventoryOutboxOperationsApplicationService(
             ObjectProvider<InventoryOutboxDispatchApplicationService> dispatcher) {
-        this.outbox = outbox;
         this.dispatcher = dispatcher;
-    }
-
-    /**
-     * 在当前业务事务中追加 Outbox。
-     *
-     * @param type 事件类型
-     * @param aggregateType 聚合类型
-     * @param aggregateId 聚合标识
-     * @param payload 业务载荷 JSON
-     */
-    public void publish(
-            String type,
-            String aggregateType,
-            String aggregateId,
-            String payload) {
-        outbox.publish(type, aggregateType, aggregateId, payload);
     }
 
     /**
@@ -60,9 +41,7 @@ public class InventoryEventApplicationService {
         return new DispatchResult(result.published(), result.failed());
     }
 
-    /**
-     * Outbox 投递统计。
-     */
+    /** Outbox 投递统计。 */
     public record DispatchResult(int published, int failed) {
     }
 }

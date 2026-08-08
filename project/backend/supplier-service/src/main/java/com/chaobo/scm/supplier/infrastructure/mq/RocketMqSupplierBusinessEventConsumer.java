@@ -1,5 +1,6 @@
 package com.chaobo.scm.supplier.infrastructure.mq;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
 import jakarta.annotation.PreDestroy;
 import org.apache.rocketmq.client.apis.*;
 import org.apache.rocketmq.client.apis.consumer.*;
@@ -47,15 +48,19 @@ public class RocketMqSupplierBusinessEventConsumer {
     }
 
     private ConsumeResult consume(MessageView message) {
-        try {
+        try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
             ByteBuffer body = message.getBody().asReadOnlyBuffer();
             byte[] bytes = new byte[body.remaining()];
             body.get(bytes);
             dispatcher.dispatch(codec.decode(bytes));
+            LOG.info("event=rocketmq_consume operation=supplier_business_event_consume result=SUCCESS messageId={} topic={}",
+                    message.getMessageId(), message.getTopic());
             return ConsumeResult.SUCCESS;
         } catch (Exception exception) {
-            LOG.warn("供应商 RocketMQ 业务事件消费失败，等待重试，messageId={},topic={}",
-                    message.getMessageId(), message.getTopic(), exception);
+            try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
+                LOG.warn("event=rocketmq_consume operation=supplier_business_event_consume result=RETRY messageId={} topic={}",
+                        message.getMessageId(), message.getTopic(), exception);
+            }
             return ConsumeResult.FAILURE;
         }
     }

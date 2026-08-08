@@ -1,4 +1,4 @@
-const page = (id, label, options = {}) => ({ id, label, ...options })
+const page = (id, label) => ({ id, label })
 
 export const purchaseSystem = {
   id: 'purchase',
@@ -11,17 +11,17 @@ export const purchaseSystem = {
   workflow: ['请购已提交', '询价已发布', '供应商已定标', '采购订单已发布', '到货已完成'],
   pages: [
     page('workbench', '采购工作台'),
-    page('requisitions', '请购管理', { legacy: 'requisitions' }),
-    page('requisition-approvals', '请购审批', { legacy: 'requisitions' }),
-    page('rfqs', '询价单', { legacy: 'rfqs' }),
+    page('requisitions', '请购管理'),
+    page('requisition-approvals', '请购审批'),
+    page('rfqs', '询价单'),
     page('quotations', '报价管理'),
     page('compare-results', '比价定标'),
-    page('orders', '采购订单', { legacy: 'orders' }),
-    page('supplier-confirms', '供应商确认', { legacy: 'confirms' }),
-    page('inbound-tracks', '到货跟踪', { legacy: 'inbounds' }),
+    page('orders', '采购订单'),
+    page('supplier-confirms', '供应商确认'),
+    page('inbound-tracks', '到货跟踪'),
     page('supplier-returns', '退供申请'),
     page('prices', '采购价格'),
-    page('failed-events', '失败事件', { legacy: 'failedEvents' }),
+    page('failed-events', '失败事件'),
     page('operation-logs', '操作日志'),
   ],
 }

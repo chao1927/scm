@@ -1,5 +1,6 @@
 package com.chaobo.scm.supplier.infrastructure.mq;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
 import com.chaobo.scm.supplier.application.contract.*;
 import jakarta.annotation.PreDestroy;
 import org.apache.rocketmq.client.apis.*;
@@ -78,11 +79,16 @@ public class RocketMqContractApprovalConsumer {
      * @return 执行命令的结果，类型为 {@code ConsumeResult}
      */
     private ConsumeResult consume(MessageView message) {
-        try {
+        try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
             service.consume(event(message));
+            log.info("event=rocketmq_consume operation=supplier_contract_approval_consume result=SUCCESS messageId={} topic={}",
+                    message.getMessageId(), message.getTopic());
             return ConsumeResult.SUCCESS;
         } catch (Exception ex) {
-            log.warn("合同审批事件消费失败，等待RocketMQ重试，messageId={}", message.getMessageId(), ex);
+            try (ScmLogContext ignored = ScmLogContext.openSystem(ScmLogContext.reference(message.getMessageId()))) {
+                log.warn("event=rocketmq_consume operation=supplier_contract_approval_consume result=RETRY messageId={} topic={}",
+                        message.getMessageId(), message.getTopic(), ex);
+            }
             return ConsumeResult.FAILURE;
         }
     }
@@ -101,7 +107,7 @@ public class RocketMqContractApprovalConsumer {
         buffer.get(bytes);
         Map<String, Object> envelope = json.readValue(bytes, Map.class);
         Map<String, Object> data = envelope.get("data") instanceof Map<?, ?> raw ? (Map<String, Object>) raw : envelope;
-        String code = text(envelope, "eventCode", message.getMessageId().toString());
+        String code = text(envelope, "eventCode", ScmLogContext.reference(message.getMessageId()));
         String type = text(envelope, "eventType", message.getTag().orElse("ContractApprovalCompleted"));
         return new ContractApprovalEvent(code, text(envelope, "sourceSystem", "IAM"), type, number(data.get("contractId")), Math.toIntExact(number(data.get("contractVersion"))), Boolean.parseBoolean(String.valueOf(data.get("approved"))), text(data, "comment", null));
     }

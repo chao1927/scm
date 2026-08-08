@@ -1,8 +1,11 @@
 package com.chaobo.scm.bms.application.outbox;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
 import com.chaobo.scm.bms.infrastructure.persistence.BmsOutboxMapper;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * BMS Outbox 可靠投递服务。
@@ -12,6 +15,8 @@ import org.springframework.stereotype.Service;
 @Service
 @Profile("!test")
 public class BmsOutboxDispatchApplicationService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(BmsOutboxDispatchApplicationService.class);
 
     private final BmsOutboxMapper mapper;
     private final BmsMessageBrokerPort broker;
@@ -27,15 +32,21 @@ public class BmsOutboxDispatchApplicationService {
         int failed = 0;
         for (var event : mapper.pending(
                 Math.max(1, Math.min(limit, 200)), Math.max(1, maxRetries))) {
-            try {
+            try (ScmLogContext ignored = ScmLogContext.openSystem(event.eventNo())) {
                 broker.publish(new BmsMessageBrokerPort.OutboundMessage(
                     event.eventNo(), event.eventType(), event.aggregateNo(),
                     event.businessNo(), event.payload()));
                 mapper.markPublished(event.eventNo());
                 published++;
+                LOG.info("event=rocketmq_publish operation=bms_outbox_publish result=SUCCESS eventId={} eventType={}",
+                        event.eventNo(), event.eventType());
             } catch (RuntimeException exception) {
                 mapper.markFailed(event.eventNo(), error(exception));
                 failed++;
+                try (ScmLogContext ignored = ScmLogContext.openSystem(event.eventNo())) {
+                    LOG.error("event=rocketmq_publish operation=bms_outbox_publish result=FAILURE eventId={} eventType={}",
+                            event.eventNo(), event.eventType(), exception);
+                }
             }
         }
         return new DispatchResult(published, failed);

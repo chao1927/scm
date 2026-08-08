@@ -1,14 +1,19 @@
 package com.chaobo.scm.oms.application;
 
+import com.chaobo.scm.common.logging.ScmLogContext;
 import com.chaobo.scm.oms.infrastructure.persistence.OmsFulfillmentMetricsMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 
 /** 在事务外生成 CSV 并写入持久化对象存储。 */
 @Service
 public class OmsMetricExportProcessor {
+
+    private static final Logger LOG = LoggerFactory.getLogger(OmsMetricExportProcessor.class);
 
     private static final String CSV_CONTENT_TYPE = "text/csv;charset=UTF-8";
 
@@ -41,7 +46,7 @@ public class OmsMetricExportProcessor {
             return;
         }
         long processingVersion = task.version() + 1;
-        try {
+        try (ScmLogContext ignored = ScmLogContext.openSystem(task.exportNo())) {
             var result = metricsService.calculate(
                     new OmsFulfillmentMetricsApplicationService.Period(
                             task.periodStart(), task.periodEnd()),
@@ -56,10 +61,16 @@ public class OmsMetricExportProcessor {
             var stored = storage.store(objectKey, content, CSV_CONTENT_TYPE);
             lifecycle.complete(task.id(), processingVersion, stored,
                     fileName, result.rows().size());
+            LOG.info("event=batch_task operation=oms_metric_export result=SUCCESS taskId={} exportNo={} rowCount={}",
+                    task.id(), task.exportNo(), result.rows().size());
         } catch (RuntimeException exception) {
             lifecycle.fail(task.id(), processingVersion, maxRetries,
                     LocalDateTime.now().plusSeconds(retryDelaySeconds),
                     failureReason(exception));
+            try (ScmLogContext ignored = ScmLogContext.openSystem(task.exportNo())) {
+                LOG.error("event=batch_task operation=oms_metric_export result=FAILURE taskId={} exportNo={}",
+                        task.id(), task.exportNo(), exception);
+            }
         }
     }
 

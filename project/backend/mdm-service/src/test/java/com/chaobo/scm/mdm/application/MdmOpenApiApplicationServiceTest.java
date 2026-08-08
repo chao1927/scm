@@ -5,6 +5,7 @@ import com.chaobo.scm.mdm.infrastructure.persistence.MasterDataRecordMapper;
 import com.chaobo.scm.mdm.infrastructure.persistence.MdmMapper;
 import com.chaobo.scm.mdm.infrastructure.persistence.MdmOpenApiMapper;
 import com.chaobo.scm.mdm.infrastructure.persistence.MdmPublicationMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -36,7 +37,7 @@ class MdmOpenApiApplicationServiceTest {
     void validatesEnabledMasterDataAndReportsFailures() {
         MasterDataRecordApplicationServiceTest.MemoryRecordMapper recordMapper = new MasterDataRecordApplicationServiceTest.MemoryRecordMapper();
         recordMapper.records.put("MDR200001", new MasterDataRecordMapper.RecordRow(null, "MDR200001", "SKU", "SKU-001", "测试商品", "{}", MasterDataRecordAggregate.ENABLED, 1, null, 3));
-        MdmOpenApiApplicationService service = new MdmOpenApiApplicationService(recordMapper, new MemoryOpenApiMapper(), null, null);
+        MdmOpenApiApplicationService service = service(recordMapper, new MemoryOpenApiMapper(), null);
         MdmOpenApiApplicationService.ValidateResponse response = service.validate(new MdmOpenApiApplicationService.ValidateRequest("PURCHASE_ORDER", List.of(new MdmOpenApiApplicationService.ValidateItem("line-1", "SKU", "SKU-001", 1, null), new MdmOpenApiApplicationService.ValidateItem("line-2", "SKU", "SKU-404", null, null))));
         assertThat(response.valid()).isFalse();
         assertThat(response.items()).extracting(MdmOpenApiApplicationService.ValidateItemResult::failureCode).contains(null, "NOT_FOUND");
@@ -53,7 +54,10 @@ class MdmOpenApiApplicationServiceTest {
         MdmImportQualityApplicationServiceTest.MemoryImportQualityMapper qualityMapper = new MdmImportQualityApplicationServiceTest.MemoryImportQualityMapper();
         MdmImportQualityApplicationService qualityService = new MdmImportQualityApplicationService(qualityMapper, mdmMapper);
         MemoryOpenApiMapper openApiMapper = new MemoryOpenApiMapper();
-        MdmOpenApiApplicationService service = new MdmOpenApiApplicationService(new MasterDataRecordApplicationServiceTest.MemoryRecordMapper(), openApiMapper, null, qualityService);
+        MdmOpenApiApplicationService service = service(
+                new MasterDataRecordApplicationServiceTest.MemoryRecordMapper(),
+                openApiMapper,
+                qualityService);
         MdmOpenApiApplicationService.EventEnvelope event = new MdmOpenApiApplicationService.EventEnvelope("evt-1", "SupplierProfileChangeSubmitted", "SUPPLIER", "SUP-001", "idem-1", "{\"supplierId\":1}", null, null, "资料变更待治理", "SUPPLIER", "SUP-001");
         MdmOpenApiApplicationService.ConsumeResult first = service.consumeEvent(event);
         MdmOpenApiApplicationService.ConsumeResult duplicate = service.consumeEvent(event);
@@ -67,9 +71,8 @@ class MdmOpenApiApplicationServiceTest {
     @Test
     void referenceBindingAndPermissionEventsCreateBusinessProjections() {
         MemoryOpenApiMapper mapper = new MemoryOpenApiMapper();
-        MdmOpenApiApplicationService service = new MdmOpenApiApplicationService(
-            new MasterDataRecordApplicationServiceTest.MemoryRecordMapper(),
-            mapper, null, null);
+        MdmOpenApiApplicationService service = service(
+                new MasterDataRecordApplicationServiceTest.MemoryRecordMapper(), mapper, null);
 
         service.consumeEvent(event("scope-1", "PermissionDataScopeChanged", "IAM"));
         service.consumeEvent(event("binding-1", "WarehouseExternalCodeBound", "WMS"));
@@ -103,18 +106,22 @@ class MdmOpenApiApplicationServiceTest {
         MemoryOpenApiMapper mapper = new MemoryOpenApiMapper();
         mapper.clients.put("oms", new MdmOpenApiMapper.OpenApiClientRow(
                 "oms", "secret", "SKU", "CN-", "SKU:*", true));
-        MdmOpenApiApplicationService service = new MdmOpenApiApplicationService(recordMapper, mapper, null, null);
+        MdmOpenApiApplicationService service = service(recordMapper, mapper, null);
         long timestamp = Instant.now().getEpochSecond();
 
-        String emptyHash = java.util.HexFormat.of().formatHex(
-                java.security.MessageDigest.getInstance("SHA-256").digest(new byte[0]));
+        String signedPayload = "SKU:CN-SKU-001:false";
+        String payloadHash = java.util.HexFormat.of().formatHex(
+                java.security.MessageDigest.getInstance("SHA-256")
+                        .digest(signedPayload.getBytes(StandardCharsets.UTF_8)));
         var access = service.authenticate("oms", timestamp,
-                signature("secret", "oms\n" + timestamp + "\nlegacy\n" + emptyHash));
+                signature("secret", "oms\n" + timestamp + "\nMASTER_DATA_SNAPSHOT\n" + payloadHash),
+                "MASTER_DATA_SNAPSHOT", signedPayload);
         var unrestricted = service.snapshot(access, "SKU", "CN-SKU-001", false);
         mapper.clients.put("oms", new MdmOpenApiMapper.OpenApiClientRow(
                 "oms", "secret", "SKU", "CN-", "SKU:name", true));
         var restrictedAccess = service.authenticate("oms", timestamp,
-                signature("secret", "oms\n" + timestamp + "\nlegacy\n" + emptyHash));
+                signature("secret", "oms\n" + timestamp + "\nMASTER_DATA_SNAPSHOT\n" + payloadHash),
+                "MASTER_DATA_SNAPSHOT", signedPayload);
         var snapshot = service.snapshot(restrictedAccess, "SKU", "CN-SKU-001", false);
 
         assertThat(unrestricted.dataPayload()).contains("cost");
@@ -129,13 +136,21 @@ class MdmOpenApiApplicationServiceTest {
         recordMapper.records.put("MDR200002", new MasterDataRecordMapper.RecordRow(null, "MDR200002",
                 "SKU", "SKU-DISABLED", "停用商品", "{}", MasterDataRecordAggregate.DISABLED,
                 1, null, 2));
-        MdmOpenApiApplicationService service = new MdmOpenApiApplicationService(
-                recordMapper, new MemoryOpenApiMapper(), null, null);
+        MdmOpenApiApplicationService service = service(
+                recordMapper, new MemoryOpenApiMapper(), null);
 
         assertThatThrownBy(() -> service.query(new MdmOpenApiApplicationService.QueryRequest(
                 List.of(new MdmOpenApiApplicationService.QueryItem("SKU", "SKU-DISABLED")))))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("not enabled");
+    }
+
+    private static MdmOpenApiApplicationService service(
+            MasterDataRecordMapper recordMapper,
+            MdmOpenApiMapper mapper,
+            MdmImportQualityApplicationService qualityService) {
+        return new MdmOpenApiApplicationService(
+                recordMapper, mapper, null, qualityService, new ObjectMapper(), null);
     }
 
     /**

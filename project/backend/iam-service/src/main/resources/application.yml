@@ -46,6 +46,11 @@ scm:
       - /api/iam/v1/auth/refresh
       - /oauth2/token
       - /oauth2/revoke
+    authenticated-paths:
+      - /api/iam/v1/me
+      - /api/iam/v1/menus
+      - /api/iam/v1/auth/logout
+      - /openapi/iam/v1/users/me/permissions
   rocketmq:
     endpoints: ${ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
     iam-topic: ${ROCKETMQ_IAM_TOPIC:iam-domain-event}
