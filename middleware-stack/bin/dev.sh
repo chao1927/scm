@@ -19,6 +19,7 @@ create_env_if_missing() {
   umask 077
   local mysql_root_password mysql_app_password mysql_nacos_password
   local redis_password nacos_password identity_key identity_value auth_token nginx_password
+  local iam_jwt_secret iam_mfa_master_key bms_external_shared_secret
   mysql_root_password="R$(random_value)"
   mysql_app_password="A$(random_value)"
   mysql_nacos_password="N$(random_value)"
@@ -28,6 +29,9 @@ create_env_if_missing() {
   identity_value="V$(random_value)"
   auth_token="$(openssl rand -base64 48 | tr -d '\r\n')"
   nginx_password="W$(random_value)"
+  iam_jwt_secret="$(openssl rand -hex 32)"
+  iam_mfa_master_key="$(openssl rand -hex 16)"
+  bms_external_shared_secret="$(openssl rand -hex 32)"
 
   {
     echo "TZ=Asia/Shanghai"
@@ -59,6 +63,10 @@ create_env_if_missing() {
     echo "NACOS_AUTH_IDENTITY_VALUE=${identity_value}"
     echo "NACOS_AUTH_TOKEN=${auth_token}"
     echo
+    echo "IAM_JWT_SECRET=${iam_jwt_secret}"
+    echo "IAM_MFA_MASTER_KEY=${iam_mfa_master_key}"
+    echo "BMS_EXTERNAL_SHARED_SECRET=${bms_external_shared_secret}"
+    echo
     echo "NGINX_HTTP_PORT=8088"
     echo "NGINX_USERNAME=admin"
     echo "NGINX_PASSWORD=${nginx_password}"
@@ -67,8 +75,40 @@ create_env_if_missing() {
   echo "已生成本机随机账号密码：${ENV_FILE}"
 }
 
+ensure_application_secrets() {
+  local changed="false"
+  umask 077
+  if ! grep -q '^IAM_JWT_SECRET=' "${ENV_FILE}"; then
+    printf '\nIAM_JWT_SECRET=%s\n' "$(openssl rand -hex 32)" >>"${ENV_FILE}"
+    changed="true"
+  fi
+  if ! grep -q '^IAM_MFA_MASTER_KEY=' "${ENV_FILE}"; then
+    printf 'IAM_MFA_MASTER_KEY=%s\n' "$(openssl rand -hex 16)" >>"${ENV_FILE}"
+    changed="true"
+  fi
+  local mfa_master_key
+  mfa_master_key="$(sed -n 's/^IAM_MFA_MASTER_KEY=//p' "${ENV_FILE}" | tail -n 1)"
+  if [[ "${#mfa_master_key}" -ne 32 ]]; then
+    local replacement_file="${ENV_FILE}.replacement.$$"
+    awk -v replacement="IAM_MFA_MASTER_KEY=$(openssl rand -hex 16)" \
+      '/^IAM_MFA_MASTER_KEY=/{print replacement; next} {print}' \
+      "${ENV_FILE}" >"${replacement_file}"
+    mv "${replacement_file}" "${ENV_FILE}"
+    changed="true"
+  fi
+  if ! grep -q '^BMS_EXTERNAL_SHARED_SECRET=' "${ENV_FILE}"; then
+    printf 'BMS_EXTERNAL_SHARED_SECRET=%s\n' "$(openssl rand -hex 32)" >>"${ENV_FILE}"
+    changed="true"
+  fi
+  chmod 600 "${ENV_FILE}"
+  if [[ "${changed}" == "true" ]]; then
+        echo "已为现有 .env 补齐独立的应用本地密钥。"
+  fi
+}
+
 load_env() {
   create_env_if_missing
+  ensure_application_secrets
   set -a
   # shellcheck disable=SC1090
   source "${ENV_FILE}"

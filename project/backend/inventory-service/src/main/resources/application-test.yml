@@ -13,4 +13,4 @@ spring:
       connection-timeout: ${MYSQL_CONNECTION_TIMEOUT_MS:3000}
 scm:
   rocketmq:
-    endpoints: ${ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
+    endpoints: ${SCM_ROCKETMQ_ENDPOINTS:127.0.0.1:8081}

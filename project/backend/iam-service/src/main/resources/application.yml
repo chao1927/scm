@@ -52,7 +52,7 @@ scm:
       - /api/iam/v1/auth/logout
       - /openapi/iam/v1/users/me/permissions
   rocketmq:
-    endpoints: ${ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
+    endpoints: ${SCM_ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
     iam-topic: ${ROCKETMQ_IAM_TOPIC:iam-domain-event}
     iam-consumer:
       topics: ${ROCKETMQ_IAM_CONSUMER_TOPICS:mdm-domain-event,supplier-domain-event,purchase-domain-event,wms-domain-event,inventory-domain-event,oms-domain-event,tms-domain-event,bms-domain-event}

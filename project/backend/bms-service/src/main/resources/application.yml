@@ -51,7 +51,7 @@ scm:
       batch-size: ${BMS_EXTERNAL_BATCH_SIZE:50}
       fixed-delay: ${BMS_EXTERNAL_FIXED_DELAY:2000}
   rocketmq:
-    endpoints: ${ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
+    endpoints: ${SCM_ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
     bms-topic: ${ROCKETMQ_BMS_TOPIC:bms-domain-event}
     bms-consumer:
       topics: ${ROCKETMQ_BMS_CONSUMER_TOPICS:purchase-domain-event,supplier-domain-event,wms-domain-event,tms-domain-event,oms-domain-event}

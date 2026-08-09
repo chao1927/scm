@@ -87,6 +87,28 @@ class PurchaseOperationsApplicationServiceTest {
         }
 
         /**
+         * 返回当前测试场景不关心的报价读模型。
+         *
+         * @param limit 最大返回数量
+         * @return 空报价列表
+         */
+        @Override
+        public List<PurchaseOperationsViews.Quotation> quotations(int limit) {
+            return List.of();
+        }
+
+        /**
+         * 返回当前测试场景不关心的操作日志读模型。
+         *
+         * @param limit 最大返回数量
+         * @return 空操作日志列表
+         */
+        @Override
+        public List<PurchaseOperationsViews.OperationLog> operationLogs(int limit) {
+            return List.of();
+        }
+
+        /**
          * 执行命令 {@code replayCommand}。
          *
          * <p>该实现遵守上游端口契约；异常、幂等和返回语义必须与接口约定保持一致。

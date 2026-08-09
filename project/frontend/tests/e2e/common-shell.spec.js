@@ -69,6 +69,21 @@ test('keeps the shared shell usable at 320, 768, 1024 and 1440 widths', async ({
   }
 })
 
+test('reports all supplier read models without treating the six-query summary window as pending', async ({ page }) => {
+  const businessQueryUrls = []
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (url.pathname.startsWith('/api/supplier/')) businessQueryUrls.push(url)
+  })
+  await login(page)
+
+  await page.goto('/supplier/workbench')
+  await expect(page.getByText('已接真实接口 11')).toBeVisible()
+  await expect(page.getByText('待补读模型 0')).toBeVisible()
+  await expect.poll(() => businessQueryUrls.length).toBeGreaterThanOrEqual(6)
+  expect(businessQueryUrls.slice(0, 6).every((url) => url.searchParams.get('pageSize') === '10')).toBe(true)
+})
+
 async function mockAuthenticatedShell(page) {
   await page.route('**/api/**', (route) => {
     const pathname = new URL(route.request().url()).pathname

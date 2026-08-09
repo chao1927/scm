@@ -14,6 +14,8 @@ if [[ "${JAVA_MAJOR_VERSION}" != "17" ]]; then
 fi
 export JAVA_HOME
 export PATH="${JAVA_HOME}/bin:/usr/local/bin:/opt/homebrew/bin:${PATH}"
+export LANG="en_US.UTF-8"
+export LC_ALL="en_US.UTF-8"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -43,10 +45,8 @@ bms-service|8110|scm_bms_qa'
   exit 1
 }
 
-set -a
 # shellcheck disable=SC1090
 source "${ENV_FILE}"
-set +a
 mkdir -p "${LOG_DIR}"
 
 cleanup() {
@@ -163,9 +163,17 @@ start_service() {
   local log_file="${LOG_DIR}/${service}.log"
   local jar="${BACKEND_DIR}/${service}/target/${service}-0.1.0-SNAPSHOT.jar"
 
-  env \
+  env -i \
+    HOME="${HOME}" \
+    TMPDIR="${TMPDIR:-/tmp}" \
+    LANG="en_US.UTF-8" \
+    LC_ALL="en_US.UTF-8" \
+    TZ="${TZ:-Asia/Shanghai}" \
+    JAVA_HOME="${JAVA_HOME}" \
+    PATH="${JAVA_HOME}/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin" \
     JAVA_TOOL_OPTIONS="-Xms64m -Xmx256m -XX:MaxDirectMemorySize=256m -XX:ActiveProcessorCount=2" \
     SPRING_PROFILES_ACTIVE="prod" \
+    SPRING_CLOUD_NACOS_CONFIG_ENABLED="true" \
     SPRING_DATASOURCE_URL="jdbc:mysql://127.0.0.1:${MYSQL_PORT}/${database}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai" \
     SPRING_DATASOURCE_USERNAME="${MYSQL_APP_USER}" \
     SPRING_DATASOURCE_PASSWORD="${MYSQL_APP_PASSWORD}" \
@@ -185,10 +193,8 @@ start_service() {
     SCM_BMS_EXTERNAL_ERP_POST_URL="http://127.0.0.1:19001/api/finance/post" \
     SCM_BMS_EXTERNAL_TAX_ISSUE_URL="http://127.0.0.1:19002/api/invoices/issue" \
     SCM_BMS_EXTERNAL_PAYMENT_REFUND_URL="http://127.0.0.1:19003/api/refunds" \
-    ROCKETMQ_ENDPOINTS="127.0.0.1:${ROCKETMQ_PROXY_GRPC_PORT}" \
     SCM_ROCKETMQ_ENDPOINTS="127.0.0.1:${ROCKETMQ_PROXY_GRPC_PORT}" \
     ROCKETMQ_SSL_ENABLED="false" \
-    ROCKETMQ_ENABLED="true" \
     SCM_ROCKETMQ_ENABLED="true" \
     ROCKETMQ_BUSINESS_CONSUMER_ENABLED="true" \
     SCM_DUBBO_REGISTRY_ADDRESS="nacos://127.0.0.1:${NACOS_API_PORT}?username=${NACOS_USERNAME}&password=${NACOS_PASSWORD}" \

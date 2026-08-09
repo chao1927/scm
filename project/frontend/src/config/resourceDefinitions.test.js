@@ -67,6 +67,15 @@ describe('resource definitions', () => {
     expect(missingPages).toEqual([])
   })
 
+  it('gives every catalog business page an executable read-model query', () => {
+    const missingQueries = systemCatalog.flatMap((system) => system.pages
+      .filter((page) => page.id !== 'workbench')
+      .map((page) => `${system.id}.${page.id}`)
+      .filter((key) => typeof resourceDefinitions[key]?.query !== 'function'))
+
+    expect(missingQueries).toEqual([])
+  })
+
   it('normalizes the supported backend page shapes', () => {
     expect(normalizePage({ data: { records: [{ id: 1 }], total: 7, pageNo: 2, pageSize: 10 } })).toEqual({
       records: [{ id: 1 }],

@@ -18,7 +18,9 @@ export const queryIamOperationLogs = (params) => client.get('/iam/v1/operation-l
 export const queryIamSecurityPolicies = (params) => client.get('/iam/v1/security-policies', { params })
 export const queryIamApps = () => client.get('/iam/v1/apps')
 export const queryIamSsoClients = () => client.get('/iam/v1/sso-clients')
-export const queryIamMenus = (params) => client.get('/iam/v1/menus', { params })
+export const queryIamMenus = (params = {}) => client.get('/iam/v1/menus', {
+  params: { ...params, appCode: 'SCM_WEB' },
+})
 export const queryIamRoleGrants = (params) => client.get('/iam/v1/role-grants', { params })
 export const queryIamUserRoles = (params) => client.get('/iam/v1/user-roles', { params })
 export const queryIamSessions = (params) => client.get('/iam/v1/sessions', { params })

@@ -49,7 +49,7 @@ cd middleware-stack
 | Nacos 原始控制台 | <http://127.0.0.1:8080/> | `nacos` |
 | Nginx 保护后的控制台 | <http://127.0.0.1:8088/> | `admin` |
 
-密码在本机 `middleware-stack/.env`，文件权限为 `600`，不会提交 Git。
+密码在本机 `middleware-stack/.env`，文件权限为 `600`，不会提交 Git。该文件还保存独立生成的 IAM JWT/MFA 本地密钥，不与 Nacos Token 复用。Java 启动脚本只按白名单传入应用所需值，不会将 MySQL root 或 Nacos 数据库凭据传给业务服务。
 
 ## 单机拓扑
 

@@ -35,7 +35,7 @@ scm:
     permission-namespace: wms
   rocketmq:
     enabled: ${SCM_ROCKETMQ_ENABLED:true}
-    endpoints: ${ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
+    endpoints: ${SCM_ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
     wms-topic: ${ROCKETMQ_WMS_TOPIC:wms-domain-event}
     wms-consumer:
       topics: ${ROCKETMQ_WMS_CONSUMER_TOPICS:purchase-domain-event,oms-domain-event,inventory-domain-event,supplier-domain-event}

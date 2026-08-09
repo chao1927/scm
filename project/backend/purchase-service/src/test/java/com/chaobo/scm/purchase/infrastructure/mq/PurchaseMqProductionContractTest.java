@@ -38,7 +38,7 @@ class PurchaseMqProductionContractTest {
         assertTrue(resource != null);
         var yaml = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
 
-        assertTrue(yaml.contains("enabled: ${ROCKETMQ_ENABLED:true}"));
+        assertTrue(yaml.contains("enabled: ${SCM_ROCKETMQ_ENABLED:true}"));
         assertTrue(yaml.contains("external-consumer:"));
         assertTrue(yaml.contains("supplier-domain-event,wms-domain-event,tms-domain-event,bms-domain-event"));
         assertTrue(yaml.contains("purchase-business-event-consumer"));

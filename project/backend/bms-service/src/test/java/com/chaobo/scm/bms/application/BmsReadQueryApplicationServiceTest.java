@@ -85,6 +85,17 @@ class BmsReadQueryApplicationServiceTest {
                 settlement("BO-B", "200.20", "100.10", "20.02"));
         }
 
+        /**
+         * 返回当前金额范围测试不关心的操作日志。
+         *
+         * @param limit 最大返回数量
+         * @return 空操作日志列表
+         */
+        @Override
+        public List<OperationLogView> listOperationLogs(int limit) {
+            return List.of();
+        }
+
         private ChargeView charge(String objectCode, String total) {
             return new ChargeView("CH-" + objectCode, "SRC", objectCode,
                 objectCode, "PAYABLE", "CNY", "FREIGHT", "RULE",

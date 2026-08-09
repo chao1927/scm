@@ -14,8 +14,8 @@ spring:
 
 scm:
   rocketmq:
-    enabled: ${ROCKETMQ_ENABLED:true}
-    endpoints: ${ROCKETMQ_ENDPOINTS:rocketmq:8081}
+    enabled: ${SCM_ROCKETMQ_ENABLED:true}
+    endpoints: ${SCM_ROCKETMQ_ENDPOINTS:rocketmq:8081}
     purchase-topic: ${ROCKETMQ_PURCHASE_TOPIC:purchase-domain-event}
     external-consumer:
       topics: ${ROCKETMQ_PURCHASE_EXTERNAL_TOPICS:supplier-domain-event,wms-domain-event,tms-domain-event,bms-domain-event}

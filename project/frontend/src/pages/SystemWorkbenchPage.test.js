@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { metricQueryState, summarizeWorkbenchQueries } from './SystemWorkbenchPage'
+import {
+  metricQueryState,
+  summarizeWorkbenchQueries,
+  workbenchPageGroups,
+  workbenchQueryParams,
+} from './SystemWorkbenchPage'
+import { supplierSystem } from '../config/systems/supplier'
 
 describe('SystemWorkbenchPage query states', () => {
   it('reports partial failures separately from genuine empty results', () => {
@@ -18,5 +24,17 @@ describe('SystemWorkbenchPage query states', () => {
       hint: '接口加载失败，点击重试',
       action: 'retry',
     })
+  })
+
+  it('does not count pages outside the six-card summary window as pending read models', () => {
+    const groups = workbenchPageGroups(supplierSystem)
+
+    expect(groups.summaryPages).toHaveLength(6)
+    expect(groups.connectedPages).toHaveLength(11)
+    expect(groups.pendingPages).toEqual([])
+  })
+
+  it('uses a backend-supported page size for every workbench summary query', () => {
+    expect(workbenchQueryParams).toEqual({ pageNo: 1, pageSize: 10 })
   })
 })

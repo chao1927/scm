@@ -13,7 +13,7 @@ spring:
       connection-timeout: ${MYSQL_CONNECTION_TIMEOUT_MS:3000}
 scm:
   rocketmq:
-    endpoints: ${ROCKETMQ_ENDPOINTS:rocketmq:8081}
+    endpoints: ${SCM_ROCKETMQ_ENDPOINTS:rocketmq:8081}
     inventory-topic: ${ROCKETMQ_INVENTORY_TOPIC:inventory-domain-event}
     inbound-topics: ${ROCKETMQ_INBOUND_TOPICS:wms-domain-event,tms-domain-event,oms-domain-event,iam-domain-event}
     consumer-group: ${ROCKETMQ_INVENTORY_CONSUMER_GROUP:inventory-domain-event-consumer}

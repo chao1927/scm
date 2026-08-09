@@ -48,7 +48,7 @@ scm:
     previous-valid-until-epoch-second: ${IAM_JWT_PREVIOUS_VALID_UNTIL_EPOCH_SECOND:0}
     permission-namespace: mdm
   rocketmq:
-    endpoints: ${ROCKETMQ_ENDPOINTS:localhost:8081}
+    endpoints: ${SCM_ROCKETMQ_ENDPOINTS:localhost:8081}
     mdm-producer:
       default-topic: ${MDM_ROCKETMQ_DEFAULT_TOPIC:mdm-domain-event}
       topics: ${MDM_ROCKETMQ_PRODUCER_TOPICS:mdm-domain-event}

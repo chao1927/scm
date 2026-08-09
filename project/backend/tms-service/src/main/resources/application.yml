@@ -48,7 +48,7 @@ scm:
           80: IN_TRANSIT
           100: ARRIVED
   rocketmq:
-    endpoints: ${ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
+    endpoints: ${SCM_ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
     tms-topic: ${ROCKETMQ_TMS_TOPIC:tms-domain-event}
     tms-consumer:
       topics: ${ROCKETMQ_TMS_CONSUMER_TOPICS:oms-domain-event,wms-domain-event,purchase-domain-event,supplier-domain-event,master-data-domain-event,bms-domain-event}

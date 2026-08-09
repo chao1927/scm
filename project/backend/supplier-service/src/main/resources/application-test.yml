@@ -25,8 +25,8 @@ scm:
     registry-address: ${DUBBO_REGISTRY_ADDRESS:N/A}
     timeout-ms: ${DUBBO_TIMEOUT_MS:2000}
   rocketmq:
-    enabled: ${ROCKETMQ_ENABLED:false}
-    endpoints: ${ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
+    enabled: ${SCM_ROCKETMQ_ENABLED:false}
+    endpoints: ${SCM_ROCKETMQ_ENDPOINTS:127.0.0.1:8081}
     topic: ${ROCKETMQ_SUPPLIER_TOPIC:supplier-domain-event}
     master-data-consumer:
       enabled: ${ROCKETMQ_MASTER_DATA_CONSUMER_ENABLED:false}

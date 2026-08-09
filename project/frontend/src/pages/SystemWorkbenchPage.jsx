@@ -7,6 +7,20 @@ import { BusinessPageHeader, StatusTag } from '../components/business/BusinessPr
 import { findResourceDefinition, normalizePage, recordIdentity } from '../config/resourceDefinitions'
 import { findSystem } from '../config/systemCatalog'
 
+export const workbenchQueryParams = { pageNo: 1, pageSize: 10 }
+
+export function workbenchPageGroups(system) {
+  const businessPages = system.pages.filter((page) => page.id !== 'workbench')
+  const connectedPages = businessPages.filter((page) => (
+    typeof findResourceDefinition(system.id, page.id)?.query === 'function'
+  ))
+  return {
+    connectedPages,
+    pendingPages: businessPages.filter((page) => !connectedPages.includes(page)),
+    summaryPages: connectedPages.slice(0, 6),
+  }
+}
+
 export function summarizeWorkbenchQueries(summaries) {
   return summaries.reduce((state, { query, result }) => ({
     failedCount: state.failedCount + (query.isError ? 1 : 0),
@@ -27,25 +41,26 @@ export default function SystemWorkbenchPage() {
   const system = findSystem(systemId)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const connectedPages = useMemo(() => system.pages
-    .filter((page) => page.id !== 'workbench' && findResourceDefinition(system.id, page.id))
-    .slice(0, 6), [system])
+  const { connectedPages, pendingPages, summaryPages } = useMemo(
+    () => workbenchPageGroups(system),
+    [system],
+  )
 
   const queries = useQueries({
-    queries: connectedPages.map((page) => {
+    queries: summaryPages.map((page) => {
       const definition = findResourceDefinition(system.id, page.id)
       return {
         queryKey: ['workbench-resource', system.id, page.id],
-        queryFn: () => definition.query({ pageNo: 1, pageSize: 5 }),
+        queryFn: () => definition.query(workbenchQueryParams),
         retry: 0,
       }
     }),
   })
 
-  const summaries = connectedPages.map((page, index) => {
+  const summaries = summaryPages.map((page, index) => {
     const definition = findResourceDefinition(system.id, page.id)
     const query = queries[index]
-    const result = query.data ? normalizePage(query.data, { pageNo: 1, pageSize: 5 }) : { records: [], total: 0 }
+    const result = query.data ? normalizePage(query.data, workbenchQueryParams) : { records: [], total: 0 }
     return { page, definition, query, result }
   })
   const queryState = summarizeWorkbenchQueries(summaries)
@@ -133,7 +148,7 @@ export default function SystemWorkbenchPage() {
           <Card title="接口状态" className="workbench-section">
             <Space orientation="vertical" size={10}>
               <Tag color="green">已接真实接口 {connectedPages.length}</Tag>
-              <Tag icon={<WarningOutlined />} color="gold">待补读模型 {Math.max(0, system.pages.length - 1 - connectedPages.length)}</Tag>
+              <Tag icon={<WarningOutlined />} color={pendingPages.length > 0 ? 'gold' : 'default'}>待补读模型 {pendingPages.length}</Tag>
               <Typography.Text type="secondary">无接口页面不会使用原型演示数据。</Typography.Text>
             </Space>
           </Card>
